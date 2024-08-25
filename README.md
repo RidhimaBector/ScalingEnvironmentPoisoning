@@ -8,12 +8,12 @@ Installation Guide:
 
 2. Create virtual environment 
     1. Open Anaconda Prompt
-    2. Run command “conda create -n envPois python=3.7.3” to create environment with name “envPois”.
+    2. Run command “conda create -n envPois python=3.10” to create environment with name “envPois”.
     3. Run command “conda activate envPois” to activate the environment
 
 3. Install required packages in the virtual environment
-    1. conda install spyder=4.2.5
-    2. conda install -c pytorch pytorch=1.10.0
+    1. conda install spyder
+    2. conda install -c pytorch pytorch
     3. conda install -c conda-forge numpy
     4. conda install -c conda-forge gym
     5. conda install -c conda-forge pot
