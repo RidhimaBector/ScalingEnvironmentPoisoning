@@ -17,13 +17,15 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 criterion = nn.MSELoss()
 
 
-def fanin_init(size, fanin=None):
+def fanin_init(size, fanin=None): 
     fanin = fanin or size[0]
     v = 1. / np.sqrt(fanin)
     return torch.Tensor(size).uniform_(-v, v)
 
 
 class Actor(nn.Module):
+
+
     def __init__(self, nb_states, nb_actions, max_action, hidden1=400, hidden2=300, init_w=3e-3):
         super(Actor, self).__init__()
         self.fc1 = nn.Linear(nb_states, hidden1)
@@ -34,11 +36,13 @@ class Actor(nn.Module):
         self.init_weights(init_w)
         self.max_action = max_action
     
+
     def init_weights(self, init_w):
         self.fc1.weight.data = fanin_init(self.fc1.weight.data.size())
         self.fc2.weight.data = fanin_init(self.fc2.weight.data.size())
         self.fc3.weight.data.uniform_(-init_w, init_w)
     
+
     def forward(self, x):
         out = self.fc1(x)
         out = self.relu(out)
@@ -50,6 +54,8 @@ class Actor(nn.Module):
 
 
 class Critic(nn.Module):
+
+
     def __init__(self, nb_states, nb_actions, hidden1=400, hidden2=300, init_w=3e-3):
         super(Critic, self).__init__()
         self.fc1 = nn.Linear(nb_states, hidden1)
@@ -58,11 +64,13 @@ class Critic(nn.Module):
         self.relu = nn.ReLU()
         self.init_weights(init_w)
     
+
     def init_weights(self, init_w):
         self.fc1.weight.data = fanin_init(self.fc1.weight.data.size())
         self.fc2.weight.data = fanin_init(self.fc2.weight.data.size())
         self.fc3.weight.data.uniform_(-init_w, init_w)
     
+
     def forward(self, state, action):
         #x, a = xs
         out = self.fc1(state)
@@ -73,7 +81,10 @@ class Critic(nn.Module):
         out = self.fc3(out)
         return out
 
+
 class DDPG(object):
+
+
     def __init__(self, seed, nb_states, nb_actions, max_action, hidden1, hidden2, init_w, prate, rate, ou_theta, ou_mu, ou_sigma, bsize, tau, discount, epsilon_divisor, is_training):
         
         if seed > 0:
@@ -119,6 +130,7 @@ class DDPG(object):
         # 
         if USE_CUDA: self.cuda()
         
+
     def select_ddpg_action(self, state, decay_epsilon=True):
         action = to_numpy(
             self.actor(to_tensor(state.reshape(1, -1)))
@@ -132,10 +144,12 @@ class DDPG(object):
         #self.a_t = action
         return action
     
+    
     def select_random_action(self):
         action = np.random.uniform(-1.,1.,self.nb_actions) #(16,)
         #self.a_t = action
         return action
+    
     
     def select_on_policy_action(self, state): #state: (1,21)
         action = to_numpy(
@@ -144,6 +158,7 @@ class DDPG(object):
 
         #self.a_t = action
         return action
+    
     
     def train(self, replay_buffer, atk_n_epoch, atk_n_batch, batch_size, ddpg_loss, i_episode):
         
@@ -199,6 +214,7 @@ class DDPG(object):
         
         return ddpg_loss
     
+    
     def save(self, filename):
         torch.save(self.critic.state_dict(), filename + "_critic")
         torch.save(self.critic_optim.state_dict(), filename + "_critic_optimizer")
@@ -216,16 +232,19 @@ class DDPG(object):
         self.actor_optim.load_state_dict(torch.load(filename + "_actor_optimizer", map_location=torch.device('cpu')))
         self.actor_target = copy.deepcopy(self.actor)
 
+
     def seed(self,s):
         torch.manual_seed(s)
         if USE_CUDA:
             torch.cuda.manual_seed(s)
+    
     
     def eval(self):
         self.actor.eval()
         self.actor_target.eval()
         self.critic.eval()
         self.critic_target.eval()
+
 
     def cuda(self):
         self.actor.cuda()

@@ -15,6 +15,22 @@ from itertools import count
 import tensorboardX
 import datetime
 
+# Attack package
+from utils import utils_buf, utils_op, utils_attack, utils_log
+from attack.DDPG import DDPG
+from envs.target_def import TARGET
+from envs.environment import Environment, AttackerEnv
+
+# Constants
+from constants import *
+
+# Environment object
+from envs.env3D_4x4 import GridWorld_3D_env
+
+#from victim.system import System
+from victim.victim_Q import VictimAgent
+from ae.ae import AutoEncoder
+
 # Configuration
 """from yacs.config import CfgNode as CN
 yaml_name='config/config_default.yaml'
@@ -22,33 +38,21 @@ fcfg = open(yaml_name)
 config = CN.load_cfg(fcfg)
 config.freeze()"""
 
-#SEQ_LEN = 6 #config.AE.SEQ_LEN
-EMBEDDING_SIZE = 5 #config.AE.EMBEDDING_SIZE
-MEMORY_SIZE = 50 #config.AE.MEMORY_SIZE
-
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# Attack package
-from utils import utils_buf, utils_op, utils_attack, utils_log
-from attack.DDPG import DDPG
-from envs.target_def import TARGET
-
-# Environment object
-from envs.env3D_4x4 import GridWorld_3D_env
-env = GridWorld_3D_env()
-INIT_T = env.T.copy()
+#envs
+victim_env = GridWorld_3D_env()
+attacker_env = AttackerEnv(victim_env)
+INIT_T = victim_env.T.copy()
 
 # Victim object
-#from victim.system import System
-from victim.victim_Q import VictimAgent
-from ae.ae import AutoEncoder
 
 #Cost Matrix
 grid = np.array([[0,0],[0,1],[0,2],[0,3],[1,0],[1,1],[1,2],[1,3],[2,0],[2,1],[2,2],[2,3],[3,0],[3,1],[3,2],[3,3]])
 cost_matrix = ot.dist(grid, grid, metric='cityblock') * 20
 np.fill_diagonal(cost_matrix, 10)
-cost_matrix = np.repeat(cost_matrix, env.nA, axis=1)
-cost_matrix = np.repeat(cost_matrix, env.nA, axis=0)
+cost_matrix = np.repeat(cost_matrix, victim_env.nA, axis=1)
+cost_matrix = np.repeat(cost_matrix, victim_env.nA, axis=0)
 np.fill_diagonal(cost_matrix, 0)
 
 
@@ -79,7 +83,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # Set seeds
-    env.seed(args.seed)
+    victim_env.seed(args.seed)
+    attacker_env.seed(args.seed)
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
     
@@ -94,9 +99,12 @@ if __name__ == "__main__":
     
     ''' ..... Attack Network ..... '''
     # Input / Output size
-    state_dim = EMBEDDING_SIZE + env.nS
-    action_dim = env.Attack_ActionSpace.shape[0]
-    max_action = float(env.Attack_ActionSpace.high[0])
+    state_dim = EMBEDDING_SIZE + victim_env.nS
+    # state_dim = attacker_env.nS
+    action_dim = victim_env.Attack_ActionSpace.shape[0]
+    # action_dim = attacker_env.action_space.shape[0]
+    max_action = float(victim_env.Attack_ActionSpace.high[0])
+    # max_action = float(attacker_env.action_space.high[0])
 
     kwargs = {
         "state_dim": state_dim,
@@ -132,7 +140,7 @@ if __name__ == "__main__":
     
     ''' ..... Victim ..... '''
     victim_args = {
-        "env": env, 
+        "env": victim_env, 
         "MEMORY_SIZE": MEMORY_SIZE,
         "discount_factor": 0.9, #1.0, 
         "alpha": 0.1, 
@@ -197,57 +205,74 @@ if __name__ == "__main__":
         cumulative_time = 0
         
         # reset victim's env and Q
-        env.reset_altitude()
+        victim_env.reset_altitude()
         victim.reset() #victim_Q = np.zeros((16,4)) #system.victim.reset()
+        
+        attacker_env.update_victim(victim) 
+        attacker_env.update_victim_env(victim_env)
+        attacker_env.reset()
 
         # Initialize the attacker's state
-        victim_info = np.zeros((1,EMBEDDING_SIZE))
-        victim_tensor = torch.from_numpy(victim_info)
-        victim_tensor_4d = victim_tensor.unsqueeze(0).unsqueeze(0)
+        # victim_info = np.zeros((1,EMBEDDING_SIZE))
+        # victim_tensor = torch.from_numpy(victim_info)
+        # victim_tensor_4d = victim_tensor.unsqueeze(0).unsqueeze(0)
 
-        env_info = env.altitude.copy()
-        env_tensor = torch.from_numpy(env_info)
-        env_tensor = env_tensor.view(1, env.nS)
-        env_tensor_4d = env_tensor.unsqueeze(0).unsqueeze(0)
+        # env_info = victim_env.altitude.copy()
+        # env_tensor = torch.from_numpy(env_info)
+        # env_tensor = env_tensor.view(1, victim_env.nS)
+        # env_tensor_4d = env_tensor.unsqueeze(0).unsqueeze(0)
 
-        x = torch.cat((victim_tensor_4d, env_tensor_4d), 3)
-        curA = env.altitude.copy().reshape((16, 1))
+        # x = torch.cat((victim_tensor_4d, env_tensor_4d), 3)
+        x = attacker_env.get_initial_state()
+        curA = victim_env.altitude.copy().reshape((16, 1))
         
         for t in range(args.max_timesteps):
             tic_timestep = time.time()
 
             # Select attack_action
             if i_episode < args.eps_greedy_start_episodes:
-                u = env.Attack_ActionSpace.sample()
+                u = victim_env.Attack_ActionSpace.sample()
+                # u = attacker_env.action_space.sample()
             else:
                 u = Policy.select_ddpg_action(np.array(x))
 
             # Step: implement attack_action
-            env.Attack_Env(u)
+            victim_env.Attack_Env(u)
+
+            # attacker_env.step(u)
 
             # Step: victim updates = get next_x
             victim_transitions = victim.Train_Model(80) #system.train(args.victim_n_episodes, args.ae_n_epochs)
+            
+            attacker_env.update_victim(victim)
+            attacker_env.update_victim_env(victim_env)
             ### ... updated victim.Q
             next_victim_info = ae.Policy_Embedding(victim_transitions) #next_victim_info = system.ae.Embedding(system.victim.MEM)
             next_victim_tensor = torch.from_numpy(next_victim_info[-1]).unsqueeze(0)
             next_victim_tensor_4d = next_victim_tensor.unsqueeze(0).unsqueeze(0)
+
+            # victim_info = np.zeros((1,EMBEDDING_SIZE))
+            # victim_tensor = torch.from_numpy(victim_info)
+            # victim_tensor_4d = victim_tensor.unsqueeze(0).unsqueeze(0)
             ### ... updated env altitude
-            next_env_info = env.altitude.copy() #system.victim.env.altitude.copy()
+            next_env_info = victim_env.altitude.copy() #system.victim.env.altitude.copy()
             next_env_tensor = torch.from_numpy(next_env_info)
-            next_env_tensor = next_env_tensor.view(1, env.nS)
+            next_env_tensor = next_env_tensor.view(1, victim_env.nS)
             next_env_tensor_4d = next_env_tensor.unsqueeze(0).unsqueeze(0)
             ### ... next_state
             next_x = torch.cat((next_victim_tensor_4d, next_env_tensor_4d), 3)
+
+            # next_x = attacker_env.get_next_state(ae, victim_transitions)
             
             # Step: cost
-            distance_K = - utils_attack.Attack_Cost_Compute_K(env, INIT_T, victim.Q, TARGET, cost_matrix, distance_type=0) #system.victim.Q
-            distance_grid_K = - utils_attack.Attack_Cost_Compute_K(env, INIT_T, victim.Q, TARGET, cost_matrix, distance_type=1)
-            distance_behavior_K = - utils_attack.Attack_Cost_Compute_K(env, INIT_T, victim.Q, TARGET, cost_matrix, distance_type=2)
-            distance_W = - utils_attack.Attack_Cost_Compute_W(env, INIT_T, victim.Q, TARGET, cost_matrix, distance_type=0) #system.victim.Q
-            distance_grid_W = - utils_attack.Attack_Cost_Compute_W(env, INIT_T, victim.Q, TARGET, cost_matrix, distance_type=1)
-            distance_behavior_W = - utils_attack.Attack_Cost_Compute_W(env, INIT_T, victim.Q, TARGET, cost_matrix, distance_type=2)
+            distance_K = - utils_attack.Attack_Cost_Compute_K(victim_env, INIT_T, victim.Q, TARGET, cost_matrix, distance_type=0) #system.victim.Q
+            distance_grid_K = - utils_attack.Attack_Cost_Compute_K(victim_env, INIT_T, victim.Q, TARGET, cost_matrix, distance_type=1)
+            distance_behavior_K = - utils_attack.Attack_Cost_Compute_K(victim_env, INIT_T, victim.Q, TARGET, cost_matrix, distance_type=2)
+            distance_W = - utils_attack.Attack_Cost_Compute_W(victim_env, INIT_T, victim.Q, TARGET, cost_matrix, distance_type=0) #system.victim.Q
+            distance_grid_W = - utils_attack.Attack_Cost_Compute_W(victim_env, INIT_T, victim.Q, TARGET, cost_matrix, distance_type=1)
+            distance_behavior_W = - utils_attack.Attack_Cost_Compute_W(victim_env, INIT_T, victim.Q, TARGET, cost_matrix, distance_type=2)
             done, accuracy, accuracy_sftmx, accuracy_sftmx_complete = utils_attack.Attack_Done_Identify(env, TARGET, victim.Q) #system.victim.Q)
-            effort, curA = utils_attack.Attack_Effort(curA, env)
+            effort, curA = utils_attack.Attack_Effort(curA, victim_env)
             effort = - effort
             toc_timestep = time.time()
             time_timestep = tic_timestep - toc_timestep #- (toc_timestep - tic_timestep)
@@ -331,7 +356,14 @@ if __name__ == "__main__":
 
         # Attack_Policy Update
         if i_episode >= args.eps_greedy_start_episodes:
-            ddpg_loss = Policy.train(Buffer, atk_n_epoch, atk_n_batch, args.batch_size, ddpg_loss, i_episode)      
+            ddpg_loss = Policy.train(Buffer, atk_n_epoch, atk_n_batch, args.batch_size, ddpg_loss, i_episode)  
+
+        # if i_episode >= args.eps_greedy_start_episodes:
+        #     ddpg_loss = Policy.train(Buffer, atk_n_epoch, atk_n_batch, args.batch_size, ddpg_loss, i_episode)          
+        
+        
+        
+        
         ''' save Attack_Policy '''
         if no_episodes % args.eval_freq_episode == 0:
             Buffer.saveBuffer(f"./{model_dir}/")
