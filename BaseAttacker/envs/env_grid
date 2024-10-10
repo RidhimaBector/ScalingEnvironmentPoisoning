@@ -18,6 +18,8 @@ EAST = 1
 SOUTH = 2
 WEST = 3
 
+GRID_DIMENSION = 4
+
 
 """def categorical_sample(prob_n, np_random):
     prob_n = np.asarray(prob_n)
@@ -25,8 +27,7 @@ WEST = 3
     return (csprob_n>np_random.rand()).argmax()"""
 
 
-class GridWorld_3D_env(Env):
-    metadata = {'render.modes': ['human', 'ansi']}
+class GridWorld_3D_env(Environment):
         
     """def _generate_altitude(self, shape):
         s = 1
@@ -215,13 +216,13 @@ class GridWorld_3D_env(Env):
 
 
     def __init__(self):
-        self.shape = (4, 4)
+        self.shape = (GRID_DIMENSION, GRID_DIMENSION)
         
         self.nS = np.prod(self.shape) #16 --- number of states
         self.nA = 4
         
         # define attack action space -- for physical settings
-        self.Attack_ActionSpace = spaces.Box(low=-1.0, high=+1.0, shape=(self.nS,), dtype=np.float64)
+        # self.Attack_ActionSpace = spaces.Box(low=-1.0, high=+1.0, shape=(self.nS,), dtype=np.float64)
         
         # generate altitute
         self.altitude_default = self._defined_altitude(self.shape)
@@ -237,22 +238,25 @@ class GridWorld_3D_env(Env):
         # target state
         #self.goal_s = 12 # Victim Goal State               #self.target_s = 12 #np.ravel_multi_index((3,3), self.shape) #Change_Target_Behavior #E-(3,2), M-(3,3), Mp-(3,0), H-(3,0)
         
-        self.lastaction = None # for rendering
+        self.last_action = None # for rendering
         self.action_space = spaces.Discrete(self.nA)
         self.observation_space = spaces.Discrete(self.nS)
+
+
+        self.initial_state = 0
         
         self.seed()
-        self.s = 0 #categorical_sample(self.isd, self.np_random)
+        self.s = self.initial_state #categorical_sample(self.isd, self.np_random)
 
         
-    def seed(self, seed=None):
-        self.np_random, seed = seeding.np_random(seed)
-        return [seed]
+    # def seed(self, seed=None):
+    #     self.np_random, seed = seeding.np_random(seed)
+    #     return [seed]
 
 
     def reset(self):
-        self.s = 0 #categorical_sample(self.isd, self.np_random) #start state
-        self.lastaction = None
+        self.s = self.initial_state #categorical_sample(self.isd, self.np_random) #start state
+        self.last_action = None
         return self.s
 
 
@@ -267,7 +271,7 @@ class GridWorld_3D_env(Env):
         #i = categorical_sample([t[0] for t in transitions], self.np_random)
         #p, s, r, d = transition[0]
         self.s = next_state
-        self.lastaction = action
+        self.last_action = action
         return (next_state, reward, done, {"prob" : prob})
         
 
@@ -299,9 +303,9 @@ class GridWorld_3D_env(Env):
         #outfile.write("\n")"""
 
 
-    def Attack_Env(self, U):
-        A = np.clip(self.altitude + U.reshape(self.shape), 0.0, 10.0)
+    # def Attack_Env(self, U):
+    #     A = np.clip(self.altitude + U.reshape(self.shape), 0.0, 10.0)
 
-        self.altitude = A
-        self.T = self._calculate_dynamics(self.shape, self.nA, self.nS, A)
+    #     self.altitude = A
+    #     self.T = self._calculate_dynamics(self.shape, self.nA, self.nS, A)
             
