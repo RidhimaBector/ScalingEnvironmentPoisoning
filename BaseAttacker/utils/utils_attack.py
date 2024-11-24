@@ -4,26 +4,31 @@ import ot
 from scipy.special import softmax
 
 from .utils_op import *
+from envs.environment import Environment
 
-""" Compute Attacker Blackbox/Whitebox Reward using Wasserstein Distance Rate """
-def Attack_Cost_Compute_W(env, init_T, agent_Q, target, cost_matrix=0, distance_type=0, whitebox=1, sinkhorn=0):
-    
-    policy = Get_Policy(agent_Q, env)
+def Attack_Cost_Compute_W(env: Environment, init_T: np.ndarray, agent_Q: np.ndarray, target: np.ndarray, policy: np.ndarray = None, cost_matrix=0, distance_type=0, whitebox=1, sinkhorn=0):
+    """ Compute Attacker Blackbox/Whitebox Reward using Wasserstein Distance Rate
+    policy: np.ndarray
+        Normalized policy matrix of shape (nS, nA)
+    """
+    policy = get_policy_from_Q(agent_Q)
     #agent_Q = np.expand_dims(agent_Q, axis=0)
     #target = DicQ_To_MatrixQ(target, env)
-    
+
     target_map = np.repeat(np.sum(target, axis=1).reshape(1,16), env.nA, axis = 1)
     target_policy = (target+0.001)/(1+0.001*env.nA)
     no_of_agents = 1 #agent_Q.shape[0]
     #policy = agent_Q.reshape(agent_Q.shape[0]*env.nS, env.nA) #Flatten agent_Q from (no_of_agents, env.nS, env.nA) to (no_of_agents x env.nS, env.nA)
     #if(whitebox == 1):
-        #policy = Get_Policy(policy, env)
+        #policy = get_policy_from_Q(policy, env)
     T =  env.T.copy()
 
     # compute P*
     init_T_matrix = np.transpose(init_T,(1,0,2)).reshape(env.nS*env.nA,env.nS) # s1,a1;s1,a2;s1,a3;s1,a4;s2,a1;
     init_T_matrix = np.repeat(init_T_matrix, env.nA, axis=1) #Dim 1 - 1st state, all actions; 2nd state, all actions ... #Dim 2 - 1st state, all actions; 2nd state, all actions ...
     init_T_matrix = np.tile(init_T_matrix, (no_of_agents,1))
+
+
     policy_matrix = np.repeat(policy.reshape(no_of_agents,env.nS*env.nA), env.nS*env.nA, axis=0) #np.tile(policy.reshape(no_of_agents,env.nS*env.nA), (env.nS*env.nA,1)) #policy.reshape(1,env.nS*env.nA)
     target_policy_matrix =  np.repeat(target_policy.reshape(1,env.nS*env.nA), no_of_agents*env.nS*env.nA, axis=0) #np.tile(target_policy.reshape(1,env.nS*env.nA), (env.nS*env.nA,1)) #target_policy.reshape(1,env.nS*env.nA)
     target_map = np.tile(target_map, (no_of_agents*env.nS*env.nA,1))
@@ -87,19 +92,37 @@ def Attack_Cost_Compute_W(env, init_T, agent_Q, target, cost_matrix=0, distance_
     return np.mean(cost) #, done, deviation
 
 
-""" Function to compute Attck_Cost_t based on KLR """
-def Attack_Cost_Compute_K(env, init_T, agent_Q, target, cost_matrix=0, distance_type=0, whitebox=1, sinkhorn=0):
-    
-    policy = Get_Policy(agent_Q, env)
+def kullback_leibler_divergence(P: np.ndarray, P_star: np.ndarray) -> np.ndarray:
+    return np.sum(P*np.log(P/P_star), axis=1)
+
+
+def Attack_Cost_Compute_K(env: Environment, init_T: np.ndarray, agent_Q: np.ndarray, target: np.ndarray, policy: np.ndarray = None, cost_matrix=0, distance_type=0, whitebox=1, sinkhorn=0):
+    """
+    Compute Attacker Blackbox/Whitebox Reward using Kullback-Leibler Divergence Rate
+
+    env: Environment
+    init_T: np.ndarray
+    agent_Q: np.ndarray
+    target: np.ndarray
+    policy: np.ndarray
+        Normalized policy matrix of shape (nS, nA)
+    cost_matrix: int
+    distance_type: int
+    whitebox: int
+    sinkhorn: int
+
+    """
+
+    policy = get_policy_from_Q(agent_Q) #softmax on Q
     #agent_Q = np.expand_dims(agent_Q, axis=0)
     #target = DicQ_To_MatrixQ(target, env)
-    
+
     target_map = np.repeat(np.sum(target, axis=1).reshape(1,16), env.nA, axis = 1)
     target_policy = (target+0.001)/(1+0.001*env.nA)
     no_of_agents = 1 #agent_Q.shape[0]
     #policy = agent_Q.reshape(agent_Q.shape[0]*env.nS, env.nA) #Flatten agent_Q from (no_of_agents, env.nS, env.nA) to (no_of_agents x env.nS, env.nA)
     #if(whitebox == 1):
-        #policy = Get_Policy(policy, env)
+        #policy = get_policy_from_Q(policy, env)
     T =  env.T.copy()
 
     # compute P*
@@ -114,16 +137,16 @@ def Attack_Cost_Compute_K(env, init_T, agent_Q, target, cost_matrix=0, distance_
     # compute P_u(s',a'|s,a) with updated policy
     T_matrix = np.transpose(T,(1,0,2)).reshape(env.nS*env.nA,env.nS)
     T_matrix = np.repeat(T_matrix, env.nA, axis=1)
-    T_matrix = np.tile(T_matrix, (no_of_agents,1))        
+    T_matrix = np.tile(T_matrix, (no_of_agents,1))
     if(distance_type == 0): #Complete
         P = T_matrix * policy_matrix
     elif(distance_type == 1): #Grid
         P = target_map*(T_matrix*target_policy_matrix) + (1-target_map)*(T_matrix*policy_matrix)
     elif(distance_type == 2): #Behavior
-        P = init_T_matrix * policy_matrix    
+        P = init_T_matrix * policy_matrix
 
     # COST
-    DKL_matrix = np.sum(P*np.log(P/P_star), axis=1).reshape(no_of_agents*env.nS, env.nA) # compute D_t^KL
+    DKL_matrix = kullback_leibler_divergence(P, P_star).reshape(no_of_agents*env.nS, env.nA) # compute D_t^KL
     sxa = env.nS*env.nA
 
     w_matrix, v_matrix = np.linalg.eig(np.transpose(P.reshape(no_of_agents,sxa,sxa), (0,2,1))) # stationary distribution
@@ -141,14 +164,15 @@ def Attack_Cost_Compute_K(env, init_T, agent_Q, target, cost_matrix=0, distance_
 
     return cost/no_of_agents #, done, deviation
 
+
 """def Attack_Cost_Compute_K(env, init_T, agent_Q, target_policy, cost_matrix=0):
-    
+
     #target_policy = DicQ_To_MatrixQ(target, env)
-    
+
     for i in range(len(target_policy)):
         target_policy[i] = (target_policy[i]+0.001)/(1+0.001*env.nA)
 
-    policy = Get_Policy(agent_Q, env)
+    policy = get_policy_from_Q(agent_Q, env)
     T =  env.T.copy()
 
     # compute P*
@@ -186,7 +210,7 @@ def Attack_Cost_Compute_K(env, init_T, agent_Q, target, cost_matrix=0, distance_
             row_index = s*env.nA + a
             for col_index in range(env.nS*env.nA):
                 DKL[s][a] += P[row_index][col_index]*math.log(P[row_index][col_index]/P_star[row_index][col_index])
-    # stationary distribution          
+    # stationary distribution
     w, v = np.linalg.eig(P.T)
     j_stationary = np.argmin(abs(w - 1.0))
     q_stationary = v[:,j_stationary].real
@@ -202,12 +226,10 @@ def Attack_Cost_Compute_K(env, init_T, agent_Q, target, cost_matrix=0, distance_
     return cost"""
 
 
-
 """
 Function to measure whether attack done
 """
-def Attack_Done_Identify(env, target, Q):
-    
+def Attack_Done_Identify(target: np.ndarray, Q: np.ndarray, policy: np.ndarray = None):
     #target = DicQ_To_MatrixQ(target, env)
     target_map = np.sum(target, axis=1)
     total = np.sum(target_map)
@@ -219,25 +241,21 @@ def Attack_Done_Identify(env, target, Q):
     Q_softmax = softmax(Q, axis=1)
     accuracy_softmax_complete_elementwise = target_map*( Q_softmax[np.arange(16),index_target] )
     accuracy_softmax_complete = np.sum( accuracy_softmax_complete_elementwise )/total
-    
+
     accuracy_softmax_elementwise = accuracy_elementwise * accuracy_softmax_complete_elementwise
     accuracy_softmax = np.where( (sum_accuracy_elementwise!=0), np.sum(accuracy_softmax_elementwise)/sum_accuracy_elementwise, 0.0).item()
-    
-    if accuracy == 1.0:
-        done = 1
-    else:
-        done = 0
-    
+
+    done = 1 if accuracy == 1.0 else 0
+
     return done, accuracy, accuracy_softmax, accuracy_softmax_complete
 
-def Attack_Effort(curA, env):
-    prevA = curA.copy() #New
-    curA_updated = env.altitude.copy().reshape((16, 1))
-    action_clipped = curA_updated - prevA #Size: 16x1
+def Attack_Effort(current_env_dynamics, env):
+    prev_env_dynamics = current_env_dynamics.copy() #New
+    current_env_dynamics_updated = env.env_dynamics.copy()
+    action_clipped = current_env_dynamics_updated - prev_env_dynamics #Size: 16x1
     effort = np.mean(np.abs(action_clipped))
-    
-    return effort, curA_updated
 
+    return effort, current_env_dynamics_updated
 
 
 def Attack_Done_Identify_Old(env, target, Q):
@@ -262,25 +280,23 @@ def Attack_Done_Identify_Old(env, target, Q):
     return done, accuracy_rate
 
 
-
-
 if __name__ == "__main__":
-    
+
     # Env
     from envs.env3D_4x4 import GridWorld_3D_env
     env = GridWorld_3D_env()
-    
+
     # Victim
     from victim.victim_Q import VictimAgent_Q
     victim_args = {
-        "env": env, 
-        "discount_factor": 1.0, 
-        "alpha": 0.1, 
+        "env": env,
+        "discount_factor": 1.0,
+        "alpha": 0.1,
         "epsilon": 0.1,
     }
     victim = VictimAgent_Q(**victim_args)
     victim.train(2)
-    
+
     """ target policy """
     target = defaultdict(lambda: np.zeros(env.action_space.n))
 
@@ -291,10 +307,10 @@ if __name__ == "__main__":
     target[13] = np.array([0, 1, 0, 0])
 
     print(f"target policy: {target}")
-    
+
     ''' Evaluation '''
     cost = Attack_Cost_Compute(env, victim.init_T, victim.Q, target)
     print(cost)
-    
+
     done, rate = Attack_Done_Identify(env, target, victim.Q)
     print(done, rate)

@@ -9,7 +9,7 @@ from os.path import dirname, abspath
 
 import sys
 if "../" not in sys.path:
-    sys.path.append("../") 
+    sys.path.append("../")
 
 
 """
@@ -24,17 +24,14 @@ def Show_PolicyQ(Q_dict, env):
 
     print(policy_Q)
 
-"""
-Get policy-table from Q-dictionary
-"""
 
-def Get_Policy(Q_dict, env):
-    #Q = copy.deepcopy(Q_dict)
-    policy = softmax(Q_dict, axis=1) #np.zeros((Q.shape[0], env.nA))
+def get_policy_from_Q(Q: np.ndarray) -> np.ndarray:
+    """
+    Get policy-table from Q-dictionary
+    """
+    return softmax(Q, axis=1)
 
-    return policy
-
-"""def Get_Policy(Q_dict, env):
+"""def get_policy_from_Q(Q_dict, env):
     Q = copy.deepcopy(Q_dict)
     policy = np.zeros((Q.shape[0], env.nA))
     ind = np.arange(Q.shape[0])
@@ -78,32 +75,31 @@ def Matrix_to_Dict(input_matrix):
 
 
 if __name__ == "__main__":
-    
+
     # Env
     from envs.env3D_4x4 import GridWorld_3D_env
     env = GridWorld_3D_env()
-    
+
     # Victim
     from victim.victim_Q import VictimAgent_Q
     victim_args = {
-        "env": env, 
-        "discount_factor": 1.0, 
-        "alpha": 0.1, 
+        "env": env,
+        "discount_factor": 1.0,
+        "alpha": 0.1,
         "epsilon": 0.1,
     }
     victim = VictimAgent_Q(**victim_args)
     victim.train(5)
-    
+
     ''' Evaluation '''
     Show_PolicyQ(victim.Q)
-    
-    policy = Get_Policy(victim.Q, victim.env)
+
+    policy = get_policy_from_Q(victim.Q)
     print(policy)
-    
+
     Q_matrix = DicQ_To_MatrixQ(victim.Q, victim.env)
     print(Q_matrix)
-    
+
     Q_dict = Matrix_to_Dict(Q_matrix)
     print(Q_dict)
-    
-    
+

@@ -1,12 +1,15 @@
+from typing import Any, Tuple
 import numpy as np
 from collections import namedtuple
 import torch
+
+from buffer.buffer import Buffer
 
 import matplotlib
 import matplotlib.pyplot as plt
 
 """ DDPG buffer"""
-class ReplayBuffer(object):
+class ReplayBuffer(Buffer):
 	def __init__(self, state_dim, action_dim, max_size=int(1e6)):
 		self.max_size = max_size
 		self.ptr = 0
@@ -42,7 +45,7 @@ class ReplayBuffer(object):
 			torch.FloatTensor(self.reward[ind]).to(self.device),
 			torch.FloatTensor(self.not_done[ind]).to(self.device)
 		)"""
-        
+
 		return (
 			self.state[ind],
 			self.action[ind],
@@ -50,7 +53,7 @@ class ReplayBuffer(object):
 			self.reward[ind],
 			self.not_done[ind]
 		)
-    
+
 	def saveBuffer(self, filename):
 		np.save(filename +'_ptr.npy', np.array([self.ptr]))
 		np.save(filename +'_size.npy', np.array([self.size]))
@@ -68,7 +71,13 @@ class ReplayBuffer(object):
 		self.next_state = np.load(filename +'_next_state.npy')
 		self.reward = np.load(filename +'_reward.npy')
 		self.not_done = np.load(filename +'_not_done.npy')
-    
+
+	def __len__(self):
+		return self.size
+
+	def push(self, experience: Tuple[Any, ...]) -> None:
+		"""Add experience to buffer."""
+		pass
 
 """ Victim Memory"""
 Transition = namedtuple('Transition', ('state', 'action'))

@@ -10,11 +10,10 @@ from utils import utils_buf, utils_op, utils_attack, utils_log
 from attack.DDPG import DDPG
 from agent.agent import VictimAgent, AttackAgent
 from constants import *
-from envs.env3D_4x4 import Grid3D
+from envs.env3D_4x4 import GridWorld_3D_env
 from envs.target_def import TARGET
 from envs.environment import AttackEnvironment
 from victim.victim_Q import VictimQLearning
-from algorithms.sarsa import SARSA
 from ae.ae import AutoEncoder
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -39,7 +38,7 @@ def parse_arguments():
     #parser.add_argument("--atk_training_start_episodes", default=100, type=int)  # Time steps initial random policy is used
     parser.add_argument("--eps_greedy_start_episodes", default=30, type=int)  # Time steps initial random policy is used
     parser.add_argument("--max_timesteps", default=15, type=int)   # Max time steps to run environment
-    parser.add_argument("--max_episodes", default=30000, type=int)   # Max episodes to run environment
+    parser.add_argument("--max_episodes_num", default=30000, type=int)   # Max episodes to run environment
     parser.add_argument("--eval_freq_episode", default=20, type=int)        # How often (time steps) we evaluate
     parser.add_argument("--expl_noise", default=0.1, type=float)                # Std of Gaussian exploration noise
     parser.add_argument("--batch_size", default=256, type=int)      # Batch size for both actor and critic
@@ -74,11 +73,9 @@ def _save_attack_policy(model_dir, no_episodes, Buffer, Policy, ddpg_loss, buffe
 
 def main():
     args = parse_arguments()
-    victim_env = Grid3D()
-    victim_algo = VictimQLearning(env=victim_env, **VICTIM_ALGO_KWARGS)
-    # victim_algo = SARSA(**VICTIM_ALGO_KWARGS)
-    victim_agent = VictimAgent(victim_env, victim_algo)
-    attack_env = AttackEnvironment(victim_env, victim_algo)
+    victim_env = GridWorld_3D_env()
+    attack_env = AttackEnvironment(victim_env)
+    INIT_T = victim_env.T.copy()
 
     _set_seeds(args.seed, victim_env, attack_env)
     cost_matrix = _create_cost_matrix(victim_env)
@@ -122,9 +119,34 @@ def main():
     # Initialize Policy -- attacker
     attack_algo = DDPG(**kwargsNew)
     Buffer = utils_buf.ReplayBuffer(attack_state_dim, attack_action_dim, max_size=int(1e6))
-    attack_agent = AttackAgent(attack_env, attack_algo)
 
-    ae = AutoEncoder(**DEFAULT_AE_KWARGS)
+    ''' ..... Victim ..... '''
+    victim_args = {
+        "env": victim_env,
+        "memory_size": MEMORY_SIZE,
+        "discount_factor": 0.9, #1.0,
+        "alpha": 0.1,
+        "epsilon": 0.1,
+    }
+
+    victim_algo = VictimQLearning(**victim_args)
+    victim_agent = VictimAgent(victim_env, victim_algo)
+    attacker_agent = AttackAgent(attack_env, attack_algo)
+
+    ae_enc_in_size = 32 #SEQ_LEN*2
+    ae_enc_out_size = 5 #EMBEDDING_SIZE
+    ae_dec_in_size = 6 #1+EMBEDDING_SIZE
+    ae_dec_out_size = 5 #4 #attack_action_dim
+
+    ae_args = {
+        "enc_in_size": ae_enc_in_size,
+        "enc_out_size": ae_enc_out_size,
+        "dec_in_size": ae_dec_in_size,
+        "dec_out_size": ae_dec_out_size,
+        "lr": 0.001, #0.001,
+    }
+
+    ae = AutoEncoder(**ae_args)
     ae.load("ae/models/" + "340240" + "_f-o_AutoEncoder_SftMx") #"14800" + "_f-o_AutoEncoder") #44780 - p-o M/H
     #system = System(victim_args, ae_args)
 
@@ -140,26 +162,28 @@ def main():
     best_model_stats = np.zeros((33,1)) #best statistics so far (across diff models)
     worst_model_stats = np.zeros((33,1)) #worst statistics so far (across diff models)
 
+
     ''' ..... Training ..... '''
-    for episode in range(args.max_episodes):
-        print(f"\n--------- Episode: {episode} ----------")
+    for i_episode in range(args.max_episodes_num):
+        print(f"\n--------- Episode: {i_episode} ----------") #txt_logger.info(f"\n--------- Episode: {i_episode} ----------")
 
         cumulative_metrics = temp_metrics = {metric: 0 for metric in METRICS}
 
         # reset victim's env and Q
         victim_env, victim_algo = victim_agent.reset()
-        attack_env.victim_algo = (victim_algo)
+
+        attack_env.victim = (victim_algo)
         attack_env.victim_env = (victim_env)
         attack_env.reset()
 
-        x = attack_env.get_state(ae)
-        current_env_dynamics = victim_env.env_dynamics.copy()
+        x = attack_env.get_initial_state()
+        curA = victim_env.altitude.copy().reshape((16, 1))
 
-        for timestep in range(args.max_timesteps):
+        for t in range(args.max_timesteps):
             tic_timestep = time.time()
 
             # Select attack_action
-            if episode < args.eps_greedy_start_episodes:
+            if i_episode < args.eps_greedy_start_episodes:
                 u = attack_algo.select_random_action(attack_env.action_space)
             else:
                 u = attack_algo.act(np.array(x))
@@ -168,36 +192,50 @@ def main():
             attack_env.step(u)
 
             # Step: victim updates = get next_x
-            _, _, _ = victim_algo.Train_Model(victim_env.copy(), num_episodes=80) #victim_transitions
+            victim_transitions = victim_algo.Train_Model(num_episodes=80)
 
             attack_env.victim = (victim_algo)
             attack_env.victim_env = (victim_env)
+            ### ... updated victim.Q
+            next_victim_info = ae.Policy_Embedding(victim_transitions) #next_victim_info = system.ae.Embedding(system.victim.MEM)
+            next_victim_tensor = torch.from_numpy(next_victim_info[-1]).unsqueeze(0)
+            next_victim_tensor_4d = next_victim_tensor.unsqueeze(0).unsqueeze(0)
 
-            next_x = attack_env.get_state(ae)
+            next_env_info = victim_env.altitude.copy() #system.victim.env.altitude.copy()
+            next_env_tensor = torch.from_numpy(next_env_info)
+            next_env_tensor = next_env_tensor.view(1, victim_env.nS)
+            next_env_tensor_4d = next_env_tensor.unsqueeze(0).unsqueeze(0)
+
+            next_x = attack_env.get_next_state(ae, victim_transitions)
 
             # Step: cost
-            temp_metrics["distance_K"], temp_metrics["distance_grid_K"], temp_metrics["distance_behavior_K"] = attack_agent.attack_cost_compute_K(TARGET, cost_matrix) #system.victim.Q
-            temp_metrics["distance_W"], temp_metrics["distance_grid_W"], temp_metrics["distance_behavior_W"] = attack_agent.attack_cost_compute_W(TARGET, cost_matrix) #system.victim.Q
-            done, temp_metrics["accuracy"], temp_metrics["accuracy_sftmx"], temp_metrics["accuracy_sftmx_complete"] = attack_agent.attack_done_identify(TARGET) #system.victim.Q)
-            temp_metrics["effort"], current_env_dynamics = attack_env.Attack_Effort(current_env_dynamics)
+            temp_metrics["distance_K"] = - utils_attack.Attack_Cost_Compute_K(victim_env, INIT_T, victim_algo.Q, TARGET, cost_matrix, distance_type=0) #system.victim.Q
+            temp_metrics["distance_grid_K"] = - utils_attack.Attack_Cost_Compute_K(victim_env, INIT_T, victim_algo.Q, TARGET, cost_matrix, distance_type=1)
+            temp_metrics["distance_behavior_K"] = - utils_attack.Attack_Cost_Compute_K(victim_env, INIT_T, victim_algo.Q, TARGET, cost_matrix, distance_type=2)
+            temp_metrics["distance_W"] = - utils_attack.Attack_Cost_Compute_W(victim_env, INIT_T, victim_algo.Q, TARGET, cost_matrix, distance_type=0) #system.victim.Q
+            temp_metrics["distance_grid_W"] = - utils_attack.Attack_Cost_Compute_W(victim_env, INIT_T, victim_algo.Q, TARGET, cost_matrix, distance_type=1)
+            temp_metrics["distance_behavior_W"] = - utils_attack.Attack_Cost_Compute_W(victim_env, INIT_T, victim_algo.Q, TARGET, cost_matrix, distance_type=2)
+            done, temp_metrics["accuracy"], temp_metrics["accuracy_sftmx"], temp_metrics["accuracy_sftmx_complete"] = utils_attack.Attack_Done_Identify(victim_env, TARGET, victim_algo.Q) #system.victim.Q)
+            temp_metrics["effort"], curA = utils_attack.Attack_Effort(curA, victim_env)
             temp_metrics["effort"] = - temp_metrics["effort"]
             toc_timestep = time.time()
             temp_metrics["time"] = tic_timestep - toc_timestep #- (toc_timestep - tic_timestep)
 
             ### log
-            no_episodes = episode+1
-            no_timesteps = timestep+1
+            no_episodes = i_episode+1
+            no_timesteps = t+1
             for metric in METRICS:
                 buffer_metrics[metric].append([no_episodes, no_timesteps, temp_metrics[metric]])
+
+            reward = temp_metrics["accuracy"]
+            for metric in temp_metrics:
                 cumulative_metrics[metric] += temp_metrics[metric]
 
             # Replay buffer
-            reward = temp_metrics["accuracy"]
             Buffer.add(x.view(attack_state_dim), u, next_x.view(attack_state_dim), reward, done)
 
             # Update state
             x = copy.deepcopy(next_x)
-
             if (done or (no_timesteps == args.max_timesteps)):
 
                 stats = []
@@ -212,7 +250,7 @@ def main():
                 model_data.append([no_episodes, no_timesteps])
                 model_data[-1].extend(cur_model_stats.tolist())
 
-                if(episode == 0):
+                if(i_episode == 0):
                     best_model_stats = copy.deepcopy(cur_model_stats)
                     worst_model_stats = copy.deepcopy(cur_model_stats)
                     break
@@ -241,12 +279,37 @@ def main():
                 break
 
         # Attack_attack_algo Update
-        if episode >= args.eps_greedy_start_episodes:
-            ddpg_loss = attack_algo.train(Buffer, atk_n_epoch, atk_n_batch, args.batch_size, ddpg_loss, episode)
+        if i_episode >= args.eps_greedy_start_episodes:
+            ddpg_loss = attack_algo.train(Buffer, atk_n_epoch, atk_n_batch, args.batch_size, ddpg_loss, i_episode)
 
-        # Save Attack policy
+        ''' save Attack policy '''
         if no_episodes % args.eval_freq_episode == 0:
             _save_attack_policy(model_dir, no_episodes, Buffer, attack_algo, ddpg_loss, buffer_metrics, model_data, model_good_data, model_bad_data)
+
+
+def idealMain():
+    args = parse_arguments()
+
+    victim_env = GridWorld_3D_env()
+    victim_algo = VictimQLearning()
+    victim_agent = VictimAgent(victim_env, victim_algo)
+
+    attack_env = AttackEnvironment(victim_env)
+    attack_algo = DDPG()
+    attack_agent = AttackAgent(attack_env, attack_algo)
+
+    buffer = utils_buf.ReplayBuffer()
+    buffer_metrics = {metric: [] for metric in METRICS} # complete data
+
+    ae = AutoEncoder()
+
+    for i_episode in range(args.max_episodes_num):
+        print(f"\n Episode: {i_episode}")
+        cumulative_metrics = temp_metrics = {metric: 0 for metric in METRICS}
+        victim_env, victim_algo = victim_agent.reset()
+        attack_env, attack_algo = attack_agent.reset()
+
+
 
 
 if __name__ == "__main__":
