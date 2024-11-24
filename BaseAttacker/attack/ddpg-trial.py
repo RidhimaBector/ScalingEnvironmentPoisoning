@@ -23,8 +23,8 @@ def fanin_init(size, fanin=None):
     return torch.Tensor(size).uniform_(-v, v)
 
 
-class Actor(nn.Module):
 
+class Actor(nn.Module):
     """Neural network for the actor (policy).
 
     Args:
@@ -34,31 +34,37 @@ class Actor(nn.Module):
         hidden_dims (tuple): Dimensions of hidden layers (default: (400, 300))
         init_w (float): Initial weight range for final layer (default: 3e-3)
     """
-    def __init__(self, nb_states, nb_actions, max_action, hidden1=400, hidden2=300, init_w=3e-3):
-        super(Actor, self).__init__()
-        self.fc1 = nn.Linear(nb_states, hidden1)
-        self.fc2 = nn.Linear(hidden1, hidden2)
-        self.fc3 = nn.Linear(hidden2, nb_actions)
-        self.relu = nn.ReLU()
-        self.tanh = nn.Tanh()
-        self.init_weights(init_w)
-        self.max_action = max_action
+    def __init__(self, state_dim, action_dim, max_action,
+                 hidden_dims=(400, 300), init_w=3e-3):
+        super().__init__()
 
+        layers = []
+        prev_dim = state_dim
+        for hidden_dim in hidden_dims:
+            layers.extend([
+                nn.Linear(prev_dim, hidden_dim),
+                nn.ReLU()
+            ])
+            prev_dim = hidden_dim
+
+        self.hidden_layers = nn.Sequential(*layers)
+        self.output_layer = nn.Linear(prev_dim, action_dim)
+
+        self.max_action = max_action
+        self.init_weights(init_w)
 
     def init_weights(self, init_w):
-        self.fc1.weight.data = fanin_init(self.fc1.weight.data.size())
-        self.fc2.weight.data = fanin_init(self.fc2.weight.data.size())
-        self.fc3.weight.data.uniform_(-init_w, init_w)
+        # Initialize hidden layers with fan-in scaling
+        for layer in self.hidden_layers:
+            if isinstance(layer, nn.Linear):
+                layer.weight.data = fanin_init(layer.weight.data.size())
 
+        # Initialize final layer uniformly
+        self.output_layer.weight.data.uniform_(-init_w, init_w)
 
-    def forward(self, x):
-        out = self.fc1(x)
-        out = self.relu(out)
-        out = self.fc2(out)
-        out = self.relu(out)
-        out = self.fc3(out)
-        out = self.max_action * self.tanh(out)
-        return out
+    def forward(self, state):
+        x = self.hidden_layers(state)
+        return self.max_action * torch.tanh(self.output_layer(x))
 
 
 class Critic(nn.Module):
@@ -70,35 +76,45 @@ class Critic(nn.Module):
         hidden_dims (tuple): Dimensions of hidden layers (default: (400, 300))
         init_w (float): Initial weight range for final layer (default: 3e-3)
     """
+    def __init__(self, state_dim, action_dim,
+                 hidden_dims=(400, 300), init_w=3e-3):
+        super().__init__()
 
-    def __init__(self, nb_states, nb_actions, hidden1=400, hidden2=300, init_w=3e-3):
-        super(Critic, self).__init__()
-        self.fc1 = nn.Linear(nb_states, hidden1)
-        self.fc2 = nn.Linear(hidden1+nb_actions, hidden2)
-        self.fc3 = nn.Linear(hidden2, 1)
-        self.relu = nn.ReLU()
+        # First layer processes state only
+        self.state_layer = nn.Linear(state_dim, hidden_dims[0])
+
+        # Remaining layers process state+action
+        layers = []
+        prev_dim = hidden_dims[0] + action_dim
+        for hidden_dim in hidden_dims[1:]:
+            layers.extend([
+                nn.Linear(prev_dim, hidden_dim),
+                nn.ReLU()
+            ])
+            prev_dim = hidden_dim
+
+        self.hidden_layers = nn.Sequential(*layers)
+        self.output_layer = nn.Linear(prev_dim, 1)
+
         self.init_weights(init_w)
 
-
     def init_weights(self, init_w):
-        self.fc1.weight.data = fanin_init(self.fc1.weight.data.size())
-        self.fc2.weight.data = fanin_init(self.fc2.weight.data.size())
-        self.fc3.weight.data.uniform_(-init_w, init_w)
+        self.state_layer.weight.data = fanin_init(self.state_layer.weight.data.size())
 
+        for layer in self.hidden_layers:
+            if isinstance(layer, nn.Linear):
+                layer.weight.data = fanin_init(layer.weight.data.size())
+
+        self.output_layer.weight.data.uniform_(-init_w, init_w)
 
     def forward(self, state, action):
-        #x, a = xs
-        out = self.fc1(state)
-        out = self.relu(out)
-        # debug()
-        out = self.fc2(torch.cat([out,action],1))
-        out = self.relu(out)
-        out = self.fc3(out)
-        return out
+        x = F.relu(self.state_layer(state))
+        x = torch.cat([x, action], dim=1)
+        x = self.hidden_layers(x)
+        return self.output_layer(x)
 
 
 class DDPG(Algorithm):
-
     """Deep Deterministic Policy Gradient implementation.
 
     Args:
@@ -116,84 +132,69 @@ class DDPG(Algorithm):
         exploration_noise (dict): Parameters for exploration noise
         device (torch.device): Device to use for tensor operations
     """
-    def __init__(self, seed, nb_states, nb_actions, max_action, hidden1, hidden2, init_w, prate, rate, ou_theta, ou_mu, ou_sigma, bsize, tau, discount, epsilon_divisor, is_training):
+    def __init__(
+        self,
+        state_dim,
+        action_dim,
+        max_action,
+        actor_kwargs={},
+        critic_kwargs={},
+        buffer_size=1e6,
+        batch_size=100,
+        discount=0.99,
+        tau=0.005,
+        actor_lr=1e-3,
+        critic_lr=1e-3,
+        exploration_noise={'theta': 0.15, 'mu': 0, 'sigma': 0.2},
+        device=None
+    ):
+        super().__init__()
 
-        if seed > 0:
-            self.seed(seed)
+        if device is None:
+            self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        else:
+            self.device = device
 
-        self.nb_states = nb_states
-        self.nb_actions= nb_actions
+        # Initialize networks
+        self.actor = Actor(state_dim, action_dim, max_action, **actor_kwargs).to(self.device)
+        self.actor_target = copy.deepcopy(self.actor)
+        self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=actor_lr)
+
+        self.critic = Critic(state_dim, action_dim, **critic_kwargs).to(self.device)
+        self.critic_target = copy.deepcopy(self.critic)
+        self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=critic_lr)
+
+        # Initialize replay buffer
+        self.replay_buffer = ReplayBuffer(state_dim, action_dim, int(buffer_size))
+
+        # Initialize noise process for exploration
+        self.noise = OrnsteinUhlenbeckProcess(
+            size=action_dim, **exploration_noise
+        )
+
+        # Save parameters
         self.max_action = max_action
-
-        # Create Actor and Critic Network
-        net_cfg = {
-            'hidden1':hidden1,
-            'hidden2':hidden2,
-            'init_w':init_w
-        }
-        self.actor = Actor(self.nb_states, self.nb_actions, self.max_action, **net_cfg)
-        self.actor_target = Actor(self.nb_states, self.nb_actions, self.max_action, **net_cfg)
-        self.actor_optim  = Adam(self.actor.parameters(), lr=prate)
-
-        self.critic = Critic(self.nb_states, self.nb_actions, **net_cfg)
-        self.critic_target = Critic(self.nb_states, self.nb_actions, **net_cfg)
-        self.critic_optim  = Adam(self.critic.parameters(), lr=rate)
-
-        hard_update(self.actor_target, self.actor) # Make sure target is with the same weight
-        hard_update(self.critic_target, self.critic)
-
-        #Create replay buffer
-        #self.memory = SequentialMemory(limit=args.rmsize, window_length=args.window_length)
-        self.random_process = OrnsteinUhlenbeckProcess(size=nb_actions, theta=ou_theta, mu=ou_mu, sigma=ou_sigma)
-
-        # Hyper-parameters
-        self.batch_size = bsize
-        self.tau = tau
+        self.batch_size = batch_size
         self.discount = discount
-        self.depsilon = 1.0 / epsilon_divisor
+        self.tau = tau
 
-        #
-        self.epsilon = 1.0
-        #self.s_t = None # Most recent state
-        #self.a_t = None # Most recent action
-        self.is_training = True
+    @torch.no_grad()
+    def select_action(self, state, evaluate=False):
+        """Select action given current state."""
+        state = torch.FloatTensor(state).to(self.device)
+        action = self.actor(state).cpu().numpy()
 
-        #
-        if USE_CUDA: self.cuda()
+        if not evaluate:
+            noise = self.noise.sample()
+            action = np.clip(action + noise, -self.max_action, self.max_action)
 
-
-    def select_ddpg_action(self, state, decay_epsilon=True):
-        action = to_numpy(
-            self.actor(to_tensor(state.reshape(1, -1)))
-        ).squeeze(0)
-        action += self.is_training*max(self.epsilon, 0)*self.random_process.sample()
-        action = np.clip(action, -1., 1.)
-
-        if decay_epsilon:
-            self.epsilon = max(self.epsilon - self.depsilon, 0.01)
-
-        #self.a_t = action
         return action
 
-
-    def select_random_action(self, action_space):
-        return action_space.sample()
-
-
-    def select_on_policy_action(self, state): #state: (1,21)
-        action = to_numpy(
-            self.actor(to_tensor(state.reshape(1, -1)))
-        ).squeeze(0)
-
-        #self.a_t = action
-        return action
-
-
-    def act(self, state):
-        return self.select_ddpg_action(state)
-
-
-    def train(self, replay_buffer, atk_n_epoch, atk_n_batch, batch_size, ddpg_loss, i_episode):
+    def train(self, batch=None):
+        """Update policy and value networks using sampled batch."""
+        # Sample from replay buffer if batch not provided
+        if batch is None:
+            batch = self.replay_buffer.sample(self.batch_size)
 
         self.is_training = True
         for i_atk_n_epoch in range(atk_n_epoch):
