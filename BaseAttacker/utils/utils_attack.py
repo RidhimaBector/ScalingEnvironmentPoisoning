@@ -1,12 +1,11 @@
-import math
-import copy
 import ot
+from envs.environment import Environment
 from scipy.special import softmax
 
 from .utils_op import *
-from envs.environment import Environment
 
-def Attack_Cost_Compute_W(env: Environment, init_T: np.ndarray, agent_Q: np.ndarray, target: np.ndarray, policy: np.ndarray = None, cost_matrix=0, distance_type=0, whitebox=1, sinkhorn=0):
+
+def Attack_Cost_Compute_W(env: Environment, init_T: np.ndarray, agent_Q: np.ndarray, target: np.ndarray, policy: np.ndarray = None, cost_matrix=None, distance_type=0, whitebox=1, sinkhorn=0):
     """ Compute Attacker Blackbox/Whitebox Reward using Wasserstein Distance Rate
     policy: np.ndarray
         Normalized policy matrix of shape (nS, nA)
@@ -73,8 +72,9 @@ def Attack_Cost_Compute_W(env: Environment, init_T: np.ndarray, agent_Q: np.ndar
         transport_matrix_WDR = [1]*no_of_agents
         cost = [1]*no_of_agents
         for k in range(no_of_agents):
-            transport_matrix_WDR[k] = ot.emd(nth_step_path_star[k], nth_step_path[k], M=cost_matrix)
-            cost[k] = np.sum(cost_matrix*transport_matrix_WDR[k])
+            cost_matrix_k = cost_matrix if isinstance(cost_matrix, np.ndarray) else np.zeros((env.nS*env.nA, env.nS*env.nA))
+            transport_matrix_WDR[k] = ot.emd(nth_step_path_star[k], nth_step_path[k], M=cost_matrix_k)
+            cost[k] = np.sum(cost_matrix_k*transport_matrix_WDR[k])
     else:
         transport_matrix_WDR_sinkhorn = [1]*no_of_agents
         cost = [1]*no_of_agents
@@ -96,41 +96,23 @@ def kullback_leibler_divergence(P: np.ndarray, P_star: np.ndarray) -> np.ndarray
     return np.sum(P*np.log(P/P_star), axis=1)
 
 
-def Attack_Cost_Compute_K(env: Environment, init_T: np.ndarray, agent_Q: np.ndarray, target: np.ndarray, policy: np.ndarray = None, cost_matrix=0, distance_type=0, whitebox=1, sinkhorn=0):
+def Attack_Cost_Compute_K(env: Environment, init_T: np.ndarray, agent_Q: np.ndarray, target: np.ndarray, cost_matrix=0, distance_type=0, whitebox=1, sinkhorn=0):
     """
     Compute Attacker Blackbox/Whitebox Reward using Kullback-Leibler Divergence Rate
-
-    env: Environment
-    init_T: np.ndarray
-    agent_Q: np.ndarray
-    target: np.ndarray
-    policy: np.ndarray
-        Normalized policy matrix of shape (nS, nA)
-    cost_matrix: int
-    distance_type: int
-    whitebox: int
-    sinkhorn: int
-
+    This version takes a Q-table from the victim
     """
-
-    policy = get_policy_from_Q(agent_Q) #softmax on Q
-    #agent_Q = np.expand_dims(agent_Q, axis=0)
-    #target = DicQ_To_MatrixQ(target, env)
-
+    policy = get_policy_from_Q(agent_Q)
     target_map = np.repeat(np.sum(target, axis=1).reshape(1,16), env.nA, axis = 1)
     target_policy = (target+0.001)/(1+0.001*env.nA)
-    no_of_agents = 1 #agent_Q.shape[0]
-    #policy = agent_Q.reshape(agent_Q.shape[0]*env.nS, env.nA) #Flatten agent_Q from (no_of_agents, env.nS, env.nA) to (no_of_agents x env.nS, env.nA)
-    #if(whitebox == 1):
-        #policy = get_policy_from_Q(policy, env)
-    T =  env.T.copy()
+    no_of_agents = 1
+    T = env.T.copy()
 
     # compute P*
     init_T_matrix = np.transpose(init_T,(1,0,2)).reshape(env.nS*env.nA,env.nS)
     init_T_matrix = np.repeat(init_T_matrix, env.nA, axis=1)
     init_T_matrix = np.tile(init_T_matrix, (no_of_agents,1))
-    policy_matrix = np.repeat(policy.reshape(no_of_agents,env.nS*env.nA), env.nS*env.nA, axis=0) #np.tile(policy.reshape(no_of_agents,env.nS*env.nA), (env.nS*env.nA,1)) #policy.reshape(1,env.nS*env.nA)
-    target_policy_matrix =  np.repeat(target_policy.reshape(1,env.nS*env.nA), no_of_agents*env.nS*env.nA, axis=0) #np.tile(target_policy.reshape(1,env.nS*env.nA), (env.nS*env.nA,1)) #target_policy.reshape(1,env.nS*env.nA)
+    policy_matrix = np.repeat(policy.reshape(no_of_agents,env.nS*env.nA), env.nS*env.nA, axis=0)
+    target_policy_matrix = np.repeat(target_policy.reshape(1,env.nS*env.nA), no_of_agents*env.nS*env.nA, axis=0)
     target_map = np.tile(target_map, (no_of_agents*env.nS*env.nA,1))
     P_star = target_map*(init_T_matrix*target_policy_matrix) + (1-target_map)*(init_T_matrix*policy_matrix)
 
@@ -146,23 +128,101 @@ def Attack_Cost_Compute_K(env: Environment, init_T: np.ndarray, agent_Q: np.ndar
         P = init_T_matrix * policy_matrix
 
     # COST
-    DKL_matrix = kullback_leibler_divergence(P, P_star).reshape(no_of_agents*env.nS, env.nA) # compute D_t^KL
+    DKL_matrix = kullback_leibler_divergence(P, P_star).reshape(no_of_agents*env.nS, env.nA)
     sxa = env.nS*env.nA
 
-    w_matrix, v_matrix = np.linalg.eig(np.transpose(P.reshape(no_of_agents,sxa,sxa), (0,2,1))) # stationary distribution
+    w_matrix, v_matrix = np.linalg.eig(np.transpose(P.reshape(no_of_agents,sxa,sxa), (0,2,1)))
     j_stationary_matrix = np.argmin(abs(w_matrix - 1.0), axis=1).astype(int)
     q_stationary_matrix = np.transpose(v_matrix, (0,2,1))[np.arange(no_of_agents),j_stationary_matrix].real
     q_stationary_matrix /= np.sum(q_stationary_matrix, axis=1).reshape(no_of_agents,1)
     cost = np.sum(q_stationary_matrix.reshape(no_of_agents*env.nS, env.nA) * DKL_matrix)
 
-    # DONE
-    #deviation = Attack_Error(policy, np.tile(target, (no_of_agents,1)))
-    #if (deviation == 0):
-        #done = 1
-    #else:
-        #done = 0
+    return cost/no_of_agents
 
-    return cost/no_of_agents #, done, deviation
+
+def Attack_Cost_Compute_K(env: Environment, init_T: np.ndarray, policy: np.ndarray, target: np.ndarray, cost_matrix=0, distance_type=0, whitebox=1, sinkhorn=0):
+    """
+    Compute Attacker Blackbox/Whitebox Reward using Kullback-Leibler Divergence Rate
+    This version takes a policy matrix directly
+    """
+    target_map = np.repeat(np.sum(target, axis=1).reshape(1,16), env.nA, axis = 1)
+    target_policy = (target+0.001)/(1+0.001*env.nA)
+    no_of_agents = 1
+    T = env.T.copy()
+
+    # compute P*
+    init_T_matrix = np.transpose(init_T,(1,0,2)).reshape(env.nS*env.nA,env.nS)
+    init_T_matrix = np.repeat(init_T_matrix, env.nA, axis=1)
+    init_T_matrix = np.tile(init_T_matrix, (no_of_agents,1))
+    policy_matrix = np.repeat(policy.reshape(no_of_agents,env.nS*env.nA), env.nS*env.nA, axis=0)
+    target_policy_matrix = np.repeat(target_policy.reshape(1,env.nS*env.nA), no_of_agents*env.nS*env.nA, axis=0)
+    target_map = np.tile(target_map, (no_of_agents*env.nS*env.nA,1))
+    P_star = target_map*(init_T_matrix*target_policy_matrix) + (1-target_map)*(init_T_matrix*policy_matrix)
+
+    # compute P_u(s',a'|s,a) with updated policy
+    T_matrix = np.transpose(T,(1,0,2)).reshape(env.nS*env.nA,env.nS)
+    T_matrix = np.repeat(T_matrix, env.nA, axis=1)
+    T_matrix = np.tile(T_matrix, (no_of_agents,1))
+    if(distance_type == 0): #Complete
+        P = T_matrix * policy_matrix
+    elif(distance_type == 1): #Grid
+        P = target_map*(T_matrix*target_policy_matrix) + (1-target_map)*(T_matrix*policy_matrix)
+    elif(distance_type == 2): #Behavior
+        P = init_T_matrix * policy_matrix
+
+    # COST
+    DKL_matrix = kullback_leibler_divergence(P, P_star).reshape(no_of_agents*env.nS, env.nA)
+    sxa = env.nS*env.nA
+
+    w_matrix, v_matrix = np.linalg.eig(np.transpose(P.reshape(no_of_agents,sxa,sxa), (0,2,1)))
+    j_stationary_matrix = np.argmin(abs(w_matrix - 1.0), axis=1).astype(int)
+    q_stationary_matrix = np.transpose(v_matrix, (0,2,1))[np.arange(no_of_agents),j_stationary_matrix].real
+    q_stationary_matrix /= np.sum(q_stationary_matrix, axis=1).reshape(no_of_agents,1)
+    cost = np.sum(q_stationary_matrix.reshape(no_of_agents*env.nS, env.nA) * DKL_matrix)
+
+    return cost/no_of_agents
+
+
+def Attack_Cost_Compute_K(env: Environment, init_T: np.ndarray, agent_Q: np.ndarray, target: np.ndarray, policy: np.ndarray = None, cost_matrix=0, distance_type=0, whitebox=1, sinkhorn=0):
+    """
+    Original implementation kept for backwards compatibility
+    """
+    target_map = np.repeat(np.sum(target, axis=1).reshape(1,16), env.nA, axis = 1)
+    target_policy = (target+0.001)/(1+0.001*env.nA)
+    no_of_agents = 1
+    T =  env.T.copy()
+
+    # compute P*
+    init_T_matrix = np.transpose(init_T,(1,0,2)).reshape(env.nS*env.nA,env.nS)
+    init_T_matrix = np.repeat(init_T_matrix, env.nA, axis=1)
+    init_T_matrix = np.tile(init_T_matrix, (no_of_agents,1))
+    policy_matrix = np.repeat(policy.reshape(no_of_agents,env.nS*env.nA), env.nS*env.nA, axis=0)
+    target_policy_matrix =  np.repeat(target_policy.reshape(1,env.nS*env.nA), no_of_agents*env.nS*env.nA, axis=0)
+    target_map = np.tile(target_map, (no_of_agents*env.nS*env.nA,1))
+    P_star = target_map*(init_T_matrix*target_policy_matrix) + (1-target_map)*(init_T_matrix*policy_matrix)
+
+    # compute P_u(s',a'|s,a) with updated policy
+    T_matrix = np.transpose(T,(1,0,2)).reshape(env.nS*env.nA,env.nS)
+    T_matrix = np.repeat(T_matrix, env.nA, axis=1)
+    T_matrix = np.tile(T_matrix, (no_of_agents,1))
+    if(distance_type == 0): #Complete
+        P = T_matrix * policy_matrix
+    elif(distance_type == 1): #Grid
+        P = target_map*(T_matrix*target_policy_matrix) + (1-target_map)*(T_matrix*policy_matrix)
+    elif(distance_type == 2): #Behavior
+        P = init_T_matrix * policy_matrix
+
+    # COST
+    DKL_matrix = kullback_leibler_divergence(P, P_star).reshape(no_of_agents*env.nS, env.nA)
+    sxa = env.nS*env.nA
+
+    w_matrix, v_matrix = np.linalg.eig(np.transpose(P.reshape(no_of_agents,sxa,sxa), (0,2,1)))
+    j_stationary_matrix = np.argmin(abs(w_matrix - 1.0), axis=1).astype(int)
+    q_stationary_matrix = np.transpose(v_matrix, (0,2,1))[np.arange(no_of_agents),j_stationary_matrix].real
+    q_stationary_matrix /= np.sum(q_stationary_matrix, axis=1).reshape(no_of_agents,1)
+    cost = np.sum(q_stationary_matrix.reshape(no_of_agents*env.nS, env.nA) * DKL_matrix)
+
+    return cost/no_of_agents
 
 
 """def Attack_Cost_Compute_K(env, init_T, agent_Q, target_policy, cost_matrix=0):
@@ -248,6 +308,7 @@ def Attack_Done_Identify(target: np.ndarray, Q: np.ndarray, policy: np.ndarray =
     done = 1 if accuracy == 1.0 else 0
 
     return done, accuracy, accuracy_softmax, accuracy_softmax_complete
+
 
 def Attack_Effort(current_env_dynamics, env):
     prev_env_dynamics = current_env_dynamics.copy() #New

@@ -1,13 +1,10 @@
-import numpy as np
 import copy
-from scipy.special import softmax
-
+import sys
 from collections import defaultdict
 
-import os
-from os.path import dirname, abspath
+import numpy as np
+from scipy.special import softmax
 
-import sys
 if "../" not in sys.path:
     sys.path.append("../")
 

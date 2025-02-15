@@ -1,19 +1,12 @@
+import os
+import sys
+from os.path import abspath, dirname
+
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import gym
-import argparse
-import os
-import copy
 
-from collections import defaultdict
-from itertools import count
-
-import os
-from os.path import dirname, abspath
-
-import sys
 if "../" not in sys.path:
     sys.path.append("../") 
 
@@ -23,6 +16,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 ''' import configuration '''
 from yacs.config import CfgNode as CN
+
 yaml_name = os.path.join(dirname(dirname(abspath(__file__))), "config", "config_default.yaml")
 fcfg = open(yaml_name)
 config = CN.load_cfg(fcfg)

@@ -1,20 +1,25 @@
-import numpy as np
-import torch
 import argparse
+import copy
+import datetime
 import os
 import time
-import copy
+
+import numpy as np
 import ot
-import datetime
-from utils import utils_buf, utils_op, utils_attack, utils_log
+import torch
+from ae.ae import AutoEncoder
 from attack.DDPG import DDPG
-from agent.agent import VictimAgent, AttackAgent
 from constants import *
 from envs.env3D_4x4 import GridWorld_3D_env
-from envs.target_def import TARGET
 from envs.environment import AttackEnvironment
+from envs.target_def import TARGET
+from utils import utils_attack, utils_buf, utils_log
 from victim.victim_Q import VictimQLearning
-from ae.ae import AutoEncoder
+
+from ScalingEnvironmentPoisoning.BaseAttacker.agent.system import (
+    AttackAgent,
+    VictimAgent,
+)
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 

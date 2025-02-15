@@ -1,28 +1,19 @@
-import math
-import random
-import numpy as np
 import copy
-from scipy.special import softmax
-import time
-
-from collections import namedtuple
-from collections import defaultdict
-from itertools import count
 import itertools
-
 import os
-from os.path import dirname, abspath
-
-from victim.victim_Q import VictimQLearning
-
 import sys
+import time
+from os.path import abspath, dirname
 
-
-from utils import utils_buf, utils_op, utils_attack
+import numpy as np
 from envs.target_def import TARGET
+from scipy.special import softmax
+from utils import utils_attack, utils_buf
+from victim.victim_Q import VictimQLearning
 
 ''' import configuration '''
 from yacs.config import CfgNode as CN
+
 yaml_name = os.path.join(dirname(dirname(abspath(__file__))), "config", "config_default.yaml")
 fcfg = open(yaml_name)
 config = CN.load_cfg(fcfg)

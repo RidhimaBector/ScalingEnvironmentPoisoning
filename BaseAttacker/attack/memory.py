@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
 
 from __future__ import absolute_import
-from collections import deque, namedtuple
-import warnings
+
 import random
+import warnings
+from collections import deque, namedtuple
 
 import numpy as np
 

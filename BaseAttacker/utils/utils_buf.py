@@ -1,12 +1,9 @@
-from typing import Any, Tuple
-import numpy as np
 from collections import namedtuple
+from typing import Any, Tuple
+
+import numpy as np
 import torch
-
 from buffer.buffer import Buffer
-
-import matplotlib
-import matplotlib.pyplot as plt
 
 """ DDPG buffer"""
 class ReplayBuffer(Buffer):

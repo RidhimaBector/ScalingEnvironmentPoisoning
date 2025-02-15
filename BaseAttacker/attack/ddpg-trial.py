@@ -1,12 +1,13 @@
 import copy
+
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.optim import Adam
-from attack.util import *
-from attack.random_process import OrnsteinUhlenbeckProcess
 from algorithms.algorithm import Algorithm
+from attack.random_process import OrnsteinUhlenbeckProcess
+from attack.util import *
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # Implementation of Deep Deterministic Policy Gradients (DDPG)

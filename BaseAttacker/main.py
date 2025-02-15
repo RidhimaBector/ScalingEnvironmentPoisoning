@@ -1,21 +1,35 @@
-import numpy as np
-import torch
 import argparse
+import copy
+import datetime
 import os
 import time
-import copy
+
+import numpy as np
 import ot
-import datetime
-from utils import utils_buf, utils_op, utils_attack, utils_log
-from attack.DDPG import DDPG
-from agent.agent import VictimAgent, AttackAgent
-from constants import *
-from envs.env3D_4x4 import Grid3D
-from envs.target_def import TARGET
-from envs.environment import AttackEnvironment
-from victim.victim_Q import VictimQLearning
-from algorithms.sarsa import SARSA
+import torch
 from ae.ae import AutoEncoder
+from ae.autoencoder import EnvAutoEncoder
+from agent.attack_system import AttackSystem
+from agent.victim_system import VictimSystem
+from attack.DDPG import DDPG
+from constants import METRICS, TARGET, MEM_Target
+from envs.environment import Environment
+from envs.victim_environment import VictimEnvironment
+from envs.attack_environment import AttackEnvironment
+from envs.env3D_4x4 import Grid3D
+from utils import utils_buf, utils_log
+from victim.victim_Q import VictimQLearning
+from yacs.config import CfgNode as CN
+
+
+# YAML config
+yaml_name='/Users/kunwarnir/projects/envPoisoning/ScalingEnvironmentPoisoning/BaseAttacker/config/config_default.yaml'
+fcfg = open(yaml_name)
+config = CN.load_cfg(fcfg)
+config.freeze()
+
+SEQ_LEN = config.AE.SEQ_LEN
+EMBEDDING_SIZE = config.AE.EMBEDDING_SIZE
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -72,182 +86,156 @@ def _save_attack_policy(model_dir, no_episodes, Buffer, Policy, ddpg_loss, buffe
     np.savetxt("model_bad_data.csv", np.array(model_bad_data), delimiter=",")
 
 
+def setup_model_dir(args):
+    """Create and setup the model directory for saving results."""
+    if args.model_dir is None:
+        current_time = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+        args.model_dir = f"results/{current_time}"
+
+    # Create directories if they don't exist
+    if not os.path.exists(args.model_dir):
+        os.makedirs(args.model_dir)
+
+    return args.model_dir
+
+
+def setup_replay_buffer(attack_env):
+    """Initialize the replay buffer for the attack agent."""
+    state_dim = attack_env.observation_space.shape[0]
+    action_dim = attack_env.action_space.shape[0]
+
+    # Initialize replay buffer with state and action dimensions
+    return ReplayBuffer(
+        state_dim=state_dim,
+        action_dim=action_dim,
+        max_size=int(1e6)  # Standard buffer size of 1 million transitions
+    )
+
+
+def setup_autoencoder(victim_env):
+    """Initialize and setup the environment autoencoder."""
+    ae_kwargs = {
+        "env": victim_env,
+        "enc_in_size": config.AE.ENC_IN_SIZE,
+        "enc_out_size": config.AE.ENC_OUT_SIZE,
+        "enc_num_layer": config.AE.ENC_NUM_LAYER,
+        "dec_fc_in_size": config.AE.DEC_FC_IN_SIZE,
+        "dec_fc_out_size": config.AE.DEC_FC_OUT_SIZE,
+        "dec_lstm_in_size": config.AE.DEC_LSTM_IN_SIZE,
+        "dec_lstm_out_size": config.AE.DEC_LSTM_OUT_SIZE,
+        "dec_lstm_num_layer": config.AE.DEC_LSTM_NUM_LAYER,
+        "seq_len": SEQ_LEN,
+        "embedding_len": EMBEDDING_SIZE,
+        "n_epochs": config.AE.N_EPOCHS,
+        "lr": config.AE.LEARNING_RATE
+    }
+    return EnvAutoEncoder(**ae_kwargs)
+
+
+def save_checkpoint(model_dir, no_episodes, buffer, policy, ddpg_loss, buffer_metrics, model_data, model_good_data, model_bad_data):
+    """Save training checkpoint and metrics."""
+    buffer.saveBuffer(f"./{model_dir}/")
+    policy.save(f"./{model_dir}/{no_episodes}")
+
+    # Save metrics
+    np.savetxt("ddpg_loss.csv", np.array(ddpg_loss), delimiter=",")
+    for metric in METRICS:
+        np.savetxt(f"{metric}_buffer.csv", np.array(buffer_metrics[metric]), delimiter=",")
+    np.savetxt("model_data.csv", np.array(model_data), delimiter=",")
+    np.savetxt("model_good_data.csv", np.array(model_good_data), delimiter=",")
+    np.savetxt("model_bad_data.csv", np.array(model_bad_data), delimiter=",")
+
+"""
+Main training loop for the environment poisoning attack. The process follows:
+
+1. Setup Phase:
+    - Initialize victim components (3D grid environment & Q-learning)
+    - Initialize attack components (attack environment & DDPG policy)
+    - Load pretrained autoencoder and setup replay buffer
+
+2. Training Loop (for each episode):
+    - Reset environments
+    - For each timestep:
+        a. Select attack action (random during warmup, then from policy)
+        b. Execute attack and train victim
+        c. Calculate attack costs and metrics
+        d. Store experience in replay buffer
+
+    - After episode:
+        - Train attack policy (if past warmup)
+        - Periodically save models and metrics
+
+3. Metrics Tracked:
+    - Attack effectiveness (KL divergence, Wasserstein distance)
+    - Attack accuracy
+    - Environmental modification effort
+    - Training time
+
+Returns:
+    None (saves models and metrics to specified directory)
+"""
 def main():
+    # Parse arguments and setup
     args = parse_arguments()
+
+    # Initialize environments and systems
+    victim_system, attack_system = setup_systems(args)
+
+    # Setup training components
+    model_dir = setup_model_dir(args)
+    buffer = setup_replay_buffer(attack_system.env)
+    ae = setup_autoencoder(victim_system.env)
+
+    #attack_system.train_system()
+
+    # Training loop
+    for episode in range(args.max_episodes):
+        temp_metrics, cumulative_metrics = attack_system.run_training_episode(
+            episode, victim_system, buffer, args.max_timesteps
+        )
+
+        # Train attack policy if past warmup
+        if episode >= args.eps_greedy_start_episodes:
+            attack_system.train(buffer, args)
+
+        # Save periodically
+        if (episode + 1) % args.eval_freq_episode == 0:
+            save_checkpoint(
+                model_dir, episode + 1, buffer, attack_system,
+                attack_system.buffer_metrics,
+                attack_system.model_data,
+                attack_system.model_good_data,
+                attack_system.model_bad_data
+            )
+
+def setup_systems(args):
+    # Initialize victim components
     victim_env = Grid3D()
-    victim_algo = VictimQLearning(env=victim_env, **VICTIM_ALGO_KWARGS)
-    # victim_algo = SARSA(**VICTIM_ALGO_KWARGS)
-    victim_agent = VictimAgent(victim_env, victim_algo)
-    attack_env = AttackEnvironment(victim_env, victim_algo)
+    victim_algo = VictimQLearning(victim_env.nS, victim_env.nA, **config.VICTIM.DEFAULT_KWARGS)
+    victim_system = VictimSystem(victim_env, victim_algo)
+
+    # Initialize attack components
+    attack_env = AttackEnvironment(victim_system)
+    attack_system = setup_attack_system(attack_env, args)
 
     _set_seeds(args.seed, victim_env, attack_env)
-    cost_matrix = _create_cost_matrix(victim_env)
 
-    ''' ..... Tensorboard Settings ..... '''
+    return victim_system, attack_system
 
-    # Set run dir
-    date = datetime.datetime.now().strftime("%y-%m-%d-%H-%M-%S")
-    default_model_name = f"results_{date}"
-
-    model_name = args.model_dir or default_model_name
-    model_dir = utils_log.get_model_dir(model_name)
-    os.makedirs(model_dir, exist_ok=True)
-
-    ''' ..... Attack Network ..... '''
-    # Input / Output size
-    attack_state_dim = attack_env.nS
-    attack_action_dim = attack_env.action_space.shape[0]
-    max_action = float(attack_env.action_space.high[0])
-
-    kwargsNew = {
-        "seed": args.seed,
-        "nb_states": attack_state_dim,
-        "nb_actions": attack_action_dim,
-        "max_action": max_action,
-        "hidden1": 400,
-        "hidden2": 300,
-        "init_w": 0.003,
-        "prate": 0.0001,
-        "rate": 0.001,
-        "ou_theta": 0.15,
-        "ou_mu": 0.0,
-        "ou_sigma": 0.2,
-        "bsize": 256,
+def setup_attack_system(attack_env, args):
+    attack_kwargs = config.ATTACK.DEFAULT_KWARGS.copy()
+    attack_kwargs.update({
+        "nb_states": attack_env.nS,
+        "nb_actions": attack_env.action_space.shape[0],
+        "max_action": float(attack_env.action_space.high[0]),
         "tau": args.tau,
         "discount": args.discount,
-        "epsilon_divisor": 1000, #Number of episodes over which to decrease actual epsilon
-        "is_training": True
-    }
+    })
 
-    # Initialize Policy -- attacker
-    attack_algo = DDPG(**kwargsNew)
-    Buffer = utils_buf.ReplayBuffer(attack_state_dim, attack_action_dim, max_size=int(1e6))
-    attack_agent = AttackAgent(attack_env, attack_algo)
+    attack_algo = DDPG(**attack_kwargs)
+    env_ae = setup_autoencoder(victim_env)
 
-    ae = AutoEncoder(**DEFAULT_AE_KWARGS)
-    ae.load("ae/models/" + "340240" + "_f-o_AutoEncoder_SftMx") #"14800" + "_f-o_AutoEncoder") #44780 - p-o M/H
-    #system = System(victim_args, ae_args)
-
-    atk_n_epoch = 1 #15
-    atk_n_batch = 15
-    ddpg_loss = []
-    model_data = [] #per episode statistic wrt all metrics
-    model_good_data = [] #all model statistic for best models
-    model_bad_data = [] #all model statistic for worst models
-
-    buffer_metrics = {metric: [] for metric in METRICS} # complete data
-
-    best_model_stats = np.zeros((33,1)) #best statistics so far (across diff models)
-    worst_model_stats = np.zeros((33,1)) #worst statistics so far (across diff models)
-
-    ''' ..... Training ..... '''
-    for episode in range(args.max_episodes):
-        print(f"\n--------- Episode: {episode} ----------")
-
-        cumulative_metrics = temp_metrics = {metric: 0 for metric in METRICS}
-
-        # reset victim's env and Q
-        victim_env, victim_algo = victim_agent.reset()
-        attack_env.victim_algo = (victim_algo)
-        attack_env.victim_env = (victim_env)
-        attack_env.reset()
-
-        x = attack_env.get_state(ae)
-        current_env_dynamics = victim_env.env_dynamics.copy()
-
-        for timestep in range(args.max_timesteps):
-            tic_timestep = time.time()
-
-            # Select attack_action
-            if episode < args.eps_greedy_start_episodes:
-                u = attack_algo.select_random_action(attack_env.action_space)
-            else:
-                u = attack_algo.act(np.array(x))
-
-            # Step: implement attack_action
-            attack_env.step(u)
-
-            # Step: victim updates = get next_x
-            _, _, _ = victim_algo.Train_Model(victim_env.copy(), num_episodes=80) #victim_transitions
-
-            attack_env.victim = (victim_algo)
-            attack_env.victim_env = (victim_env)
-
-            next_x = attack_env.get_state(ae)
-
-            # Step: cost
-            temp_metrics["distance_K"], temp_metrics["distance_grid_K"], temp_metrics["distance_behavior_K"] = attack_agent.attack_cost_compute_K(TARGET, cost_matrix) #system.victim.Q
-            temp_metrics["distance_W"], temp_metrics["distance_grid_W"], temp_metrics["distance_behavior_W"] = attack_agent.attack_cost_compute_W(TARGET, cost_matrix) #system.victim.Q
-            done, temp_metrics["accuracy"], temp_metrics["accuracy_sftmx"], temp_metrics["accuracy_sftmx_complete"] = attack_agent.attack_done_identify(TARGET) #system.victim.Q)
-            temp_metrics["effort"], current_env_dynamics = attack_env.Attack_Effort(current_env_dynamics)
-            temp_metrics["effort"] = - temp_metrics["effort"]
-            toc_timestep = time.time()
-            temp_metrics["time"] = tic_timestep - toc_timestep #- (toc_timestep - tic_timestep)
-
-            ### log
-            no_episodes = episode+1
-            no_timesteps = timestep+1
-            for metric in METRICS:
-                buffer_metrics[metric].append([no_episodes, no_timesteps, temp_metrics[metric]])
-                cumulative_metrics[metric] += temp_metrics[metric]
-
-            # Replay buffer
-            reward = temp_metrics["accuracy"]
-            Buffer.add(x.view(attack_state_dim), u, next_x.view(attack_state_dim), reward, done)
-
-            # Update state
-            x = copy.deepcopy(next_x)
-
-            if (done or (no_timesteps == args.max_timesteps)):
-
-                stats = []
-                for metric in METRICS:
-                    stats.extend([
-                        temp_metrics[metric],
-                        cumulative_metrics[metric]/no_timesteps,
-                        cumulative_metrics[metric]
-                    ])
-                cur_model_stats = np.array(stats)
-
-                model_data.append([no_episodes, no_timesteps])
-                model_data[-1].extend(cur_model_stats.tolist())
-
-                if(episode == 0):
-                    best_model_stats = copy.deepcopy(cur_model_stats)
-                    worst_model_stats = copy.deepcopy(cur_model_stats)
-                    break
-
-                cur_model_is_good = cur_model_stats >= best_model_stats
-                cur_model_is_bad = cur_model_stats <= worst_model_stats
-
-                if(np.sum(cur_model_is_good) > 0):
-                    model_good_data.append([no_episodes, no_timesteps])
-                    model_good_data[-1].extend(cur_model_stats.tolist())
-                    model_good_data[-1].extend(best_model_stats.tolist())
-                    model_good_data[-1].extend(worst_model_stats.tolist())
-                    attack_algo.save(f"./{model_dir}/good_model_{no_episodes}")
-
-                    best_model_stats[cur_model_is_good] = cur_model_stats[cur_model_is_good]
-
-                elif(np.sum(cur_model_is_bad) > 0):
-                    model_bad_data.append([no_episodes, no_timesteps])
-                    model_bad_data[-1].extend(cur_model_stats.tolist())
-                    model_bad_data[-1].extend(best_model_stats.tolist())
-                    model_bad_data[-1].extend(worst_model_stats.tolist())
-                    attack_algo.save(f"./{model_dir}/bad_model_{no_episodes}")
-
-                    worst_model_stats[cur_model_is_bad] = cur_model_stats[cur_model_is_bad]
-
-                break
-
-        # Attack_attack_algo Update
-        if episode >= args.eps_greedy_start_episodes:
-            ddpg_loss = attack_algo.train(Buffer, atk_n_epoch, atk_n_batch, args.batch_size, ddpg_loss, episode)
-
-        # Save Attack policy
-        if no_episodes % args.eval_freq_episode == 0:
-            _save_attack_policy(model_dir, no_episodes, Buffer, attack_algo, ddpg_loss, buffer_metrics, model_data, model_good_data, model_bad_data)
-
+    return AttackSystem(attack_env, attack_algo, env_ae)
 
 if __name__ == "__main__":
     main()

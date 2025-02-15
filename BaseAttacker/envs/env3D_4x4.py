@@ -1,20 +1,19 @@
 # Attack action space U: Box=(-10, +10, (16, ), float 32) -- continuous
 
 # import io
-from typing import Tuple
-import numpy as np
 # import sys
 import math
+import os
+import sys
+from typing import Tuple
 
+import numpy as np
 from gym import spaces
 from gym.utils import seeding
 
-import os
-import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from constants import *
-from envs.environment import VictimEnvironment
-
+from envs.victim_environment import VictimEnvironment
 
 # STILL = 0
 NORTH = 0
@@ -372,6 +371,11 @@ class Grid3D(VictimEnvironment):
     @property
     def env_dynamics(self):
         return self.altitude.copy().reshape((self.nS, 1))
+
+
+    @property
+    def max_steps(self):
+        return None
 
     def reset(self):
         self.s = 0 #categorical_sample(self.isd, self.np_random) #start state
