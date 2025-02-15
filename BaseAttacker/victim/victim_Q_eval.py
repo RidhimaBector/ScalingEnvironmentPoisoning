@@ -1,30 +1,22 @@
-import math
-import random
-import numpy as np
 import copy
+import os
+import sys
+from os.path import abspath, dirname
+
+import numpy as np
 from scipy.special import softmax
 
-from collections import namedtuple
-from collections import defaultdict
-from itertools import count
-import itertools
-
-import os
-from os.path import dirname, abspath
-
-import sys
 if "../" not in sys.path:
     sys.path.append("../")
 
-from utils import utils_buf
 
 import utils.utils_attack as utils
-import utils.utils_op as utils_op
 from envs.target_def import TARGET
-
 from victim.victim_Q import VictimQLearning
+
 ''' import configuration '''
 from yacs.config import CfgNode as CN
+
 yaml_name = os.path.join(dirname(dirname(abspath(__file__))), "config", "config_default.yaml")
 fcfg = open(yaml_name)
 config = CN.load_cfg(fcfg)

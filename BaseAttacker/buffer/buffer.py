@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Any, List, Tuple
 
+
 class Buffer(ABC):
     """Abstract base class for experience replay buffers."""
 

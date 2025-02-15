@@ -1,19 +1,12 @@
-import numpy as np
-import torch
-import gym
-import argparse
-import os
+import copy
 import sys
 import time
-import copy
+
+import numpy as np
 import ot
 
-from collections import defaultdict
-from itertools import count
-
 # TensorBoard
-import tensorboardX
-import datetime
+import torch
 
 # Configuration
 """from yacs.config import CfgNode as CN
@@ -29,22 +22,22 @@ MEMORY_SIZE = 50 #config.AE.MEMORY_SIZE
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # Attack package
-from utils import utils_buf, utils_op, utils_attack, utils_log
 from attack.DDPG import DDPG
-from envs.target_def import TARGET
 
 # Environment object
 from envs.env3D_4x4 import GridWorld_3D_env
+from envs.target_def import TARGET
+from utils import utils_attack
+
 env = GridWorld_3D_env()
 INIT_T = env.T.copy()
 
 # Victim object
-from victim.victim_Q import VictimAgent
 #from victim.victim_Sarsa_eval import VictimAgent_Sarsa
 #from victim.victim_MC_eval import VictimAgent_MC
-
 # AutoEncoder
 from ae.ae import AutoEncoder
+from victim.victim_Q import VictimAgent
 
 #Cost Matrix
 grid = np.array([[0,0],[0,1],[0,2],[0,3],[1,0],[1,1],[1,2],[1,3],[2,0],[2,1],[2,2],[2,3],[3,0],[3,1],[3,2],[3,3]])
@@ -330,9 +323,10 @@ for i_victim_pop in range(n_victim_pop):
             
             
 """ dataframe """
-import seaborn as sns 
-import pandas as pd 
 import matplotlib.pyplot as plt
+import pandas as pd
+import seaborn as sns
+
 sns.set(font_scale = 1.8)
 sns.set_style("whitegrid")
 

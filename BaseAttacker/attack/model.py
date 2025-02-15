@@ -1,12 +1,9 @@
 # -*- coding: utf-8 -*-
 
 import numpy as np
-
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
-from ipdb import set_trace as debug
 
 def fanin_init(size, fanin=None):
     fanin = fanin or size[0]

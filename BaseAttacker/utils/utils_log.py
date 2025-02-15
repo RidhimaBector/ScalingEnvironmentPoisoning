@@ -1,10 +1,9 @@
 import csv
-import os
-import torch
 import logging
+import os
 import sys
 
-import utils
+import torch
 
 
 def create_folders_if_necessary(path):

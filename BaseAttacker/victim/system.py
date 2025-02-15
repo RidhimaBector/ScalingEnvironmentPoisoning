@@ -1,14 +1,16 @@
 import os
-from os.path import dirname, abspath
 import sys
+from os.path import abspath, dirname
+
 if "../" not in sys.path:
     sys.path.append("../") 
     
-from victim.victim_Q import VictimAgent
 from ae.ae_policy import AutoEncoder
+from victim.victim_Q import VictimAgent
 
 ''' import configuration '''
 from yacs.config import CfgNode as CN
+
 yaml_name = os.path.join(dirname(dirname(abspath(__file__))), "config", "config_default.yaml")
 fcfg = open(yaml_name)
 config = CN.load_cfg(fcfg)
@@ -20,7 +22,6 @@ MEMORY_SIZE = config.AE.MEMORY_SIZE
 
 
 ''' import target_Memory '''
-from envs.target_def import TARGET
 
 class System():
     def __init__(self, victim_args, ae_args):

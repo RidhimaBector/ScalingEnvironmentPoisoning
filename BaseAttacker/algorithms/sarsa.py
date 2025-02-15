@@ -3,16 +3,13 @@ SARSA algorithm implementation,
 implements Algorithm interface
 """
 
-import numpy as np
-from scipy.special import softmax
-import copy
-import itertools
-from typing import Dict, Any
+from typing import Any, Dict
 
-from algorithms.algorithm import Algorithm
+import numpy as np
 import utils.utils_buf as utils_buf
-import utils.utils_attack as utils_attack
-from envs.environment import VictimEnvironment
+from algorithms.algorithm import Algorithm
+from envs.victim_environment import VictimEnvironment
+from scipy.special import softmax
 
 
 class SARSA(Algorithm):

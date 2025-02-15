@@ -3,35 +3,27 @@ Q-learning algorithm for victim,
 implements Algorithm interface
 """
 
-import math
-import random
-import numpy as np
 import copy
-from scipy.special import softmax
-
-from collections import namedtuple
-from collections import defaultdict
-from itertools import count
 import itertools
-
 import os
-from os.path import dirname, abspath
-
 import sys
+from os.path import abspath, dirname
+from typing import Any, Dict
 
-from envs.target_def import TARGET
-import utils.utils_buf as utils_buf
-import utils.utils_op as utils_op
+import numpy as np
 import utils.utils_attack as utils_attack
+import utils.utils_buf as utils_buf
 from algorithms.algorithm import Algorithm
-from envs.environment import VictimEnvironment
-from typing import Dict, Any
+from envs.victim_environment import VictimEnvironment
+from envs.target_def import TARGET
+from scipy.special import softmax
 
 if "../" not in sys.path:
     sys.path.append("../")
 
 ''' import configuration '''
 from yacs.config import CfgNode as CN
+
 yaml_name = os.path.join(dirname(dirname(abspath(__file__))), "config", "config_default.yaml")
 fcfg = open(yaml_name)
 config = CN.load_cfg(fcfg)
@@ -41,7 +33,6 @@ config.freeze()
 MEMORY_SIZE = config.AE.MEMORY_SIZE
 T_max = config.VICTIM.TMAX
 
-# should be a subclass of Agent
 class VictimQLearning(Algorithm):
     """
     Q-learning algorithm implementation,
@@ -123,8 +114,8 @@ class VictimQLearning(Algorithm):
         state = env.reset()
         episode_reward = 0
 
-        max_steps = float('inf') if env.max_steps is None else env.max_steps
-        for t in range(max_steps):
+        max_steps = 1000 if env.max_steps is None else env.max_steps
+        for t in range(int(max_steps)):
             action = self.act(state)
             next_state, reward, done, _ = env.step(action)
             transitions[state, 1] = action
@@ -309,8 +300,8 @@ class VictimQLearning(Algorithm):
         """Update training statistics."""
         stats['episode_rewards'].append(episode_stats['reward'])
         stats['episode_lengths'].append(episode_stats['length'])
-        for state, action in episode_stats['transitions']:
-            stats['transitions'][state, 1] = action
+        # Copy over the transitions directly since they're already in the right format
+        stats['transitions'] = episode_stats['transitions']
 
 if __name__ == "__main__":
     from envs.env3D_4x4 import GridWorld_3D_env
