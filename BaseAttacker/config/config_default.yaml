@@ -22,12 +22,14 @@ AE:
 VICTIM:
   TMAX: 100
   DEFAULT_KWARGS:
-    gamma: 0.9
-    alpha: 0.1
-    epsilon: 0.1
-    max_epsilon: 1.0
-    min_epsilon: 0.01
-    decay_rate: 0.01
+    memory_size: 50  # From victim_Q.py MEMORY_SIZE
+    discount_factor: 1.0  # From victim_Q.py default arg
+    alpha: 0.1  # From victim_Q.py default arg
+    epsilon: 0.1  # From victim_Q.py default arg
+    # Commenting out unused params
+    # max_epsilon: 1.0
+    # min_epsilon: 0.01
+    # decay_rate: 0.01
 
 ATTACK:
   DEFAULT_KWARGS:

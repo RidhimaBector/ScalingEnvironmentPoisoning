@@ -12,9 +12,7 @@ from ae.autoencoder import EnvAutoEncoder
 from agent.attack_system import AttackSystem
 from agent.victim_system import VictimSystem
 from attack.DDPG import DDPG
-from constants import METRICS, TARGET, MEM_Target
-from envs.environment import Environment
-from envs.victim_environment import VictimEnvironment
+from constants import METRICS
 from envs.attack_environment import AttackEnvironment
 from envs.env3D_4x4 import Grid3D
 from utils import utils_buf, utils_log
@@ -101,10 +99,11 @@ def setup_model_dir(args):
 
 def setup_replay_buffer(attack_env):
     """Initialize the replay buffer for the attack agent."""
-    state_dim = attack_env.observation_space.shape[0]
+    state_dim = attack_env.nS
     action_dim = attack_env.action_space.shape[0]
 
     # Initialize replay buffer with state and action dimensions
+    from utils.utils_buf import ReplayBuffer
     return ReplayBuffer(
         state_dim=state_dim,
         action_dim=action_dim,
@@ -112,38 +111,44 @@ def setup_replay_buffer(attack_env):
     )
 
 
-def setup_autoencoder(victim_env):
-    """Initialize and setup the environment autoencoder."""
-    ae_kwargs = {
-        "env": victim_env,
-        "enc_in_size": config.AE.ENC_IN_SIZE,
-        "enc_out_size": config.AE.ENC_OUT_SIZE,
-        "enc_num_layer": config.AE.ENC_NUM_LAYER,
-        "dec_fc_in_size": config.AE.DEC_FC_IN_SIZE,
-        "dec_fc_out_size": config.AE.DEC_FC_OUT_SIZE,
-        "dec_lstm_in_size": config.AE.DEC_LSTM_IN_SIZE,
-        "dec_lstm_out_size": config.AE.DEC_LSTM_OUT_SIZE,
-        "dec_lstm_num_layer": config.AE.DEC_LSTM_NUM_LAYER,
-        "seq_len": SEQ_LEN,
-        "embedding_len": EMBEDDING_SIZE,
-        "n_epochs": config.AE.N_EPOCHS,
-        "lr": config.AE.LEARNING_RATE
-    }
-    return EnvAutoEncoder(**ae_kwargs)
+def setup_systems(args, model_dir):
+    # Initialize victim components
+    victim_env = Grid3D()
+    victim_algo = VictimQLearning(victim_env.nS, victim_env.nA, **config.VICTIM.DEFAULT_KWARGS)
+    victim_system = VictimSystem(victim_env, victim_algo)
+
+    # Initialize attack components
+    attack_env = AttackEnvironment(victim_system)
+    attack_kwargs = config.ATTACK.DEFAULT_KWARGS.copy()
+    attack_kwargs.update({
+        "nb_states": attack_env.nS,
+        "nb_actions": attack_env.action_space.shape[0],
+        "max_action": float(attack_env.action_space.high[0]),
+        "tau": args.tau,
+        "discount": args.discount,
+        "eps_greedy_start_episodes": args.eps_greedy_start_episodes,
+    })
+    attack_algo = DDPG(**attack_kwargs)
+    attack_system = AttackSystem(attack_env, attack_algo, args, model_dir, config)
+
+    _set_seeds(args.seed, victim_env, attack_env)
+
+    return attack_system
 
 
-def save_checkpoint(model_dir, no_episodes, buffer, policy, ddpg_loss, buffer_metrics, model_data, model_good_data, model_bad_data):
-    """Save training checkpoint and metrics."""
-    buffer.saveBuffer(f"./{model_dir}/")
-    policy.save(f"./{model_dir}/{no_episodes}")
 
-    # Save metrics
-    np.savetxt("ddpg_loss.csv", np.array(ddpg_loss), delimiter=",")
-    for metric in METRICS:
-        np.savetxt(f"{metric}_buffer.csv", np.array(buffer_metrics[metric]), delimiter=",")
-    np.savetxt("model_data.csv", np.array(model_data), delimiter=",")
-    np.savetxt("model_good_data.csv", np.array(model_good_data), delimiter=",")
-    np.savetxt("model_bad_data.csv", np.array(model_bad_data), delimiter=",")
+# def save_checkpoint(model_dir, no_episodes, buffer, policy, ddpg_loss, buffer_metrics, model_data, model_good_data, model_bad_data):
+    # """Save training checkpoint and metrics."""
+    # buffer.saveBuffer(f"./{model_dir}/")
+    # policy.save(f"./{model_dir}/{no_episodes}")
+
+    # # Save metrics
+    # np.savetxt("ddpg_loss.csv", np.array(ddpg_loss), delimiter=",")
+    # for metric in METRICS:
+    #     np.savetxt(f"{metric}_buffer.csv", np.array(buffer_metrics[metric]), delimiter=",")
+    # np.savetxt("model_data.csv", np.array(model_data), delimiter=",")
+    # np.savetxt("model_good_data.csv", np.array(model_good_data), delimiter=",")
+    # np.savetxt("model_bad_data.csv", np.array(model_bad_data), delimiter=",")
 
 """
 Main training loop for the environment poisoning attack. The process follows:
@@ -175,67 +180,10 @@ Returns:
     None (saves models and metrics to specified directory)
 """
 def main():
-    # Parse arguments and setup
     args = parse_arguments()
-
-    # Initialize environments and systems
-    victim_system, attack_system = setup_systems(args)
-
-    # Setup training components
     model_dir = setup_model_dir(args)
-    buffer = setup_replay_buffer(attack_system.env)
-    ae = setup_autoencoder(victim_system.env)
-
-    #attack_system.train_system()
-
-    # Training loop
-    for episode in range(args.max_episodes):
-        temp_metrics, cumulative_metrics = attack_system.run_training_episode(
-            episode, victim_system, buffer, args.max_timesteps
-        )
-
-        # Train attack policy if past warmup
-        if episode >= args.eps_greedy_start_episodes:
-            attack_system.train(buffer, args)
-
-        # Save periodically
-        if (episode + 1) % args.eval_freq_episode == 0:
-            save_checkpoint(
-                model_dir, episode + 1, buffer, attack_system,
-                attack_system.buffer_metrics,
-                attack_system.model_data,
-                attack_system.model_good_data,
-                attack_system.model_bad_data
-            )
-
-def setup_systems(args):
-    # Initialize victim components
-    victim_env = Grid3D()
-    victim_algo = VictimQLearning(victim_env.nS, victim_env.nA, **config.VICTIM.DEFAULT_KWARGS)
-    victim_system = VictimSystem(victim_env, victim_algo)
-
-    # Initialize attack components
-    attack_env = AttackEnvironment(victim_system)
-    attack_system = setup_attack_system(attack_env, args)
-
-    _set_seeds(args.seed, victim_env, attack_env)
-
-    return victim_system, attack_system
-
-def setup_attack_system(attack_env, args):
-    attack_kwargs = config.ATTACK.DEFAULT_KWARGS.copy()
-    attack_kwargs.update({
-        "nb_states": attack_env.nS,
-        "nb_actions": attack_env.action_space.shape[0],
-        "max_action": float(attack_env.action_space.high[0]),
-        "tau": args.tau,
-        "discount": args.discount,
-    })
-
-    attack_algo = DDPG(**attack_kwargs)
-    env_ae = setup_autoencoder(victim_env)
-
-    return AttackSystem(attack_env, attack_algo, env_ae)
+    attack_system = setup_systems(args, model_dir)
+    attack_system.train_system()
 
 if __name__ == "__main__":
     main()
