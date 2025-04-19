@@ -96,12 +96,13 @@ def kullback_leibler_divergence(P: np.ndarray, P_star: np.ndarray) -> np.ndarray
     return np.sum(P*np.log(P/P_star), axis=1)
 
 
-def Attack_Cost_Compute_K(env: Environment, init_T: np.ndarray, agent_Q: np.ndarray, target: np.ndarray, cost_matrix=0, distance_type=0, whitebox=1, sinkhorn=0):
+def Attack_Cost_Compute_K(env: Environment, init_T: np.ndarray, agent_Q: np.ndarray, target: np.ndarray, policy: np.ndarray = None, cost_matrix=0, distance_type=0, whitebox=1, sinkhorn=0):
     """
     Compute Attacker Blackbox/Whitebox Reward using Kullback-Leibler Divergence Rate
-    This version takes a Q-table from the victim
     """
-    policy = get_policy_from_Q(agent_Q)
+    if policy is None:
+        policy = get_policy_from_Q(agent_Q)
+
     target_map = np.repeat(np.sum(target, axis=1).reshape(1,16), env.nA, axis = 1)
     target_policy = (target+0.001)/(1+0.001*env.nA)
     no_of_agents = 1

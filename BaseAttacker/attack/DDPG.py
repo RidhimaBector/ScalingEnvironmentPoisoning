@@ -117,7 +117,7 @@ class DDPG(Algorithm):
         exploration_noise (dict): Parameters for exploration noise
         device (torch.device): Device to use for tensor operations
     """
-    def __init__(self, seed, nb_states, nb_actions, max_action, hidden1, hidden2, init_w, prate, rate, ou_theta, ou_mu, ou_sigma, bsize, tau, discount, epsilon_divisor, is_training):
+    def __init__(self, seed, nb_states, nb_actions, max_action, hidden1, hidden2, init_w, prate, rate, ou_theta, ou_mu, ou_sigma, bsize, tau, discount, epsilon_divisor, eps_greedy_start_episodes, is_training):
 
         if seed > 0:
             self.seed(seed)
@@ -152,7 +152,7 @@ class DDPG(Algorithm):
         self.tau = tau
         self.discount = discount
         self.depsilon = 1.0 / epsilon_divisor
-
+        self.eps_greedy_start_episodes = eps_greedy_start_episodes
         #
         self.epsilon = 1.0
         #self.s_t = None # Most recent state
@@ -177,9 +177,6 @@ class DDPG(Algorithm):
         return action
 
 
-    def select_random_action(self, action_space):
-        return action_space.sample()
-
 
     def select_on_policy_action(self, state): #state: (1,21)
         action = to_numpy(
@@ -191,48 +188,44 @@ class DDPG(Algorithm):
 
 
     def act(self, state):
+
         return self.select_ddpg_action(state)
 
 
     def train(self, replay_buffer, atk_n_epoch, atk_n_batch, batch_size, ddpg_loss, i_episode):
-
         self.is_training = True
         for i_atk_n_epoch in range(atk_n_epoch):
-
             loss_critic = 0.0
             loss_actor = 0.0
             for i_atk_n_batch in range(atk_n_batch):
-
                 # Sample batch
                 state_batch, action_batch, next_state_batch, \
-                reward_batch, terminal_batch = replay_buffer.sample(self.batch_size) #self.memory.sample_and_split(self.batch_size)
+                reward_batch, terminal_batch = replay_buffer.sample(self.batch_size)
 
                 # Prepare for the target q batch
-                next_q_values = self.critic_target(
-                    to_tensor(next_state_batch, volatile=True),
-                    self.actor_target(to_tensor(next_state_batch, volatile=True)))
-                next_q_values.volatile=False
+                with torch.no_grad():
+                    next_q_values = self.critic_target(
+                        to_tensor(next_state_batch),
+                        self.actor_target(to_tensor(next_state_batch))
+                    )
 
+                # Calculate target Q values
                 target_q_batch = to_tensor(reward_batch) + \
                     self.discount*to_tensor(terminal_batch.astype(np.float64))*next_q_values
 
                 # Critic update
                 self.critic.zero_grad()
-
-                q_batch = self.critic( to_tensor(state_batch), to_tensor(action_batch) )
-
+                q_batch = self.critic(to_tensor(state_batch), to_tensor(action_batch))
                 value_loss = criterion(q_batch, target_q_batch)
                 value_loss.backward()
                 self.critic_optim.step()
 
                 # Actor update
                 self.actor.zero_grad()
-
                 policy_loss = -self.critic(
                     to_tensor(state_batch),
                     self.actor(to_tensor(state_batch))
                 )
-
                 policy_loss = policy_loss.mean()
                 policy_loss.backward()
                 self.actor_optim.step()

@@ -17,6 +17,7 @@ from algorithms.algorithm import Algorithm
 from envs.victim_environment import VictimEnvironment
 from envs.target_def import TARGET
 from scipy.special import softmax
+import torch
 
 if "../" not in sys.path:
     sys.path.append("../")
@@ -132,6 +133,11 @@ class VictimQLearning(Algorithm):
             'length': t + 1,
             'transitions': transitions
         }
+
+
+    def train(self, env: VictimEnvironment, num_episodes: int) -> Dict[str, Any]:
+        """Train the agent for specified number of episodes."""
+        return self.Train_Model(env, num_episodes)
 
 
     def Train_Model(self, env: VictimEnvironment, num_episodes: int) -> np.ndarray:
@@ -302,6 +308,92 @@ class VictimQLearning(Algorithm):
         stats['episode_lengths'].append(episode_stats['length'])
         # Copy over the transitions directly since they're already in the right format
         stats['transitions'] = episode_stats['transitions']
+
+
+    def act_with_encoding(self, encoded_state: torch.Tensor) -> int:
+        """Select action using current policy with encoded state input."""
+        # Convert encoded state to policy input format
+        state_features = encoded_state.detach().numpy().flatten()
+
+        # Project Q-values using encoded state features
+        q_values = self.Q @ state_features
+        action_probs = softmax(q_values)
+        return np.random.choice(np.arange(len(action_probs)), p=action_probs)
+
+
+    def update_with_encoding(self, encoded_state: torch.Tensor,
+                            action: int, reward: float,
+                            next_encoded_state: torch.Tensor,
+                            done: bool) -> None:
+        """Update Q-values using TD learning with encoded states."""
+        state_features = encoded_state.detach().numpy().flatten()
+        next_state_features = next_encoded_state.detach().numpy().flatten()
+
+        # Project Q-values using encoded states
+        current_q = self.Q @ state_features
+        next_q = self.Q @ next_state_features
+
+        best_next_action = np.argmax(next_q)
+        td_target = reward + self.discount_factor * next_q[best_next_action] if not done else reward
+        td_delta = td_target - current_q[action]
+
+        # Update Q-values using encoded state features
+        self.Q[action] += self.alpha * td_delta * state_features
+
+
+    def _run_episode_encoded(self, env: VictimEnvironment, encoder_service) -> Dict[str, Any]:
+        """Run single training episode using encoded states."""
+        state = env.reset()
+        encoded_state = encoder_service.encode_state(
+            env.altitude,
+            self._transitions
+        )
+        episode_reward = 0
+        transitions = []
+
+        max_steps = 1000 if env.max_steps is None else env.max_steps
+        for t in range(int(max_steps)):
+            action = self.act_with_encoding(encoded_state)
+            next_state, reward, done, _ = env.step(action)
+
+            # Track transitions for encoder
+            self._transitions[state, 1] = action
+            transitions.append((state, action))
+
+            # Get next encoded state
+            next_encoded_state = encoder_service.encode_state(
+                env.altitude,
+                self._transitions
+            )
+
+            self.update_with_encoding(encoded_state, action, reward, next_encoded_state, done)
+            encoded_state = next_encoded_state
+            state = next_state
+            episode_reward += reward
+
+            if done:
+                break
+
+        return {
+            'reward': episode_reward,
+            'length': t + 1,
+            'transitions': transitions
+        }
+
+
+    def train_with_encoding(self, env: VictimEnvironment, num_episodes: int, encoder_service) -> Dict[str, Any]:
+        """Train the agent using encoded states for specified number of episodes."""
+        stats = {
+            'episode_rewards': [],
+            'episode_lengths': [],
+            'transitions': self._init_transition_matrix()
+        }
+
+        for episode in range(num_episodes):
+            episode_stats = self._run_episode_encoded(env, encoder_service)
+            self._update_stats(stats, episode_stats)
+
+        return stats
 
 if __name__ == "__main__":
     from envs.env3D_4x4 import GridWorld_3D_env

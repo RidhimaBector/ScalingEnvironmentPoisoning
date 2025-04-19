@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import os
+import numpy as np
 
 import torch
 from torch.autograd import Variable
@@ -20,10 +21,14 @@ def prBlack(prt): print("\033[98m {}\033[00m" .format(prt))
 def to_numpy(var):
     return var.cpu().data.numpy() if USE_CUDA else var.data.numpy()
 
-def to_tensor(ndarray, volatile=False, requires_grad=False, dtype=FLOAT):
-    return Variable(
-        torch.from_numpy(ndarray), volatile=volatile, requires_grad=requires_grad
-    ).type(dtype)
+def to_tensor(ndarray, requires_grad=False):
+    """Convert numpy array to PyTorch tensor."""
+    if isinstance(ndarray, np.ndarray):
+        tensor = torch.from_numpy(ndarray).float()
+        if USE_CUDA:
+            tensor = tensor.cuda()
+        return tensor.requires_grad_(requires_grad)
+    return ndarray
 
 def soft_update(target, source, tau):
     for target_param, param in zip(target.parameters(), source.parameters()):

@@ -1,5 +1,5 @@
 from .system import System
-from .attack_system import AttackSystem
 from .victim_system import VictimSystem
+from .attack_system import AttackSystem
 
-__all__ = ['System', 'AttackSystem', 'VictimSystem']
+__all__ = ['System', 'VictimSystem', 'AttackSystem']
