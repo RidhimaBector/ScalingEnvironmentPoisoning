@@ -10,5 +10,7 @@ pydantic>=2.5.2
 bcrypt>=4.0.1
 python-jose[cryptography]>=3.3.0
 passlib>=1.7.4
-pot
 tensorboardX>=2.6.0
+pandas>=2.1.1
+matplotlib>=3.7.2
+pot

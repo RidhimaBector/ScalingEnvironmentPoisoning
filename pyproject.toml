@@ -1,0 +1,30 @@
+[tool.ruff]
+# Enable pycodestyle ('E'), pyflakes ('F'), and isort ('I') rules
+select = ["E", "F", "I"]
+
+# Same as Black.
+line-length = 88
+
+# Assume Python 3.8
+target-version = "py38"
+
+# Ignore specific rules
+ignore = [
+    "E402",  # module level import not at top of file
+    "E501",  # line too long
+]
+
+# Exclude files and directories
+exclude = [
+    ".git",
+    ".ruff_cache",
+    "__pycache__",
+    "build",
+    "dist"
+]
+
+# Allow unused variables when underscore-prefixed.
+dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+
+[tool.ruff.isort]
+known-first-party = ["ScalingEnvironmentPoisoning"]
