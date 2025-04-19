@@ -6,11 +6,12 @@ should implement to ensure consistency across the codebase.
 
 """
 from abc import ABC, abstractmethod
-from typing import Any, Dict
+from typing import Any, Dict, Tuple
 
 
 class Algorithm(ABC):
     """Abstract base class for all RL algorithms."""
+
 
     @abstractmethod
     def train(self, num_episodes: int) -> Dict[str, Any]:
@@ -24,6 +25,7 @@ class Algorithm(ABC):
         """
         pass
 
+
     @abstractmethod
     def act(self, state: Any) -> int:
         """Select an action given the current state.
@@ -35,6 +37,7 @@ class Algorithm(ABC):
             Selected action
         """
         pass
+
 
     @abstractmethod
     def update(self, state: Any, action: int, reward: float,
@@ -50,10 +53,12 @@ class Algorithm(ABC):
         """
         pass
 
+
     @abstractmethod
     def reset(self) -> None:
         """Reset the algorithm to initial state."""
         pass
+
 
     @abstractmethod
     def save(self, path: str) -> None:
@@ -63,6 +68,7 @@ class Algorithm(ABC):
             path: Path to save location
         """
         pass
+
 
     @abstractmethod
     def load(self, path: str) -> None:

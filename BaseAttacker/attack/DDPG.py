@@ -117,7 +117,7 @@ class DDPG(Algorithm):
         exploration_noise (dict): Parameters for exploration noise
         device (torch.device): Device to use for tensor operations
     """
-    def __init__(self, seed, nb_states, nb_actions, max_action, hidden1, hidden2, init_w, prate, rate, ou_theta, ou_mu, ou_sigma, bsize, tau, discount, epsilon_divisor, is_training):
+    def __init__(self, seed, nb_states, nb_actions, max_action, hidden1, hidden2, init_w, prate, rate, ou_theta, ou_mu, ou_sigma, bsize, tau, discount, epsilon_divisor, eps_greedy_start_episodes, is_training):
 
         if seed > 0:
             self.seed(seed)
@@ -152,7 +152,7 @@ class DDPG(Algorithm):
         self.tau = tau
         self.discount = discount
         self.depsilon = 1.0 / epsilon_divisor
-
+        self.eps_greedy_start_episodes = eps_greedy_start_episodes
         #
         self.epsilon = 1.0
         #self.s_t = None # Most recent state
@@ -177,9 +177,6 @@ class DDPG(Algorithm):
         return action
 
 
-    def select_random_action(self, action_space):
-        return action_space.sample()
-
 
     def select_on_policy_action(self, state): #state: (1,21)
         action = to_numpy(
@@ -191,6 +188,7 @@ class DDPG(Algorithm):
 
 
     def act(self, state):
+
         return self.select_ddpg_action(state)
 
 

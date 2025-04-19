@@ -13,6 +13,7 @@ if "../" not in sys.path:
 project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.append(project_root)
 
+from utils.utils_buf import Memory
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -34,7 +35,6 @@ MEMORY_SIZE = config.AE.MEMORY_SIZE
 Transition = namedtuple('Transition', ('pre_state', 'pre_action', 'state', 'action'))
 
 
-
 """ Define the Encoder(LSTM) Network"""
 
 class Encoder_LSTM(nn.Module):
@@ -47,13 +47,15 @@ class Encoder_LSTM(nn.Module):
         self.lstm = nn.LSTM(input_size, hidden_size, num_layer)
 
     def forward(self, x):
+        # Create hidden states based on input dimensions
         h0 = torch.zeros(self.num_layer, x.size(1), self.hidden_size).to(device)
         c0 = torch.zeros(self.num_layer, x.size(1), self.hidden_size).to(device)
 
+        # Forward pass
         out, (hn, cn) = self.lstm(x, (h0, c0))
 
+        # Return last hidden state
         embedding = hn[-1, :, :]
-
         return embedding.data
 
 
@@ -142,6 +144,9 @@ class EnvAutoEncoder():
         self.criterion = nn.CrossEntropyLoss()
         self.optimizer = torch.optim.SGD(self.Model.parameters(), self.lr)
 
+        self.enc_in_size = enc_in_size
+        self.enc_out_size = enc_out_size
+        self.enc_num_layer = enc_num_layer
 
     def _train(self, memory_A, memory_B):
 
@@ -373,13 +378,31 @@ class EnvAutoEncoder():
 
 
     def _embedding_BATCH(self, memory_A, memory_B):
-
         self.Model.eval() # prep model for *evaluation*
 
         n_trajectory = MEMORY_SIZE//SEQ_LEN
 
         zA = []
         zB = []
+
+        # Convert lists to Memory objects if needed
+        if isinstance(memory_A, list):
+            mem_A = Memory(MEMORY_SIZE)
+            for item in memory_A:
+                if isinstance(item, tuple):
+                    mem_A.push(*item)
+                else:
+                    mem_A.push(item[0], item[1])  # Assuming each item is [state, action]
+            memory_A = mem_A
+
+        if isinstance(memory_B, list):
+            mem_B = Memory(MEMORY_SIZE)
+            for item in memory_B:
+                if isinstance(item, tuple):
+                    mem_B.push(*item)
+                else:
+                    mem_B.push(item[0], item[1])  # Assuming each item is [state, action]
+            memory_B = mem_B
 
         for n in range(n_trajectory):
             # Input Data
@@ -428,6 +451,21 @@ class EnvAutoEncoder():
 
         return load_model
 
+    def encode_environment(self, altitude):
+        """Encode environment state (altitude) into embedding."""
+        # Reshape altitude to match LSTM input expectations: (seq_len, batch, input_size)
+        env_tensor = torch.from_numpy(altitude).float()
+        env_tensor = env_tensor.view(-1, 1, self.enc_in_size)  # (seq_len, batch=1, features)
+
+        # Forward pass through encoder LSTM
+        embedding = self.Enc_Model(env_tensor)
+
+        return embedding
+
+    def combine_embeddings(self, policy_embedding, env_embedding):
+        """Combine policy and environment embeddings into single state representation."""
+        return torch.cat((policy_embedding, env_embedding), dim=1)
+
 
 
 if __name__ == "__main__":
@@ -464,6 +502,6 @@ if __name__ == "__main__":
         "lr": 0.001,
     }
 
-    ae_Model = AutoEncoder(**ae_args)
+    ae_Model = EnvAutoEncoder(**ae_args)
 
 

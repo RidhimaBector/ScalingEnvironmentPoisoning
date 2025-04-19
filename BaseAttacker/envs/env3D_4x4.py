@@ -261,6 +261,8 @@ class Grid3D(VictimEnvironment):
         self.nS = np.prod(self.shape)
         self.nA = 4
 
+        self._max_steps = 1000
+
         # generate altitute
         self.altitude_default = self._defined_altitude()
 
@@ -283,6 +285,24 @@ class Grid3D(VictimEnvironment):
         self.seed()
         self.s = 0 #categorical_sample(self.isd, self.np_random)
 
+
+    def __str__(self):
+        return f"Grid3D(shape={self.shape}, nS={self.nS}, nA={self.nA}, max_steps={self._max_steps})"
+
+
+    @property
+    def max_steps(self) -> int:
+        """Get maximum number of steps allowed in an episode."""
+        return self._max_steps
+
+    @max_steps.setter
+    def max_steps(self, value: int) -> None:
+        """Set maximum number of steps allowed in an episode.
+
+        Args:
+            value: Maximum number of steps as integer
+        """
+        self._max_steps = value
 
     def render_altitude_heatmap(self) -> np.ndarray:
         """Returns a numpy array representing the environment as an RGB heatmap based on altitude.
@@ -372,10 +392,6 @@ class Grid3D(VictimEnvironment):
     def env_dynamics(self):
         return self.altitude.copy().reshape((self.nS, 1))
 
-
-    @property
-    def max_steps(self):
-        return None
 
     def reset(self):
         self.s = 0 #categorical_sample(self.isd, self.np_random) #start state
