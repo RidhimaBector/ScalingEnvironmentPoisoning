@@ -145,7 +145,7 @@ def setup_systems(args, model_dir) -> AttackSystem:
     attack_kwargs = config.ATTACK.DEFAULT_KWARGS.copy()
     attack_kwargs.update({
         "nb_states": attack_env.nS,
-        "nb_actions": attack_env.action_space.shape[0],
+        "nb_actions": attack_env.action_space.shape[0] + 1,
         "max_action": float(attack_env.action_space.high[0]),
         "tau": args.tau,
         "discount": args.discount,

@@ -19,6 +19,8 @@ from ae.encoder_service import EncoderService, EncoderType
 
 METRICS = WHITEBOX_METRICS
 
+DEFAULT_NUM_EPISODES = 50
+
 class AttackSystem(System):
     """
     AttackSystem class that manages attack agent training and evaluation
@@ -97,9 +99,16 @@ class AttackSystem(System):
         )
 
     def select_attack_action(self, state, episode):
+        """Select action using encoded state representation."""
         if episode < self.args.eps_greedy_start_episodes:
             return self.env.action_space.sample()
-        return self.algorithm.act(np.array(state))
+
+        # Convert encoded state tensor to numpy array for algorithm
+        state_np = state.detach().numpy().flatten()
+        action = self.algorithm.act(state_np)
+
+        return action
+
 
     def attack_cost_compute_W(self, target, cost_matrix):
         distance_w = Attack_Cost_Compute_W(self.env.victim_system.env, self.env.victim_system.env.INIT_T, self.env.victim_system.algorithm.Q, target, cost_matrix, distance_type=0)
@@ -144,10 +153,12 @@ class AttackSystem(System):
         start_time = time.time()
         state = self.get_state()
         current_env_dynamics = self.env.victim_system.env.env_dynamics.copy()
+
         action = self.select_attack_action(state, episode)
 
-        self.env.step(action)
-        self.env.train_victim(num_episodes=80)
+        self.env.step(action[:-1])  # Use all components except the last logit value
+        x = (action[-1] + 1)/2
+        self.env.train_victim(num_episodes=(DEFAULT_NUM_EPISODES*x)+5)
 
         next_state = self.get_state()
 
@@ -170,7 +181,7 @@ class AttackSystem(System):
         return timestep_metrics, done
 
     def get_state(self) -> torch.Tensor:
-        """Get combined state representation from policy and environment."""
+        """Get encoded state representation from victim system."""
         if self.env.is_initial_state:
             return self._encoder_service.get_initial_state(self.env.victim_system)
 
