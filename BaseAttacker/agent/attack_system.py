@@ -28,14 +28,19 @@ class AttackSystem(System):
         self.model_dir = model_dir
         self.args = args
         self.ddpg_loss = []
-        self.buffer = self._setup_replay_buffer()
         self.experiment_time = time.time()
+
+        # Initialize encoder service BEFORE setting up replay buffer
         self._encoder_service = EncoderService(
             config,
             env=self.env.victim_system.env,
             algorithm=self.env.victim_system.algorithm,
             encoder_type=encoder_type
         )
+
+        # Now setup replay buffer (which depends on encoder service)
+        self.buffer = self._setup_replay_buffer()
+
         # Initialize all metrics tracking
         self.buffer_metrics = {metric: [] for metric in METRICS}
 
@@ -112,22 +117,17 @@ class AttackSystem(System):
 
     def train_system(self):
         for episode in range(self.args.max_episodes):
-            self.run_training_episode(
-                episode
-            )
+            self.run_training_episode(episode)
 
     def run_training_episode(self, episode: int) -> dict:
         """Run a single training episode."""
         print(f"\n--------- Episode: {episode} ----------")
 
         self.env.reset()
-
         self.metrics_df.loc[episode + 1] = 0
 
         for timestep in range(self.args.max_timesteps):
-            timestep_metrics, done = self._run_training_step(
-                episode, timestep
-            )
+            timestep_metrics, done = self._run_training_step(episode, timestep)
             if (done or timestep == self.args.max_timesteps - 1):
                 _ = self.update_model_statistics(episode, timestep, timestep_metrics)
                 break
@@ -137,7 +137,6 @@ class AttackSystem(System):
 
         if (episode + 1) % self.args.eval_freq_episode == 0:
             self.save_checkpoint(self.model_dir, episode + 1)
-
 
     def _run_training_step(self, episode: int, timestep: int) -> Tuple[dict, bool]:
         """Execute single training step."""
@@ -165,7 +164,15 @@ class AttackSystem(System):
             self.buffer_metrics[metric].append([no_episodes, no_timesteps, timestep_metrics[metric]])
             self.metrics_df.loc[no_episodes, metric] += timestep_metrics[metric]
 
-        self.buffer.add(state.view(self.env.nS), action, next_state.view(self.env.nS), rewards, done)
+        # For whitebox encoding, flatten the state properly
+        if self._encoder_service.encoder_type == EncoderType.WHITEBOX:
+            state_flat = state.view(-1)
+            next_state_flat = next_state.view(-1)
+        else:
+            state_flat = state.view(self.env.nS)
+            next_state_flat = next_state.view(self.env.nS)
+
+        self.buffer.add(state_flat, action, next_state_flat, rewards, done)
 
         return timestep_metrics, done
 
@@ -174,9 +181,7 @@ class AttackSystem(System):
         if self.env.is_initial_state:
             return self._encoder_service.get_initial_state(self.env.victim_system)
 
-        return self._encoder_service.encode(
-          victim_system=self.env.victim_system,
-        )
+        return self._encoder_service.encode(victim_system=self.env.victim_system)
 
     def train(self, episode):
         """Train the attack policy using the internal replay buffer."""
@@ -191,7 +196,6 @@ class AttackSystem(System):
 
     def calculate_attack_metrics_with_target(self, current_env_dynamics, start_time):
         """Calculate attack metrics based on privacy mode."""
-        privacy_mode = self.env.victim_system.get_privacy_mode()
         metrics = {}
 
         # Calculate KL divergence distances
@@ -308,7 +312,7 @@ class AttackSystem(System):
         for metric in METRICS:
             stats.extend([
                 timestep_metrics[metric],
-                self.metrics_df.loc[episode+1, metric]/timestep,
+                self.metrics_df.loc[episode+1, metric]/(timestep+1),
                 self.metrics_df.loc[episode+1, metric]
             ])
         cur_model_stats = np.array(stats)
@@ -401,7 +405,7 @@ class AttackSystem(System):
         """Save training checkpoint and metrics."""
         # Save buffer and policy
         self.buffer.saveBuffer(f"./{model_dir}/{self.experiment_time}")
-        self.algorithm.save(f"./{model_dir}/{episode+1}")
+        self.algorithm.save(f"./{model_dir}/{episode}")
 
         # Create the metrics directory if it doesn't exist
         metrics_dir = f"metrics/{self.experiment_time}"
@@ -420,7 +424,11 @@ class AttackSystem(System):
 
     def _setup_replay_buffer(self):
         """Initialize the replay buffer for the attack agent."""
-        state_dim = self.env.nS
+        # For whitebox encoding, state dimension is larger
+        if self._encoder_service.encoder_type == EncoderType.WHITEBOX:
+            state_dim = self.env.victim_system.env.nS * self.env.victim_system.env.nA + self.env.victim_system.env.nS
+        else:
+            state_dim = self.env.nS
         action_dim = self.env.action_space.shape[0]
 
         from utils.utils_buf import ReplayBuffer
@@ -429,11 +437,6 @@ class AttackSystem(System):
             action_dim=action_dim,
             max_size=int(1e6)  # Standard buffer size of 1 million transitions
         )
-
-    def _compute_trajectory_features(self, trajectories):
-        """Convert trajectory samples into feature vectors."""
-        # TODO: Implement trajectory feature computation
-        pass
 
     def plot_metrics(self, episode_num):
         # Get metrics for specific episode

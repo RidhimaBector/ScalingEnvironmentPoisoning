@@ -25,7 +25,7 @@ class VictimSystem(System):
 
         # Initialize encoder based on privacy mode
         if privacy_mode == PrivacyMode.FULL_WHITEBOX:
-            encoder_type = EncoderType.COMBINED
+            encoder_type = EncoderType.WHITEBOX  # Use whitebox for full whitebox mode
         elif privacy_mode == PrivacyMode.PARTIAL_BLACKBOX:
             encoder_type = EncoderType.ENVIRONMENT_ONLY
         else:  # FULL_BLACKBOX

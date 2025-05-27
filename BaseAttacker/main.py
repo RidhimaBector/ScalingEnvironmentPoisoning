@@ -29,7 +29,7 @@ EMBEDDING_SIZE = config.AE.EMBEDDING_SIZE
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-ENCODER_TYPE = EncoderType.NIL
+ENCODER_TYPE = EncoderType.WHITEBOX
 METRICS = WHITEBOX_METRICS
 
 """
@@ -144,8 +144,13 @@ def setup_systems(args, model_dir) -> AttackSystem:
     # Initialize attack components
     attack_env = AttackEnvironment(victim_system, config)
     attack_kwargs = config.ATTACK.DEFAULT_KWARGS.copy()
+
+    # Calculate state dimension for whitebox encoding
+    # For whitebox: victim Q-table (nS * nA) + environment state (nS)
+    state_dim = victim_env.nS * victim_env.nA + victim_env.nS
+
     attack_kwargs.update({
-        "nb_states": attack_env.nS,
+        "nb_states": state_dim,  # Use calculated state dimension
         "nb_actions": attack_env.action_space.shape[0],
         "max_action": float(attack_env.action_space.high[0]),
         "tau": args.tau,

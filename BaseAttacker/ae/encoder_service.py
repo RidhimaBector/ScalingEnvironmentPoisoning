@@ -16,6 +16,7 @@ class EncoderType(Enum):
     ENVIRONMENT_ONLY = "environment"
     COMBINED = "combined"
     NIL = "nil"
+    WHITEBOX = "whitebox"
 
 
 class EncoderService:
@@ -23,7 +24,7 @@ class EncoderService:
         self.embedding_len = config.AE.EMBEDDING_SIZE
         self.encoder_type = encoder_type
 
-        if self.encoder_type == EncoderType.NIL:
+        if self.encoder_type == EncoderType.NIL or self.encoder_type == EncoderType.WHITEBOX:
             self.policy_encoder = None
             self.env_encoder = None
         elif self.encoder_type == EncoderType.POLICY_ONLY:
@@ -80,6 +81,11 @@ class EncoderService:
         #     env_embedding = self.env_encoder.encode_environment(env_state)
         #     return torch.cat((torch.from_numpy(policy_embedding[-1]).unsqueeze(0), env_embedding.view(1, -1)), dim=3)
 
+        # Handle whitebox encoding first
+        if self.encoder_type == EncoderType.WHITEBOX:
+            return self._encode_whitebox(victim_system)
+
+        # Original encoding logic (commented out above, reimplemented below)
         if self.policy_encoder is None and self.env_encoder is None:
             return torch.zeros((1, self.embedding_len)).unsqueeze(0).unsqueeze(0)
         elif self.policy_encoder is None:
@@ -95,6 +101,23 @@ class EncoderService:
             env_encoding = self.env_encoder.encode_environment(victim_system.env.altitude)
             return torch.cat((policy_encoding, env_encoding), dim=3)
 
+    def _encode_whitebox(self, victim_system: 'VictimSystem') -> torch.Tensor:
+        """Whitebox encoding that returns raw victim info and environment state."""
+        # Get victim policy information (flattened Q-values)
+        victim_info = victim_system.algorithm.Q.flatten()
+        victim_tensor = torch.from_numpy(victim_info).float()
+        victim_tensor_4d = victim_tensor.unsqueeze(0).unsqueeze(0).unsqueeze(0)
+
+        # Get environment state (altitude)
+        env_info = victim_system.env.altitude.copy()
+        env_tensor = torch.from_numpy(env_info).float()
+        env_tensor = env_tensor.view(1, victim_system.env.nS)
+        env_tensor_4d = env_tensor.unsqueeze(0).unsqueeze(0)
+
+        # Concatenate victim and environment information
+        encoding = torch.cat((victim_tensor_4d, env_tensor_4d), dim=3)
+        return encoding
+
     def _gather_victim_data(self, victim_env, victim_algo):
         # Victim data can include:
         # - policy derived from Q-values
@@ -105,7 +128,15 @@ class EncoderService:
         return np.concatenate([policy.flatten(), env_dynamics.flatten()])
 
     def get_initial_state(self, victim_system: 'VictimSystem') -> torch.Tensor:
-        if self.encoder_type == EncoderType.POLICY_ONLY:
+        if self.encoder_type == EncoderType.WHITEBOX:
+            # For whitebox, return zeros with appropriate dimensions
+            victim_info = torch.zeros((1, victim_system.env.nS * victim_system.env.nA))
+            victim_tensor_4d = victim_info.unsqueeze(0).unsqueeze(0)
+            env_info = torch.zeros((1, victim_system.env.nS))
+            env_tensor_4d = env_info.unsqueeze(0).unsqueeze(0)
+            encoding = torch.cat((victim_tensor_4d, env_tensor_4d), dim=3)
+            return encoding
+        elif self.encoder_type == EncoderType.POLICY_ONLY:
             victim_info = torch.zeros((1, self.embedding_len))
             return victim_info.unsqueeze(0).unsqueeze(0)
         elif self.encoder_type == EncoderType.ENVIRONMENT_ONLY:
@@ -116,8 +147,10 @@ class EncoderService:
             victim_tensor_4d = victim_info.unsqueeze(0).unsqueeze(0)
             env_info = torch.zeros((1, victim_system.env.nS))
             env_tensor_4d = env_info.unsqueeze(0).unsqueeze(0)
-            encoding = torch.cat((victim_tensor_4d, env_tensor_4d), 3)
+            encoding = torch.cat((victim_tensor_4d, env_tensor_4d), dim=3)
             return encoding
 
     def encode_state(self, env_state: np.ndarray, policy_transitions: np.ndarray) -> torch.Tensor:
+        if self.encoder_type == EncoderType.WHITEBOX:
+            return torch.from_numpy(env_state).float()
         return self.env_encoder.encode_environment(env_state)

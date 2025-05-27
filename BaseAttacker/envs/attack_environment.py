@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Tuple
 from algorithms.algorithm import Algorithm
 from constants import *
 from envs.environment import Environment
-from ae.encoder_service import EncoderService
+from ae.encoder_service import EncoderService, EncoderType
 
 if TYPE_CHECKING:
     from agent.victim_system import VictimSystem
@@ -15,7 +15,13 @@ class AttackEnvironment(Environment):
     def __init__(self, victim_system: 'VictimSystem', config):
         super(AttackEnvironment, self).__init__()
         self._victim_system = victim_system
-        self.nS = EMBEDDING_SIZE + self.victim_system.env.nS
+
+        # For whitebox encoding, state size is victim Q-table + environment state
+        if hasattr(victim_system, 'encoder_service') and victim_system.encoder_service.encoder_type == EncoderType.WHITEBOX:
+            self.nS = victim_system.env.nS * victim_system.env.nA + victim_system.env.nS
+        else:
+            self.nS = EMBEDDING_SIZE + self.victim_system.env.nS
+
         self.action_space = spaces.Box(low=-1.0, high=+1.0, shape=(self.victim_system.env.nS,), dtype=np.float64)
         self.observation_space = spaces.Discrete(self.nS + 1)
         self.is_initial_state = True
@@ -36,6 +42,7 @@ class AttackEnvironment(Environment):
             A = np.clip(self.victim_system.env.altitude + U.reshape(self.victim_system.env.shape), 0.0, 10.0)
             self.victim_system.env.altitude = A
             self.victim_system.env.T = self.victim_system.env._calculate_dynamics(self.victim_system.env.shape, self.victim_system.env.nA, self.victim_system.env.nS, A)
+            self.is_initial_state = False  # Mark that we're no longer in initial state
             return 0
 
         return Attack_Env(self, U)
