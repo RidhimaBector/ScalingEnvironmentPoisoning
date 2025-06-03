@@ -1,9 +1,26 @@
-from collections import defaultdict
+import os
+import sys
+from os.path import abspath, dirname
+
 import numpy as np
 
 # Environment object
-from .env3D_4x4 import GridWorld_3D_env
-env = GridWorld_3D_env()
+from envs.env3D_4x4 import Grid3D
+from utils.utils_buf import Memory
+
+if "../" not in sys.path:
+    sys.path.append("../")
+
+from yacs.config import CfgNode as CN
+
+yaml_name = os.path.join(dirname(dirname(abspath(__file__))), "config", "config_default.yaml")
+fcfg = open(yaml_name)
+config = CN.load_cfg(fcfg)
+config.freeze()
+env = Grid3D()
+
+
+MEMORY_SIZE = config.AE.MEMORY_SIZE
 
 #TARGET = defaultdict(lambda: np.zeros(env.action_space.n))
 
@@ -41,3 +58,5 @@ TARGET[11][2] = 1 #np.array([0, 1, 0, 0])
 TARGET[15][3] = 1 #np.array([0, 1, 0, 0])
 TARGET[14][3] = 1 #np.array([0, 1, 0, 0])
 TARGET[13][3] = 1 #np.array([0, 1, 0, 0])
+
+MEM_Target = Memory(MEMORY_SIZE)

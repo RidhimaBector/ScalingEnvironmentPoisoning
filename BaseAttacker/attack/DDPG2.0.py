@@ -1,14 +1,12 @@
 # -*- coding: utf-8 -*-
 
 import numpy as np
-
 import torch
 import torch.nn as nn
-from torch.optim import Adam
-
-from model import (Actor, Critic)
 from memory import SequentialMemory
+from model import Actor, Critic
 from random_process import OrnsteinUhlenbeckProcess
+from torch.optim import Adam
 from util import *
 
 # from ipdb import set_trace as debug

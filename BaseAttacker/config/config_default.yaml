@@ -3,5 +3,47 @@ AE:
   SEQ_LEN: 5
   LEN_TRAJECTORY: 5
   MEMORY_SIZE: 50
+  DEFAULT_KWARGS:
+    input_size: 2
+    hidden_size: 128
+    output_size: 16  # EMBEDDING_SIZE
+    learning_rate: 0.001
+    num_epochs: 10
+  ENV_KWARGS:
+    enc_in_size: 2
+    enc_out_size: 16  # EMBEDDING_SIZE
+    enc_num_layer: 1
+    dec_fc_in_size: 17  # enc_out_size + 1
+    dec_lstm_in_size: 18  # enc_out_size + 2
+    dec_lstm_num_layer: 1
+    n_epochs: 2
+    lr: 0.001
+
 VICTIM:
   TMAX: 100
+  DEFAULT_KWARGS:
+    memory_size: 50  # From victim_Q.py MEMORY_SIZE
+    discount_factor: 1.0  # From victim_Q.py default arg
+    alpha: 0.1  # From victim_Q.py default arg
+    epsilon: 0.1  # From victim_Q.py default arg
+    # Commenting out unused params
+    # max_epsilon: 1.0
+    # min_epsilon: 0.01
+    # decay_rate: 0.01
+
+ATTACK:
+  DEFAULT_KWARGS:
+    seed: 0
+    hidden1: 400
+    hidden2: 300
+    init_w: 0.003
+    prate: 0.0001
+    rate: 0.001
+    ou_theta: 0.15
+    ou_mu: 0.0
+    ou_sigma: 0.2
+    bsize: 256
+    tau: 0.005
+    discount: 0.9
+    epsilon_divisor: 1000
+    is_training: true

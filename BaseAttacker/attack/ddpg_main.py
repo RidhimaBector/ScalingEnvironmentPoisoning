@@ -1,14 +1,13 @@
 # -*- coding: utf-8 -*-
 
-import numpy as np
 import argparse
 from copy import deepcopy
-import torch
-import gym
 
-from normalized_env import NormalizedEnv
-from evaluator import Evaluator
+import gym
+import numpy as np
 from ddpg import DDPG
+from evaluator import Evaluator
+from normalized_env import NormalizedEnv
 from util import *
 
 gym.undo_logger_setup()
