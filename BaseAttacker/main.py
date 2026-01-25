@@ -19,7 +19,7 @@ from ae.encoder_service import EncoderType
 import sys
 
 # YAML config
-yaml_name='/Users/kunwarnir/projects/envPoisoning/ScalingEnvironmentPoisoning/BaseAttacker/config/config_default.yaml'
+yaml_name='/Users/kunwar/projects/rl_playground/ScalingEnvironmentPoisoning/BaseAttacker/config/config_default.yaml'
 fcfg = open(yaml_name)
 config = CN.load_cfg(fcfg)
 config.freeze()

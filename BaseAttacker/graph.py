@@ -3,7 +3,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 # Read the CSV data
-data = np.loadtxt('/Users/kunwarnir/projects/envPoisoning/ScalingEnvironmentPoisoning/BaseAttacker/metrics/1745264984.979033/accuracy_buffer.csv', delimiter=',')
+data = np.loadtxt('/Users/kunwar/projects/rl_playground/ScalingEnvironmentPoisoning/BaseAttacker/metrics/1748305566.537834/accuracy_buffer.csv', delimiter=',')
 # data = np.loadtxt('/Users/kunwarnir/projects/envPoisoning/master/ScalingEnvironmentPoisoning/accuracy_buffer.csv', delimiter=',')
 
 # Convert to DataFrame
@@ -44,5 +44,5 @@ plt.grid(True, linestyle='--', alpha=0.7)
 plt.tight_layout()
 
 # Save the plot
-plt.savefig('accuracy_per_episode4.png', dpi=300, bbox_inches='tight')
+plt.savefig('accuracy_per_episode_sedf.png', dpi=300, bbox_inches='tight')
 plt.close()
