@@ -1,12 +1,21 @@
+"""DDPG attack algorithm for learning environment perturbation policies.
+
+Implements Deep Deterministic Policy Gradients with Ornstein-Uhlenbeck
+exploration noise. Used as the attack agent that learns to modify
+environment dynamics to steer victims toward a target policy.
+"""
+
 import copy
+from typing import Any, Dict, List
 
 import numpy as np
 import torch
 import torch.nn as nn
-from algorithms.algorithm import Algorithm
+from core.attack_algorithm import AttackAlgorithm
 from attack.random_process import OrnsteinUhlenbeckProcess
 from attack.util import *
 from torch.optim import Adam
+from utils.utils_buf import ReplayBuffer
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -98,26 +107,16 @@ class Critic(nn.Module):
         return out
 
 
-class DDPG(Algorithm):
+class DDPG(AttackAlgorithm):
+    """DDPG attack algorithm for environment poisoning.
 
-    """Deep Deterministic Policy Gradient implementation.
+    Learns a deterministic policy that maps attack states (encoded victim
+    information + environment dynamics) to continuous perturbation actions.
+    Uses actor-critic architecture with target networks and OU noise.
 
-    Args:
-        state_dim (int): Dimension of state space
-        action_dim (int): Dimension of action space
-        max_action (float): Maximum action value
-        actor_kwargs (dict): Arguments for Actor network
-        critic_kwargs (dict): Arguments for Critic network
-        buffer_size (int): Size of replay buffer
-        batch_size (int): Size of training batch
-        discount (float): Discount factor gamma
-        tau (float): Target network update rate
-        actor_lr (float): Learning rate for actor
-        critic_lr (float): Learning rate for critic
-        exploration_noise (dict): Parameters for exploration noise
-        device (torch.device): Device to use for tensor operations
+    Implements both Algorithm (legacy) and AttackAlgorithm (new ABC).
     """
-    def __init__(self, seed, nb_states, nb_actions, max_action, hidden1, hidden2, init_w, prate, rate, ou_theta, ou_mu, ou_sigma, bsize, tau, discount, epsilon_divisor, eps_greedy_start_episodes, is_training):
+    def __init__(self, seed, nb_states, nb_actions, max_action, hidden1, hidden2, init_w, prate, rate, ou_theta, ou_mu, ou_sigma, bsize, tau, discount, epsilon_divisor, eps_greedy_start_episodes, is_training, **kwargs):
 
         if seed > 0:
             self.seed(seed)
@@ -144,7 +143,7 @@ class DDPG(Algorithm):
         hard_update(self.critic_target, self.critic)
 
         #Create replay buffer
-        #self.memory = SequentialMemory(limit=args.rmsize, window_length=args.window_length)
+        self._buffer = ReplayBuffer(state_dim=nb_states, action_dim=nb_actions)
         self.random_process = OrnsteinUhlenbeckProcess(size=nb_actions, theta=ou_theta, mu=ou_mu, sigma=ou_sigma)
 
         # Hyper-parameters
@@ -155,9 +154,10 @@ class DDPG(Algorithm):
         self.eps_greedy_start_episodes = eps_greedy_start_episodes
         #
         self.epsilon = 1.0
-        #self.s_t = None # Most recent state
-        #self.a_t = None # Most recent action
         self.is_training = True
+
+        # Loss log for new ABC interface
+        self._loss_log: List[list] = []
 
         #
         if USE_CUDA: self.cuda()
@@ -173,7 +173,6 @@ class DDPG(Algorithm):
         if decay_epsilon:
             self.epsilon = max(self.epsilon - self.depsilon, 0.01)
 
-        #self.a_t = action
         return action
 
 
@@ -183,7 +182,6 @@ class DDPG(Algorithm):
             self.actor(to_tensor(state.reshape(1, -1)))
         ).squeeze(0)
 
-        #self.a_t = action
         return action
 
 
@@ -191,6 +189,75 @@ class DDPG(Algorithm):
 
         return self.select_ddpg_action(state)
 
+    # ------------------------------------------------------------------
+    # New AttackAlgorithm ABC methods
+    # ------------------------------------------------------------------
+
+    def store_transition(self, obs, action, next_obs, reward, done):
+        self._buffer.add(obs, action, next_obs, reward, done)
+
+    def ready_to_train(self):
+        return len(self._buffer) >= self.batch_size
+
+    def update(self, episode=0):
+        """Run 1 epoch x 15 batches of critic/actor updates."""
+        atk_n_batch = 15
+        loss_critic = 0.0
+        loss_actor = 0.0
+        self.is_training = True
+
+        for _ in range(atk_n_batch):
+            state_batch, action_batch, next_state_batch, \
+                reward_batch, terminal_batch = self._buffer.sample(self.batch_size)
+
+            with torch.no_grad():
+                next_q_values = self.critic_target(
+                    to_tensor(next_state_batch),
+                    self.actor_target(to_tensor(next_state_batch))
+                )
+
+            target_q_batch = to_tensor(reward_batch) + \
+                self.discount * to_tensor(terminal_batch.astype(np.float64)) * next_q_values
+
+            self.critic.zero_grad()
+            q_batch = self.critic(to_tensor(state_batch), to_tensor(action_batch))
+            value_loss = criterion(q_batch, target_q_batch)
+            value_loss.backward()
+            self.critic_optim.step()
+
+            self.actor.zero_grad()
+            policy_loss = -self.critic(
+                to_tensor(state_batch),
+                self.actor(to_tensor(state_batch))
+            )
+            policy_loss = policy_loss.mean()
+            policy_loss.backward()
+            self.actor_optim.step()
+
+            soft_update(self.actor_target, self.actor, self.tau)
+            soft_update(self.critic_target, self.critic, self.tau)
+
+            loss_critic += value_loss.item()
+            loss_actor += policy_loss.item()
+
+        avg_critic = loss_critic / atk_n_batch
+        avg_actor = loss_actor / atk_n_batch
+        self._loss_log.append([episode, 0, avg_critic, avg_actor])
+        return {'critic_loss': avg_critic, 'actor_loss': avg_actor}
+
+    @property
+    def warmup_episodes(self):
+        return self.eps_greedy_start_episodes
+
+    def get_loss_log(self):
+        return self._loss_log
+
+    def save_buffer(self, path):
+        self._buffer.saveBuffer(path)
+
+    # ------------------------------------------------------------------
+    # Legacy train method (kept for backward compat / eval scripts)
+    # ------------------------------------------------------------------
 
     def train(self, replay_buffer, atk_n_epoch, atk_n_batch, batch_size, ddpg_loss, i_episode):
         self.is_training = True
@@ -242,6 +309,28 @@ class DDPG(Algorithm):
         return ddpg_loss
 
 
+    # --- Deprecated AttackAlgorithm ABC method ---
+
+    def train_step(self, replay_buffer: Any, batch_size: int, **kwargs) -> Dict[str, float]:
+        """Deprecated. Wraps legacy train() for backward compat."""
+        atk_n_epoch = kwargs.get('atk_n_epoch', 1)
+        atk_n_batch = kwargs.get('atk_n_batch', 15)
+        i_episode = kwargs.get('i_episode', 0)
+        ddpg_loss = kwargs.get('ddpg_loss', [])
+
+        result = self.train(
+            replay_buffer, atk_n_epoch, atk_n_batch, batch_size, ddpg_loss, i_episode
+        )
+
+        if result and len(result) > 0:
+            last = result[-1]
+            return {
+                'critic_loss': last[2] if len(last) > 2 else 0.0,
+                'actor_loss': last[3] if len(last) > 3 else 0.0,
+                'ddpg_loss': result,
+            }
+        return {'critic_loss': 0.0, 'actor_loss': 0.0, 'ddpg_loss': result}
+
     def save(self, filename):
         torch.save(self.critic.state_dict(), filename + "_critic")
         torch.save(self.critic_optim.state_dict(), filename + "_critic_optimizer")
@@ -280,7 +369,4 @@ class DDPG(Algorithm):
         self.critic_target.cuda()
 
     def reset(self):
-        pass
-
-    def update(self, state, action, reward, next_state, done):
         pass

@@ -8,12 +8,12 @@ import sys
 from typing import Tuple
 
 import numpy as np
-from gym import spaces
-from gym.utils import seeding
+from gymnasium import spaces
+from gymnasium.utils import seeding
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from constants import *
-from envs.victim_environment import VictimEnvironment
+from core.victim_environment import VictimEnvironment as VictimEnvironmentABC
 
 # STILL = 0
 NORTH = 0
@@ -29,9 +29,15 @@ GRID_DIMENSIONS = (4,4) #(4, 4)
     return (csprob_n>np_random.rand()).argmax()"""
 
 
-class Grid3D(VictimEnvironment):
-    """
-    GridWorld_3D_env is a class that implements the GridWorld_3D environment.
+class Grid3D(VictimEnvironmentABC):
+    """3D grid world environment with altitude-based transition dynamics.
+
+    A 4x4 grid where each cell has an altitude. Movement probabilities depend
+    on altitude differences: going uphill is harder (high stay probability),
+    going downhill risks sliding two cells. The attacker modifies altitudes
+    to change transition dynamics and steer the victim's learned policy.
+
+    Implements both the legacy VictimEnvironment and the new core ABC.
     """
 
     """def _generate_altitude(self, shape):
@@ -392,11 +398,48 @@ class Grid3D(VictimEnvironment):
     def env_dynamics(self):
         return self.altitude.copy().reshape((self.nS, 1))
 
+    # --- VictimEnvironmentABC methods ---
 
-    def reset(self):
-        self.s = 0 #categorical_sample(self.isd, self.np_random) #start state
+    @property
+    def perturbation_space(self) -> spaces.Space:
+        """Perturbation space: one continuous value per grid cell in [-1, 1]."""
+        return spaces.Box(low=-1.0, high=1.0, shape=(self.nS,), dtype=np.float64)
+
+    def apply_perturbation(self, perturbation: np.ndarray) -> None:
+        """Apply altitude perturbation and recalculate transition dynamics.
+
+        Args:
+            perturbation: Array of shape (nS,) with values typically in [-1, 1].
+        """
+        new_altitude = np.clip(
+            self.altitude + perturbation.reshape(self.shape), 0.0, 10.0
+        )
+        self.altitude = new_altitude
+        self.T = self._calculate_dynamics(self.shape, self.nA, self.nS, new_altitude)
+
+    def get_dynamics(self) -> np.ndarray:
+        """Return altitude flattened to (nS,).
+
+        Returns:
+            1D array of altitude values.
+        """
+        return self.altitude.copy().flatten()
+
+    def reset_dynamics(self) -> None:
+        """Reset altitude and transitions to original values."""
+        self.reset_altitude()
+
+    @property
+    def dynamics_dim(self) -> int:
+        """Number of states (one altitude value per cell)."""
+        return self.nS
+
+    def reset(self, *, seed=None, options=None):
+        if seed is not None:
+            self.seed(seed)
+        self.s = 0
         self.lastaction = None
-        return self.s
+        return self.s, {}
 
 
     def reset_altitude(self):
@@ -406,12 +449,10 @@ class Grid3D(VictimEnvironment):
 
 
     def step(self, action):
-        prob, next_state, reward, done = self._calculate_transition_status(self.s, action, self.T) #P[self.s][action]
-        #i = categorical_sample([t[0] for t in transitions], self.np_random)
-        #p, s, r, d = transition[0]
+        prob, next_state, reward, terminated = self._calculate_transition_status(self.s, action, self.T)
         self.s = next_state
         self.lastaction = action
-        return (next_state, reward, done, {"prob" : prob})
+        return next_state, reward, terminated, False, {"prob": prob}
 
 
     """def render(self, mode='human', close=False):

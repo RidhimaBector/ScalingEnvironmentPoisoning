@@ -1,16 +1,47 @@
-# Byte-compiled / optimized / DLL files
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
+.ruff_cache/
+
+# Virtual environment
+venv/
+.venv/
+env/
+
+# Experiment outputs (generated at runtime)
+sacred_runs/
+sacred_runs_victims/
+results/
+metrics/
 storage/
 R_0818/
-metrics/
-# Data
+
+# Data files
 *.csv
-*.json
 *.pkl
-.ruff_cache/
-.DS_Store
-.png
-.npy
+*.npy
+*.json
+
+# Plots and images
+*.png
+*.jpg
 images/
+
+# macOS
+.DS_Store
+
+# IDE
+.idea/
+.vscode/
+
+# Data files
+*.csv
+*.pkl
+*.npy
+*.json
+
+.claude
+/docs/
+/docs/**
+.cursor/

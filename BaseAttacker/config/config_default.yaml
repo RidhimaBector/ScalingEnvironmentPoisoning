@@ -47,6 +47,34 @@ ATTACK:
     discount: 0.9
     epsilon_divisor: 1000
     is_training: true
+  PPO_KWARGS:
+    hidden1: 256
+    hidden2: 256
+    actor_lr: 0.0003
+    critic_lr: 0.001
+    gamma: 0.99
+    gae_lambda: 0.95
+    clip_epsilon: 0.2
+    ppo_epochs: 10
+    mini_batch_size: 64
+    max_grad_norm: 0.5
+    entropy_coef: 0.01
+    value_loss_coef: 0.5
+    rollout_size: 256
 
 experiment:
   privacy_mode: "partial_blackbox"  # Can be: "full_whitebox", "partial_blackbox", or "full_blackbox"
+
+# Collective attack settings (multi-victim)
+# Based on "Poisoning the Well: Can We Simultaneously Attack a Group of Learning Agents?" (ALA 2023)
+COLLECTIVE:
+  NUM_VICTIMS: 5  # Number of independent victim agents (K)
+  ENCODER_TYPE: "vae_barycenter"  # Can be: "vae_barycenter", "mean_embedding", "concat_embedding", "mean_behavior"
+  BASE_SEED: 0  # Base random seed (victim k gets seed BASE_SEED + k)
+  VAE:
+    LATENT_SIZE: 8  # Dimension of VAE latent space
+    HIDDEN_SIZE: 128  # Hidden layer size for VAE encoder/decoder
+    LEARNING_RATE: 0.001  # Learning rate for VAE training
+    BETA: 1.0  # KL divergence weight (beta-VAE)
+    PRETRAIN_EPOCHS: 20  # Number of epochs for VAE pre-training
+    PRETRAIN_SAMPLES: 5000  # Number of synthetic samples for pre-training

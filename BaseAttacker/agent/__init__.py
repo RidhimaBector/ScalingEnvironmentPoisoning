@@ -1,5 +1,4 @@
-from .system import System
-from .victim_system import VictimSystem
-from .attack_system import AttackSystem
+# Lazy imports to avoid circular dependencies.
+# Import individual modules directly: e.g. from agent.victim_system import VictimSystem
 
 __all__ = ['System', 'VictimSystem', 'AttackSystem']

@@ -1,387 +1,204 @@
-import copy
+"""Evaluation script for trained attack policies.
+
+Loads a trained DDPG attack policy and evaluates it against fresh victims.
+Produces CSV files and plots of accuracy and effort metrics.
+
+Usage:
+    python eval_on_Q_avg.py <policy_number>
+    python eval_on_Q_avg.py 1000  # Evaluates storage/R_0818/good_model_1000
+"""
+
+import os
 import sys
 import time
 
 import numpy as np
-import ot
-
-# TensorBoard
 import torch
+from gymnasium import spaces
 
-# Configuration
-"""from yacs.config import CfgNode as CN
-yaml_name='config/config_default.yaml'
-fcfg = open(yaml_name)
-config = CN.load_cfg(fcfg)
-config.freeze()"""
+from attack.DDPG import DDPG
+from ae.victim_encoder import VictimEncoder
+from ae.observation_encoder import ObservationEncoder
+from ae.action_translator import ActionTranslator
+from agent.attack_dispatch import AttackDispatch
+from agent.victim_system import VictimSystem, PrivacyMode
+from envs.attack_environment import AttackEnvironment
+from envs.env3D_4x4 import Grid3D
+from envs.target_def import create_target_policy
+from victim.victim_Q import VictimQLearning
+from utils.utils_attack import Attack_Done_Identify, Attack_Effort
+from yacs.config import CfgNode as CN
 
-#SEQ_LEN = 6 #config.AE.SEQ_LEN
-EMBEDDING_SIZE = 5 #config.AE.EMBEDDING_SIZE
-MEMORY_SIZE = 50 #config.AE.MEMORY_SIZE
+# Load config
+yaml_name = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config", "config_default.yaml")
+with open(yaml_name) as fcfg:
+    config = CN.load_cfg(fcfg)
+config.freeze()
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# Attack package
-from attack.DDPG import DDPG
+# --- Setup ---
 
-# Environment object
-from envs.env3D_4x4 import GridWorld_3D_env
-from envs.target_def import TARGET
-from utils import utils_attack
-
-env = GridWorld_3D_env()
-INIT_T = env.T.copy()
-
-# Victim object
-#from victim.victim_Sarsa_eval import VictimAgent_Sarsa
-#from victim.victim_MC_eval import VictimAgent_MC
-# AutoEncoder
-from ae.ae import AutoEncoder
-from victim.victim_Q import VictimAgent
-
-#Cost Matrix
-grid = np.array([[0,0],[0,1],[0,2],[0,3],[1,0],[1,1],[1,2],[1,3],[2,0],[2,1],[2,2],[2,3],[3,0],[3,1],[3,2],[3,3]])
-cost_matrix = ot.dist(grid, grid, metric='cityblock') * 20
-np.fill_diagonal(cost_matrix, 10)
-cost_matrix = np.repeat(cost_matrix, env.nA, axis=1)
-cost_matrix = np.repeat(cost_matrix, env.nA, axis=0)
-np.fill_diagonal(cost_matrix, 0)
-
-''' ... PATH ... '''
 policy_no = str(sys.argv[1])
-PATH = "storage/R_0818/good_model_" + policy_no
-PATH_ae = "ae/models/" + "340240" + "_f-o_AutoEncoder_SftMx" #"14800" + "_f-o_AutoEncoder"
+PATH = f"storage/R_0818/good_model_{policy_no}"
 
-# Set seeds
 seed = 0
-env.seed(seed)
 torch.manual_seed(seed)
 np.random.seed(seed)
 
-""" parameter of DDPG """
+# State dim: derived at eval time from a scratch population (must match training)
+nS, nA = 16, 4
+action_dim = nS  # 16
 
-discount=0.9                # Discount factor
-tau=0.005                    # Target network update rate
+_ref_env = Grid3D()
+_ref_algo = VictimQLearning(_ref_env.nS, _ref_env.nA, **config.VICTIM.DEFAULT_KWARGS)
+_ref_encoder = VictimEncoder.from_population(
+    type('_P', (), {
+        'algorithm': _ref_algo,
+        'env': _ref_env,
+        'nS': _ref_env.nS,
+        'num_victims': 1,
+    })()
+)
+state_dim = _ref_encoder.embedding_dim
 
-''' ..... Attack Network ..... '''
-# Input / Output size
-state_dim = EMBEDDING_SIZE + env.nS
-action_dim = env.Attack_ActionSpace.shape[0]
-max_action = float(env.Attack_ActionSpace.high[0])
-
-attack_args = {
-    "state_dim": state_dim,
-    "action_dim": action_dim,
-    "max_action": max_action,
-    "discount": discount,
-    "tau": tau,
-}
-
-kwargsNew = {
-    "seed": 0,
+attack_kwargs = dict(config.ATTACK.DEFAULT_KWARGS)
+attack_kwargs.update({
     "nb_states": state_dim,
     "nb_actions": action_dim,
-    "max_action": max_action,
-    "hidden1": 400,
-    "hidden2": 300,
-    "init_w": 0.003,
-    "prate": 0.0001,
-    "rate": 0.001,
-    "ou_theta": 0.15,
-    "ou_mu": 0.0,
-    "ou_sigma": 0.2,
-    "bsize": 256,
-    "tau": tau,
-    "discount": discount,
-    "epsilon_divisor": 1000, #Number of episodes over which to decrease actual epsilon
-    "is_training": True
-}
-
-""" load Policy """ 
-Policy = DDPG(**kwargsNew)
+    "max_action": 1.0,
+    "tau": 0.005,
+    "discount": 0.9,
+    "eps_greedy_start_episodes": 30,
+})
+Policy = DDPG(**attack_kwargs)
 Policy.load(PATH)
 
-''' ..... Victim ..... '''
-
-victim_args = {
-    "env": env, 
-    "MEMORY_SIZE": MEMORY_SIZE,
-    "discount_factor": 0.9, 
-    "alpha": 0.1, 
-    "epsilon": 0.1,
-}
-
-victim = VictimAgent(**victim_args)
-
-""" parameter of AutoEncoder """
-
-ae_enc_in_size = 32 #SEQ_LEN*2
-ae_enc_out_size = 5 #EMBEDDING_SIZE
-ae_dec_in_size = 6 #1+EMBEDDING_SIZE
-ae_dec_out_size = 5 #4 #action_dim
-
-ae_args = {
-    "enc_in_size": ae_enc_in_size, 
-    "enc_out_size": ae_enc_out_size, 
-    "dec_in_size": ae_dec_in_size, 
-    "dec_out_size": ae_dec_out_size, 
-    "lr": 0.001, 
-}
-
-ae = AutoEncoder(**ae_args)
-ae.load(PATH_ae)
-
-""" Func: evaluation """
-Tmax = 15 #50 #100
-Plot_Seed = "Same"
+# Evaluation parameters
+Tmax = 15
+n_victim_pop = 5
 Model = "Accuracy-FD_0.90"
-n_victim_pop = 5 #10 #10
+Plot_Seed = "Same"
+
+
 def eval_policy(policy):
-    # log
-    distance_K_atk_timestep = [] #complete data
-    distance_grid_K_atk_timestep = [] #complete data
-    distance_behavior_K_atk_timestep = [] #complete data
-    distance_W_atk_timestep = [] #complete data
-    distance_grid_W_atk_timestep = [] #complete data
-    distance_behavior_W_atk_timestep = [] #complete data
-    accuracy_victim_timestep = [] #complete data
-    accuracy_atk_timestep = [] #complete data
-    accuracy_sftmx_victim_timestep = [] #complete data
-    accuracy_sftmx_atk_timestep = [] #complete data
-    accuracy_sftmx_complete_victim_timestep = [] #complete data
-    accuracy_sftmx_complete_atk_timestep = [] #complete data
-    effort_atk_timestep = [] #complete data
-    time_atk_timestep = [] #complete data
+    """Evaluate an attack policy against a fresh victim.
 
-    # reset victim's env and Q
-    env.reset_altitude()
-    victim.reset()
+    Creates a new VictimSystem and AttackEnvironment, runs the attack
+    for Tmax timesteps using the loaded policy.
 
-    # Initialize the attacker's state
-    victim_info = np.zeros((1,EMBEDDING_SIZE))
-    victim_tensor = torch.from_numpy(victim_info)
-    victim_tensor_4d = victim_tensor.unsqueeze(0).unsqueeze(0)
+    Args:
+        policy: Trained DDPG attack policy.
 
-    env_info = env.altitude.copy()
-    env_tensor = torch.from_numpy(env_info)
-    env_tensor = env_tensor.view(1, env.nS)
-    env_tensor_4d = env_tensor.unsqueeze(0).unsqueeze(0)
+    Returns:
+        Dict with per-timestep metrics.
+    """
+    victim_env = Grid3D()
+    victim_env.seed(seed)
+    victim_algo = VictimQLearning(victim_env.nS, victim_env.nA, **config.VICTIM.DEFAULT_KWARGS)
 
-    state = torch.cat((victim_tensor_4d, env_tensor_4d), 3)
-    
-    orgA = env.altitude.copy().reshape((16, 1)) #New
-    curA =  orgA.copy()
+    population = VictimSystem(
+        env=victim_env,
+        algorithm=victim_algo,
+        config=config,
+        privacy_mode=PrivacyMode.FULL_WHITEBOX,
+    )
+
+    attack_env = AttackEnvironment(
+        victim_population=population,
+        attack_dispatch=AttackDispatch(),
+        victim_train_episodes=80,
+        config=config,
+    )
+
+    # Build encoder services (no Sacred tracker — fallback to VictimSystem)
+    obs_encoder = ObservationEncoder(VictimEncoder.from_population(population))
+    action_translator = ActionTranslator.from_space(
+        spaces.Box(-1.0, 1.0, shape=(population.nS,), dtype=np.float64)
+    )
+
+    target = create_target_policy(victim_env.nS, victim_env.nA, path_type="Mp")
+
+    attack_env.reset()
+    obs = obs_encoder.get_initial_embedding()
+
+    metrics_per_timestep = {
+        'accuracy': [],
+        'accuracy_sftmx': [],
+        'accuracy_sftmx_complete': [],
+        'effort': [],
+        'time': [],
+    }
+
+    prev_dynamics = population.get_env_dynamics().flatten()
 
     for t in range(Tmax):
-        tic_timestep = time.time()
+        tic = time.time()
 
-        # select action
-        action = Policy.select_on_policy_action(np.array(state)) #Policy.select_action(np.array(state))
+        raw_action = policy.select_on_policy_action(np.array(obs))
+        dispatch_action = action_translator.translate(raw_action)
+        _, reward, terminated, truncated, step_info = attack_env.step(dispatch_action)
+        next_obs = obs_encoder.encode(step_info['victim_results'])
 
-        ## perform attack_action on Env
-        env.Attack_Env(action)
-        
-        # next_victim_info: compute victim's updated policy
-        accuracy_array, accuracy_sftmx_array, accuracy_sftmx_complete_array, victim_transitions = victim.train_for_eval(80)
-        ### ... updated victim.Q
-        next_victim_info = ae.Policy_Embedding(victim_transitions)
-        next_victim_tensor = torch.from_numpy(next_victim_info[-1]).unsqueeze(0)
-        next_victim_tensor_4d = next_victim_tensor.unsqueeze(0).unsqueeze(0)
-        ### ... updated env altitude
-        next_env_info = env.altitude.copy()
-        next_env_tensor = torch.from_numpy(next_env_info)
-        next_env_tensor = next_env_tensor.view(1, env.nS)
-        next_env_tensor_4d = next_env_tensor.unsqueeze(0).unsqueeze(0)
-        ### ... next_state
-        next_state = torch.cat((next_victim_tensor_4d, next_env_tensor_4d), 3)
-        
-        # Step: cost
-        distance_K = utils_attack.Attack_Cost_Compute_K(env, INIT_T, victim.Q, TARGET, cost_matrix, distance_type=0) #system.victim.Q
-        distance_grid_K = utils_attack.Attack_Cost_Compute_K(env, INIT_T, victim.Q, TARGET, cost_matrix, distance_type=1)
-        distance_behavior_K = utils_attack.Attack_Cost_Compute_K(env, INIT_T, victim.Q, TARGET, cost_matrix, distance_type=2)
-        distance_W = utils_attack.Attack_Cost_Compute_W(env, INIT_T, victim.Q, TARGET, cost_matrix, distance_type=0) #system.victim.Q
-        distance_grid_W = utils_attack.Attack_Cost_Compute_W(env, INIT_T, victim.Q, TARGET, cost_matrix, distance_type=1)
-        distance_behavior_W = utils_attack.Attack_Cost_Compute_W(env, INIT_T, victim.Q, TARGET, cost_matrix, distance_type=2)
-        #accuracy_array, accuracy_sftmx_array, accuracy_sftmx_complete_array = utils_attack.Attack_Done_Identify(env, TARGET, victim.Q) #system.victim.Q)
-        effort, curA = utils_attack.Attack_Effort(curA, env)
-        #effort = - effort
-        toc_timestep = time.time()
-        time_timestep = toc_timestep - tic_timestep #tic_timestep - toc_timestep #- (toc_timestep - tic_timestep)
-        
-        # Step: log
-        distance_K_atk_timestep.append(distance_K)
-        distance_grid_K_atk_timestep.append(distance_grid_K)
-        distance_behavior_K_atk_timestep.append(distance_behavior_K)
-        distance_W_atk_timestep.append(distance_W)
-        distance_grid_W_atk_timestep.append(distance_grid_W)
-        distance_behavior_W_atk_timestep.append(distance_behavior_W)
-        accuracy_victim_timestep += accuracy_array
-        accuracy_atk_timestep.append(accuracy_array[-1])
-        accuracy_sftmx_victim_timestep += accuracy_sftmx_array
-        accuracy_sftmx_atk_timestep.append(accuracy_sftmx_array[-1])
-        accuracy_sftmx_complete_victim_timestep += accuracy_sftmx_complete_array
-        accuracy_sftmx_complete_atk_timestep.append(accuracy_sftmx_complete_array[-1])
-        effort_atk_timestep.append(effort)
-        time_atk_timestep.append(time_timestep)
+        done, acc, acc_sftmx, acc_sftmx_complete = Attack_Done_Identify(
+            target.copy(), victim_algo.Q
+        )
+        current_dynamics = population.get_env_dynamics().flatten()
+        effort = float(np.mean(np.abs(current_dynamics - prev_dynamics)))
 
-        # update state 
-        state = copy.deepcopy(next_state)
+        metrics_per_timestep['accuracy'].append(acc)
+        metrics_per_timestep['accuracy_sftmx'].append(acc_sftmx)
+        metrics_per_timestep['accuracy_sftmx_complete'].append(acc_sftmx_complete)
+        metrics_per_timestep['effort'].append(effort)
+        metrics_per_timestep['time'].append(time.time() - tic)
 
-        #if done:
-            #break
+        prev_dynamics = current_dynamics
+        obs = next_obs
 
-    #print("---------------------------------------")
-    #cum_reward = cumulative_reward #/(t+1)
-    #print(f"Evaluation over {t} timesteps: {cumulative_reward:.3f}")
-    #utils_op.Show_PolicyQ(victim.Q, env)
-    #print("---------------------------------------")
+    return metrics_per_timestep
 
 
-    return distance_K_atk_timestep, distance_grid_K_atk_timestep, distance_behavior_K_atk_timestep, distance_W_atk_timestep, distance_grid_W_atk_timestep, distance_behavior_W_atk_timestep, accuracy_victim_timestep, accuracy_atk_timestep, accuracy_sftmx_victim_timestep, accuracy_sftmx_atk_timestep, accuracy_sftmx_complete_victim_timestep, accuracy_sftmx_complete_atk_timestep, effort_atk_timestep, time_atk_timestep
+# --- Run evaluations ---
 
+all_results = []
+for i_pop in range(n_victim_pop):
+    print(f"Evaluating victim population {i_pop + 1}/{n_victim_pop}")
+    result = eval_policy(Policy)
+    all_results.append(result)
 
-
-""" Evaluate """
-distance_K_atk_timestep_cluster = [] #complete data
-distance_grid_K_atk_timestep_cluster = [] #complete data
-distance_behavior_K_atk_timestep_cluster = [] #complete data
-distance_W_atk_timestep_cluster = [] #complete data
-distance_grid_W_atk_timestep_cluster = [] #complete data
-distance_behavior_W_atk_timestep_cluster = [] #complete data
-accuracy_victim_timestep_cluster = [] #complete data
-accuracy_atk_timestep_cluster = [] #complete data
-accuracy_sftmx_victim_timestep_cluster = [] #complete data
-accuracy_sftmx_atk_timestep_cluster = [] #complete data
-accuracy_sftmx_complete_victim_timestep_cluster = [] #complete data
-accuracy_sftmx_complete_atk_timestep_cluster = [] #complete data
-effort_atk_timestep_cluster = [] #complete data
-time_atk_timestep_cluster = [] #complete data
-
-
-for i_victim_pop in range(n_victim_pop):
-    distance_K_atk_timestep, distance_grid_K_atk_timestep, distance_behavior_K_atk_timestep, distance_W_atk_timestep, distance_grid_W_atk_timestep, distance_behavior_W_atk_timestep, accuracy_victim_timestep, accuracy_atk_timestep, accuracy_sftmx_victim_timestep, accuracy_sftmx_atk_timestep, accuracy_sftmx_complete_victim_timestep, accuracy_sftmx_complete_atk_timestep, effort_atk_timestep, time_atk_timestep = eval_policy(Policy)
-
-    distance_K_atk_timestep_cluster.append(distance_K_atk_timestep)
-    distance_grid_K_atk_timestep_cluster.append(distance_grid_K_atk_timestep)
-    distance_behavior_K_atk_timestep_cluster.append(distance_behavior_K_atk_timestep)
-    distance_W_atk_timestep_cluster.append(distance_W_atk_timestep)
-    distance_grid_W_atk_timestep_cluster.append(distance_grid_W_atk_timestep)
-    distance_behavior_W_atk_timestep_cluster.append(distance_behavior_W_atk_timestep)
-    accuracy_victim_timestep_cluster.append(accuracy_victim_timestep)
-    accuracy_atk_timestep_cluster.append(accuracy_atk_timestep)
-    accuracy_sftmx_victim_timestep_cluster.append(accuracy_sftmx_victim_timestep)
-    accuracy_sftmx_atk_timestep_cluster.append(accuracy_sftmx_atk_timestep)
-    accuracy_sftmx_complete_victim_timestep_cluster.append(accuracy_sftmx_complete_victim_timestep)
-    accuracy_sftmx_complete_atk_timestep_cluster.append(accuracy_sftmx_complete_atk_timestep)
-    effort_atk_timestep_cluster.append(effort_atk_timestep)
-    time_atk_timestep_cluster.append(time_atk_timestep)
-
-    
-""" unify length """
-max_size = Tmax * 80 #4800 #2500 #5000 #Tmax * 80
-
-"""for i in range(n_victim):
-    last_value = Rate_List[i][-1]
-    print(last_value)
-    if len(Rate_List[i]) < max_size:
-        delta_size = max_size - len(Rate_List[i])
-        for j in range(delta_size):
-            Rate_List[i].append(last_value)"""
-            
-            
-""" average """
-avg_step = 5 #25
-accuracy_victim_timestep_avg = []
-accuracy_sftmx_victim_timestep_avg = []
-accuracy_sftmx_complete_victim_timestep_avg = []
-
-N = max_size
-N_avg = N//avg_step
-
-for i_victim_pop in range(n_victim_pop):
-    accuracy_victim_timestep_avg_temp = [0]
-    accuracy_sftmx_victim_timestep_avg_temp = [0]
-    accuracy_sftmx_complete_victim_timestep_avg_temp = [0]
-    
-    for i in range(0, N_avg):
-        start = i*avg_step
-        end = (i+1)*avg_step
-
-        tmp_acc = sum(accuracy_victim_timestep_cluster[i_victim_pop][start: end])
-        tmp_acc_sftmx = sum(accuracy_sftmx_victim_timestep_cluster[i_victim_pop][start: end])
-        tmp_acc_sftmx_c = sum(accuracy_sftmx_complete_victim_timestep_cluster[i_victim_pop][start: end])
-        
-        accuracy_victim_timestep_avg_temp.append(tmp_acc/avg_step)
-        accuracy_sftmx_victim_timestep_avg_temp.append(tmp_acc_sftmx/avg_step)
-        accuracy_sftmx_complete_victim_timestep_avg_temp.append(tmp_acc_sftmx_c/avg_step)
-        
-    accuracy_victim_timestep_avg.append(accuracy_victim_timestep_avg_temp)
-    accuracy_sftmx_victim_timestep_avg.append(accuracy_sftmx_victim_timestep_avg_temp)
-    accuracy_sftmx_complete_victim_timestep_avg.append(accuracy_sftmx_complete_victim_timestep_avg_temp)
-    #print(len(per_avg_rate))
-    #print(np.round(per_avg_rate,2))
-            
-            
-""" dataframe """
+# --- Build DataFrames and plots ---
 import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
 
-sns.set(font_scale = 1.8)
+sns.set(font_scale=1.8)
 sns.set_style("whitegrid")
 
-time_compression = np.arange( len(accuracy_victim_timestep_avg[0]) ) #np.array(range(0, len(accuracy_victim_timestep_avg[0]))) #list(range(0, len(avg_rate[0])))
-vic_time = (time_compression * avg_step) / 80 #list(np.array(time_compression) * avg_step)
-atk_time = np.arange(1,Tmax+1)
-vic_Pop_name = ["VP1", "VP2", "VP3", "VP4", "VP5", "VP6", "VP7", "VP8", "VP9", "VP10", "VP11", "VP12", "VP13", "VP14", "VP15", "VP16", "VP17", "VP18", "VP19", "VP20"]
+atk_time = np.arange(1, Tmax + 1)
+vic_Pop_names = [f"VP{i + 1}" for i in range(n_victim_pop)]
 
-df_acc_V = pd.DataFrame({"Victim Timestep":vic_time, "Model":Model, "Accuracy V":accuracy_victim_timestep_avg[0], "Sftmx Accuracy V":accuracy_sftmx_victim_timestep_avg[0], "C Sftmc Accuracy V":accuracy_sftmx_complete_victim_timestep_avg[0], "Victim Pop":vic_Pop_name[0], "Seed":Plot_Seed })
-df_acc_A = pd.DataFrame({"Attacker Timestep":atk_time, "Model":Model, "Accuracy A":accuracy_atk_timestep_cluster[0], "Sftmx Accuracy A":accuracy_sftmx_atk_timestep_cluster[0], "C Sftmx Accuracy A":accuracy_sftmx_complete_atk_timestep_cluster[0], "Victim Pop":vic_Pop_name[0], "Seed":Plot_Seed })
-df_dis_K = pd.DataFrame({"Attacker Timestep":atk_time, "Model":Model, "Distance":distance_K_atk_timestep_cluster[0], "Grid Distance":distance_grid_K_atk_timestep_cluster[0], "Behavior Distance":distance_behavior_K_atk_timestep_cluster[0], "Victim":vic_Pop_name[0], "Seed":Plot_Seed })
-df_dis_W = pd.DataFrame({"Attacker Timestep":atk_time, "Model":Model, "Distance":distance_W_atk_timestep_cluster[0], "Grid Distance":distance_grid_W_atk_timestep_cluster[0], "Behavior Distance":distance_behavior_W_atk_timestep_cluster[0], "Victim":vic_Pop_name[0], "Seed":Plot_Seed })
-df_eff = pd.DataFrame({"Attacker Timestep":atk_time, "Model":Model, "Effort":effort_atk_timestep_cluster[0], "Attack Timestep Time":time_atk_timestep_cluster[0], "Victim":vic_Pop_name[0], "Seed":Plot_Seed })
-for i in range(1, n_victim_pop):
-    tmp_df_acc_V = pd.DataFrame({"Victim Timestep":vic_time, "Model":Model, "Accuracy V":accuracy_victim_timestep_avg[i], "Sftmx Accuracy V":accuracy_sftmx_victim_timestep_avg[i], "C Sftmc Accuracy V":accuracy_sftmx_complete_victim_timestep_avg[i], "Victim Pop":vic_Pop_name[i], "Seed":Plot_Seed })
-    tmp_df_acc_A = pd.DataFrame({"Attacker Timestep":atk_time, "Model":Model, "Accuracy A":accuracy_atk_timestep_cluster[i], "Sftmx Accuracy A":accuracy_sftmx_atk_timestep_cluster[i], "C Sftmx Accuracy A":accuracy_sftmx_complete_atk_timestep_cluster[i], "Victim Pop":vic_Pop_name[i], "Seed":Plot_Seed })
-    tmp_df_dis_K = pd.DataFrame({"Attacker Timestep":atk_time, "Model":Model, "Distance":distance_K_atk_timestep_cluster[i], "Grid Distance":distance_grid_K_atk_timestep_cluster[i], "Behavior Distance":distance_behavior_K_atk_timestep_cluster[i], "Victim":vic_Pop_name[i], "Seed":Plot_Seed })
-    tmp_df_dis_W = pd.DataFrame({"Attacker Timestep":atk_time, "Model":Model, "Distance":distance_W_atk_timestep_cluster[i], "Grid Distance":distance_grid_W_atk_timestep_cluster[i], "Behavior Distance":distance_behavior_W_atk_timestep_cluster[i], "Victim":vic_Pop_name[i], "Seed":Plot_Seed })
-    tmp_df_eff = pd.DataFrame({"Attacker Timestep":atk_time, "Model":Model, "Effort":effort_atk_timestep_cluster[i], "Attack Timestep Time":time_atk_timestep_cluster[i], "Victim":vic_Pop_name[i], "Seed":Plot_Seed })
-    df_acc_V = df_acc_V.append(tmp_df_acc_V, ignore_index=True)
-    df_acc_A = df_acc_A.append(tmp_df_acc_A, ignore_index=True)
-    df_dis_K = df_dis_K.append(tmp_df_dis_K, ignore_index=True)
-    df_dis_W = df_dis_W.append(tmp_df_dis_W, ignore_index=True)
-    df_eff = df_eff.append(tmp_df_eff, ignore_index=True)
-df_acc_V.to_csv(policy_no + "_accuracy_V_" + Model + "_Seed" + Plot_Seed + ".csv", index=False)
-df_acc_A.to_csv(policy_no + "_accuracy_A_" + Model + "_Seed" + Plot_Seed + ".csv", index=False)
-df_dis_K.to_csv(policy_no + "_distance_K_" + Model + "_Seed" + Plot_Seed + ".csv", index=False)
-df_dis_W.to_csv(policy_no + "_distance_W_" + Model + "_Seed" + Plot_Seed + ".csv", index=False)
-df_eff.to_csv(policy_no + "_effort_" + Model + "_Seed" + Plot_Seed + ".csv", index=False)
+rows = []
+for i_pop in range(n_victim_pop):
+    for t in range(Tmax):
+        rows.append({
+            'Attacker Timestep': atk_time[t],
+            'Model': Model,
+            'Accuracy': all_results[i_pop]['accuracy'][t],
+            'Sftmx Accuracy': all_results[i_pop]['accuracy_sftmx'][t],
+            'Effort': all_results[i_pop]['effort'][t],
+            'Time': all_results[i_pop]['time'][t],
+            'Victim Pop': vic_Pop_names[i_pop],
+            'Seed': Plot_Seed,
+        })
 
-""" Figure & Data """
-fig, axs = plt.subplots(nrows=3, ncols=2, figsize=(15, 15))
-sns_plot_acc_V = sns.lineplot(x = "Victim Timestep", y = "Accuracy V", hue="Model", data=df_acc_V, ax=axs[0,0])
-sns_plot_acc_A = sns.lineplot(x = "Attacker Timestep", y = "Accuracy A", hue="Model", data=df_acc_A, ax=axs[0,1])
-sns_plot_acc_sft_V = sns.lineplot(x = "Victim Timestep", y = "Sftmx Accuracy V", hue="Model", data=df_acc_V, ax=axs[1,0])
-sns_plot_acc_sft_A = sns.lineplot(x = "Attacker Timestep", y = "Sftmx Accuracy A", hue="Model", data=df_acc_A, ax=axs[1,1])
-sns_plot_acc_sft_C_V = sns.lineplot(x = "Victim Timestep", y = "C Sftmc Accuracy V", hue="Model", data=df_acc_V, ax=axs[2,0])
-sns_plot_acc_sft_C_A = sns.lineplot(x = "Attacker Timestep", y = "C Sftmx Accuracy A", hue="Model", data=df_acc_A, ax=axs[2,1])
-plt.savefig(policy_no + "_accuracy_" + Model + "_Seed" + Plot_Seed + ".png")
+df = pd.DataFrame(rows)
+df.to_csv(f"{policy_no}_eval_results_{Model}_Seed{Plot_Seed}.csv", index=False)
 
-fig, axs = plt.subplots(nrows=2, ncols=2, figsize=(15, 15))
-sns_plot_dis_grid_K = sns.lineplot(x = "Attacker Timestep", y = "Grid Distance", hue="Model", data=df_dis_K, ax=axs[0,0])
-sns_plot_dis_beh_K = sns.lineplot(x = "Attacker Timestep", y = "Behavior Distance", hue="Model", data=df_dis_K, ax=axs[0,1])
-sns_plot_dis_K = sns.lineplot(x = "Attacker Timestep", y = "Distance", hue="Model", data=df_dis_K, ax=axs[1,0])
-sns_plot_time = sns.lineplot(x = "Attacker Timestep", y = "Attack Timestep Time", hue="Model", data=df_eff, ax=axs[1,1])
-plt.savefig(policy_no + "_distance_K_time_" + Model + "_Seed" + Plot_Seed + ".png")
-
-fig, axs = plt.subplots(nrows=2, ncols=2, figsize=(15, 15))
-sns_plot_dis_grid_W = sns.lineplot(x = "Attacker Timestep", y = "Grid Distance", hue="Model", data=df_dis_W, ax=axs[0,0])
-sns_plot_dis_beh_W = sns.lineplot(x = "Attacker Timestep", y = "Behavior Distance", hue="Model", data=df_dis_W, ax=axs[0,1])
-sns_plot_dis_W = sns.lineplot(x = "Attacker Timestep", y = "Distance", hue="Model", data=df_dis_W, ax=axs[1,0])
-sns_plot_eff = sns.lineplot(x = "Attacker Timestep", y = "Effort", hue="Model", data=df_eff, ax=axs[1,1])
-plt.savefig(policy_no + "_distance_W_effort_" + Model + "_Seed" + Plot_Seed + ".png")
-
-
-# plt.show() # to show graph
-#fig = sns_plot.get_figure()
-#fig.savefig(TITLE_figure, bbox_inches='tight')
+fig, axs = plt.subplots(nrows=2, ncols=2, figsize=(15, 10))
+sns.lineplot(x="Attacker Timestep", y="Accuracy", hue="Model", data=df, ax=axs[0, 0])
+sns.lineplot(x="Attacker Timestep", y="Sftmx Accuracy", hue="Model", data=df, ax=axs[0, 1])
+sns.lineplot(x="Attacker Timestep", y="Effort", hue="Model", data=df, ax=axs[1, 0])
+sns.lineplot(x="Attacker Timestep", y="Time", hue="Model", data=df, ax=axs[1, 1])
+plt.tight_layout()
+plt.savefig(f"{policy_no}_eval_{Model}_Seed{Plot_Seed}.png")
+print(f"Results saved to {policy_no}_eval_results_{Model}_Seed{Plot_Seed}.csv")

@@ -1,4 +1,12 @@
-import argparse
+"""Main training script for environment poisoning attack experiments.
+
+Run with Sacred experiment tracking:
+    python main.py
+    python main.py with max_episodes=50000 batch_size=512
+    python main.py with whitebox       # named config
+    python main.py with max_episodes=5 max_timesteps=3 victim_n_episodes=3
+"""
+
 import copy
 import datetime
 import os
@@ -7,177 +15,285 @@ import time
 import numpy as np
 import ot
 import torch
-from agent.attack_system import AttackSystem
-from agent.victim_system import VictimSystem
+from gymnasium import spaces
+
+from agent.attack_dispatch import AttackDispatch
+from agent.victim_experiment import AttackExperimentTracker, VictimExperimentTracker
+from agent.victim_system import VictimSystem, PrivacyMode
 from attack.DDPG import DDPG
-from constants import WHITEBOX_METRICS, BLACKBOX_METRICS, PARTIAL_BLACKBOX_METRICS
+from attack.PPO import PPO
+from ae.victim_encoder import VictimEncoder
+from ae.observation_encoder import ObservationEncoder
+from ae.action_translator import ActionTranslator
 from envs.attack_environment import AttackEnvironment
 from envs.env3D_4x4 import Grid3D
 from victim.victim_Q import VictimQLearning
+from victim.victim_sarsa import VictimSARSA
+from victim.victim_reinforce import VictimREINFORCE
+from experiment import ex, start_victim_sacred, finish_victim_sacred
 from yacs.config import CfgNode as CN
-from ae.encoder_service import EncoderType
-import sys
+import pandas as pd
+
+
+VICTIM_ALGO_MAP = {
+    "qlearning": VictimQLearning,
+    "sarsa": VictimSARSA,
+    "reinforce": VictimREINFORCE,
+}
+
+ATTACK_ALGO_MAP = {
+    "ddpg": DDPG,
+    "ppo": PPO,
+}
+
+ENV_MAP = {
+    "grid3d": Grid3D,
+}
 
 # YAML config
-yaml_name='/Users/kunwar/projects/rl_playground/ScalingEnvironmentPoisoning/BaseAttacker/config/config_default.yaml'
-fcfg = open(yaml_name)
-config = CN.load_cfg(fcfg)
+yaml_name = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config", "config_default.yaml")
+with open(yaml_name) as fcfg:
+    config = CN.load_cfg(fcfg)
 config.freeze()
-
-SEQ_LEN = config.AE.SEQ_LEN
-EMBEDDING_SIZE = config.AE.EMBEDDING_SIZE
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-ENCODER_TYPE = EncoderType.WHITEBOX
-METRICS = WHITEBOX_METRICS
 
-"""
-Main training loop for the environment poisoning attack. The process follows:
+# ---------------------------------------------------------------------------
+# Component factories
+# ---------------------------------------------------------------------------
 
-1. Setup Phase:
-    - Initialize victim components (3D grid environment & Q-learning)
-    - Initialize attack components (attack environment & DDPG policy)
-    - Load pretrained autoencoder and setup replay buffer
+def build_population(args, privacy_mode: PrivacyMode, victim_tracker=None):
+    """Create the VictimSystem (unified K-victim manager)."""
+    num_victims = getattr(args, 'num_victims', 1)
+    algo_class = VICTIM_ALGO_MAP.get(getattr(args, 'victim_algo', 'qlearning'), VictimQLearning)
+    env_class = ENV_MAP.get(getattr(args, 'env', 'grid3d'), Grid3D)
 
-2. Training Loop (for each episode):
-    - Reset environments
-    - For each timestep:
-        a. Select attack action (random during warmup, then from policy)
-        b. Execute attack and train victim
-        c. Calculate attack costs and metrics
-        d. Store experience in replay buffer
-
-    - After episode:
-        - Train attack policy (if past warmup)
-        - Periodically save models and metrics
-
-3. Metrics Tracked:
-    - Attack effectiveness (KL divergence, Wasserstein distance)
-    - Attack accuracy
-    - Environmental modification effort
-    - Training time
-
-Returns:
-    None (saves models and metrics to specified directory)
-"""
-def main():
-    args = parse_arguments()
-    model_dir = setup_model_dir(args)
-    attack_system = setup_systems(args, model_dir)
-    attack_system.train_system()
+    if num_victims > 1:
+        return VictimSystem(
+            num_victims=num_victims,
+            env_class=env_class,
+            algo_class=algo_class,
+            config=config,
+            privacy_mode=privacy_mode,
+            base_seed=getattr(args, 'seed', 0),
+            algo_kwargs=dict(config.VICTIM.DEFAULT_KWARGS),
+            victim_tracker=victim_tracker,
+        )
+    else:
+        victim_env = env_class()
+        victim_algo = algo_class(
+            victim_env.nS, victim_env.nA, **config.VICTIM.DEFAULT_KWARGS
+        )
+        return VictimSystem(
+            env=victim_env,
+            algorithm=victim_algo,
+            config=config,
+            privacy_mode=privacy_mode,
+            victim_tracker=victim_tracker,
+        )
 
 
-def _create_cost_matrix(victim_env):
-    """Create a cost matrix for the attack environment."""
-    grid = np.mgrid[0:4, 0:4].reshape(2,-1).T
-    cost_matrix = ot.dist(grid, grid, metric='cityblock') * 20
-    np.fill_diagonal(cost_matrix, 10)
-    cost_matrix = np.tile(cost_matrix, (victim_env.nA, victim_env.nA))
-    np.fill_diagonal(cost_matrix, 0)
-    return cost_matrix
+def build_attack_env(population, args):
+    """Create the AttackEnvironment (pure MDP wrapper, no encoder)."""
+    return AttackEnvironment(
+        victim_population=population,
+        attack_dispatch=AttackDispatch(),
+        victim_train_episodes=getattr(args, 'victim_n_episodes', 80),
+        config=config,
+    )
 
 
-def parse_arguments():
-    parser = argparse.ArgumentParser()
+def build_encoders(population, args):
+    """Create the standalone ObservationEncoder and ActionTranslator.
 
-    parser.add_argument("--model_dir", default="R_0818")               # TensorBoard folder
-    parser.add_argument("--policy", default="DDPG")                  # Policy name (TD3, DDPG or OurDDPG)
-    parser.add_argument("--seed", default=0, type=int)              # Sets Gym, PyTorch and Numpy seeds
-    #parser.add_argument("--atk_training_start_episodes", default=100, type=int)  # Time steps initial random policy is used
-    parser.add_argument("--eps_greedy_start_episodes", default=30, type=int)  # Time steps initial random policy is used
-    parser.add_argument("--max_timesteps", default=15, type=int)   # Max time steps to run environment
-    parser.add_argument("--max_episodes", default=30000, type=int)   # Max episodes to run environment
-    parser.add_argument("--eval_freq_episode", default=20, type=int)        # How often (time steps) we evaluate
-    # parser.add_argument("--eval_freq_episode", default=500, type=int)        # How often (time steps) we evaluate
+    ObservationEncoder is a pure transformation service: the training loop
+    passes victim_results from env.step() info directly to encode().
+    VictimEncoder derives its dimensions from the population's actual algo/env.
+    """
+    obs_encoder = ObservationEncoder(VictimEncoder.from_population(population))
 
-    parser.add_argument("--expl_noise", default=0.1, type=float)                # Std of Gaussian exploration noise
-    parser.add_argument("--batch_size", default=256, type=int)      # Batch size for both actor and critic
-    parser.add_argument("--discount", default=0.9, type=float)     # Discount factor of attack network $\gamma$DDPG with Fixed Discount
-    parser.add_argument("--tau", default=0.005, type=float)                     # Target network update rate
-    parser.add_argument("--policy_noise", default=0.2, type=float)              # Noise added to target policy during critic update
-    parser.add_argument("--noise_clip", default=0.5, type=float)                # Range to clip target policy noise
-    parser.add_argument("--policy_freq", default=2, type=int)        # Frequency of delayed policy updates
-    parser.add_argument("--victim_n_episodes", default=80, type=int)  # number of episodes for victim's updated in poisoned Env
-    parser.add_argument("--ae_n_epochs", default=10, type=int)         # number of training epoch
+    ref_env = population.env
+    if hasattr(ref_env, 'perturbation_space'):
+        action_space = ref_env.perturbation_space
+    else:
+        action_space = spaces.Box(-1.0, 1.0, shape=(population.nS,), dtype=np.float64)
 
-    return parser.parse_args()
+    return obs_encoder, ActionTranslator.from_space(action_space)
 
 
-def _set_seeds(seed, victim_env, attack_env):
-    victim_env.seed(seed)
-    attack_env.seed(seed)
-    torch.manual_seed(seed)
-    np.random.seed(seed)
+def build_attack_algo(state_dim, action_dim, max_action, args):
+    """Create the attack algorithm (DDPG or PPO)."""
+    algo_name = getattr(args, 'attack_algo', 'ddpg')
+
+    if algo_name == 'ppo':
+        ppo_kwargs = dict(config.ATTACK.PPO_KWARGS)
+        ppo_kwargs.update({
+            "nb_states": state_dim,
+            "nb_actions": action_dim,
+            "max_action": max_action,
+        })
+        return PPO(**ppo_kwargs)
+    else:
+        attack_kwargs = dict(config.ATTACK.DEFAULT_KWARGS)
+        attack_kwargs.update({
+            "nb_states": state_dim,
+            "nb_actions": action_dim,
+            "max_action": max_action,
+            "tau": getattr(args, 'tau', 0.005),
+            "discount": getattr(args, 'discount', 0.9),
+            "eps_greedy_start_episodes": getattr(args, 'eps_greedy_start_episodes', 30),
+        })
+        return DDPG(**attack_kwargs)
 
 
-def _save_attack_policy(model_dir, no_episodes, Buffer, Policy, ddpg_loss, buffer_metrics, model_data, model_good_data, model_bad_data):
-    Buffer.saveBuffer(f"./{model_dir}/")
-    Policy.save(f"./{model_dir}/{no_episodes}")
-    np.savetxt("ddpg_loss.csv", np.array(ddpg_loss), delimiter=",")
-    for metric in METRICS:
-        np.savetxt(f"{metric}_buffer.csv", np.array(buffer_metrics[metric]), delimiter=",")
-    np.savetxt("model_data.csv", np.array(model_data), delimiter=",")
-    np.savetxt("model_good_data.csv", np.array(model_good_data), delimiter=",")
-    np.savetxt("model_bad_data.csv", np.array(model_bad_data), delimiter=",")
+def train(attack_env, attack_algo, obs_encoder, action_translator,
+          args, attack_tracker=None):
+    """Main training loop."""
+    max_episodes = getattr(args, 'max_episodes', 30000)
+    max_timesteps = getattr(args, 'max_timesteps', 15)
+    eval_freq = getattr(args, 'eval_freq_episode', 20)
+    model_dir = getattr(args, 'model_dir', 'results')
+
+    num_warmup_episodes = attack_algo.warmup_episodes
+    best_accuracy = 0.0
+
+    os.makedirs(model_dir, exist_ok=True)
+
+    for episode in range(max_episodes):
+        print(f"\n--------- Episode: {episode} ----------")
+
+        # Reset all victims
+        attack_env.reset()
+        obs = obs_encoder.get_initial_embedding()
+        episode_reward = 0.0
+        episode_start = time.time()
+        info = {}
+
+        for timestep in range(max_timesteps):
+            if episode < num_warmup_episodes:
+                raw_action = attack_env.action_space.sample()
+            else:
+                raw_action = attack_algo.act(np.array(obs))
+
+            action = action_translator.translate(raw_action)
+            _, reward, terminated, truncated, info = attack_env.step(action)
+            next_obs = obs_encoder.encode(info['victim_results'])
+
+            attack_algo.store_transition(obs, raw_action, next_obs, reward, terminated)
+            episode_reward += reward
+
+            if attack_tracker is not None:
+                attack_tracker.log_timestep(episode, timestep, info)
+
+            print(f"  t={timestep}: acc={info.get('accuracy', 0):.4f}")
+
+            obs = next_obs
+            if terminated:
+                break
+
+        if episode >= num_warmup_episodes and attack_algo.ready_to_train():
+            attack_algo.update(episode=episode)
+
+        loss_log = attack_algo.get_loss_log()
+        episode_metrics = {
+            'accuracy': info.get('accuracy', 0.0),
+            'min_accuracy': info.get('min_accuracy', 0.0),
+            'episode_reward': episode_reward,
+            'time': time.time() - episode_start,
+        }
+
+        if attack_tracker is not None:
+            loss_val = loss_log[-1][2] if loss_log else None
+            attack_tracker.log_episode(episode, episode_metrics, loss_val)
+
+        cur_accuracy = info.get('accuracy', 0.0)
+        if cur_accuracy > best_accuracy:
+            best_accuracy = cur_accuracy
+            attack_algo.save(os.path.join(model_dir, "best_model"))
+
+        if (episode + 1) % eval_freq == 0:
+            attack_algo.save(os.path.join(model_dir, str(episode + 1)))
+            attack_algo.save_buffer(os.path.join(model_dir, f"buffer_{episode + 1}"))
+            if attack_tracker is not None:
+                attack_tracker.log_checkpoint(
+                    episode + 1, cur_accuracy, f"{model_dir}/{episode + 1}"
+                )
+            print(f"  Checkpoint saved at episode {episode + 1}, best_acc={best_accuracy:.4f}")
 
 
-def setup_model_dir(args) -> str:
-    """Create and setup the model directory for saving results."""
-    if args.model_dir is None:
+# ---------------------------------------------------------------------------
+# Sacred entry point
+# ---------------------------------------------------------------------------
+
+@ex.main
+def sacred_main(_run, _config):
+    """Main function with Sacred experiment tracking."""
+    print(f"Starting Sacred experiment: {_run._id}")
+    print(f"Configuration: {_config}")
+
+    victim_run = start_victim_sacred(_config)
+    victim_tracker = VictimExperimentTracker(sacred_run=victim_run)
+    attack_tracker = AttackExperimentTracker(sacred_run=_run)
+
+    privacy_mode_str = _config.get('privacy_mode', 'full_whitebox')
+    privacy_mode = (
+        PrivacyMode.FULL_WHITEBOX
+        if privacy_mode_str == 'full_whitebox'
+        else PrivacyMode.FULL_BLACKBOX
+    )
+
+    model_dir = _config.get('model_dir')
+    if model_dir is None:
         current_time = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-        args.model_dir = f"results/{current_time}"
+        model_dir = f"results/sacred_run_{_run._id}_{current_time}"
+    os.makedirs(model_dir, exist_ok=True)
+    _run.info['model_dir'] = model_dir
 
-    # Create directories if they don't exist
-    if not os.path.exists(args.model_dir):
-        os.makedirs(args.model_dir)
+    class Args:
+        pass
+    args = Args()
+    args.model_dir = model_dir
+    args.seed = _config.get('seed', 0)
+    args.max_episodes = _config.get('max_episodes', 30000)
+    args.max_timesteps = _config.get('max_timesteps', 15)
+    args.eval_freq_episode = _config.get('eval_freq_episode', 20)
+    args.eps_greedy_start_episodes = _config.get('eps_greedy_start_episodes', 30)
+    args.batch_size = _config.get('batch_size', 256)
+    args.discount = _config.get('discount', 0.9)
+    args.tau = _config.get('tau', 0.005)
+    args.victim_n_episodes = _config.get('victim_n_episodes', 80)
+    args.num_victims = _config.get('num_victims', 1)
+    args.victim_algo = _config.get('victim_algo', 'qlearning')
+    args.env = _config.get('env', 'grid3d')
+    args.attack_algo = _config.get('attack_algo', 'ddpg')
 
-    return args.model_dir
+    population = build_population(args, privacy_mode, victim_tracker)
+    attack_env = build_attack_env(population, args)
+    obs_encoder, action_translator = build_encoders(population, args)
 
+    state_dim = obs_encoder.embedding_dim
+    action_dim = attack_env.action_space.shape[0]
+    max_action = float(attack_env.action_space.high[0])
+    attack_algo = build_attack_algo(state_dim, action_dim, max_action, args)
 
-def setup_systems(args, model_dir) -> AttackSystem:
-    # Initialize victim components
-    victim_env = Grid3D()
-    victim_algo = VictimQLearning(victim_env.nS, victim_env.nA, **config.VICTIM.DEFAULT_KWARGS)
-    victim_system = VictimSystem(victim_env, victim_algo, config)
+    attack_env.seed(args.seed)
+    torch.manual_seed(args.seed)
+    np.random.seed(args.seed)
 
-    # Initialize attack components
-    attack_env = AttackEnvironment(victim_system, config)
-    attack_kwargs = config.ATTACK.DEFAULT_KWARGS.copy()
+    try:
+        train(attack_env, attack_algo, obs_encoder, action_translator,
+              args, attack_tracker)
 
-    # Calculate state dimension for whitebox encoding
-    # For whitebox: victim Q-table (nS * nA) + environment state (nS)
-    state_dim = victim_env.nS * victim_env.nA + victim_env.nS
+        attack_tracker.log_info('final_episode', args.max_episodes)
+        attack_tracker.log_info('attack_algo', args.attack_algo)
+        attack_tracker.log_info('num_victims', args.num_victims)
 
-    attack_kwargs.update({
-        "nb_states": state_dim,  # Use calculated state dimension
-        "nb_actions": attack_env.action_space.shape[0],
-        "max_action": float(attack_env.action_space.high[0]),
-        "tau": args.tau,
-        "discount": args.discount,
-        "eps_greedy_start_episodes": args.eps_greedy_start_episodes,
-    })
-    attack_algo = DDPG(**attack_kwargs)
-    attack_system = AttackSystem(attack_env, attack_algo, args, model_dir, config, ENCODER_TYPE)
-
-    _set_seeds(args.seed, victim_env, attack_env)
-
-    return attack_system
-
-
-# def save_checkpoint(model_dir, no_episodes, buffer, policy, ddpg_loss, buffer_metrics, model_data, model_good_data, model_bad_data):
-    # """Save training checkpoint and metrics."""
-    # buffer.saveBuffer(f"./{model_dir}/")
-    # policy.save(f"./{model_dir}/{no_episodes}")
-
-    # # Save metrics
-    # np.savetxt("ddpg_loss.csv", np.array(ddpg_loss), delimiter=",")
-    # for metric in METRICS:
-    #     np.savetxt(f"{metric}_buffer.csv", np.array(buffer_metrics[metric]), delimiter=",")
-    # np.savetxt("model_data.csv", np.array(model_data), delimiter=",")
-    # np.savetxt("model_good_data.csv", np.array(model_good_data), delimiter=",")
-    # np.savetxt("model_bad_data.csv", np.array(model_bad_data), delimiter=",")
+        finish_victim_sacred(victim_run, status='COMPLETED')
+    except Exception as e:
+        finish_victim_sacred(victim_run, status=f'FAILED: {e}')
+        raise
 
 
 if __name__ == "__main__":
-    main()
+    ex.run_commandline()

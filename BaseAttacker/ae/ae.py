@@ -124,7 +124,7 @@ class AutoEncoder():
         torch.save(self.Model.state_dict(), filename + "_AutoEncoder")
 
     def load(self, filename):
-        load_model = self.Model.load_state_dict(torch.load(filename, map_location=device))  #torch.device('cpu')))
+        load_model = self.Model.load_state_dict(torch.load(filename, map_location=device, weights_only=True))
         return load_model
 
 

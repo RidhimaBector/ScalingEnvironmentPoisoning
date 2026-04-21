@@ -1,15 +1,16 @@
-"""Q-learning victim algorithm.
+"""SARSA victim algorithm.
 
-Implements the VictimAlgorithm ABC. Maintains a Q-table updated via
-TD learning and tracks behavior traces for blackbox/whitebox encoding.
+Implements the VictimAlgorithm ABC. On-policy variant of Q-learning:
+the TD update uses the actual next action chosen by the policy rather
+than the greedy max action.
 """
 
 from __future__ import annotations
 
+import copy
 from typing import Any, Dict
 
 import numpy as np
-import utils.utils_buf as utils_buf
 from core.victim_algorithm import VictimAlgorithm
 from scipy.special import softmax
 
@@ -29,11 +30,11 @@ def _get_max_steps(env, default: int = 1000) -> int:
     return default
 
 
-class VictimQLearning(VictimAlgorithm):
-    """Q-learning victim algorithm.
+class VictimSARSA(VictimAlgorithm):
+    """SARSA victim algorithm.
 
-    Maintains a Q-table updated via TD learning. Tracks behavior traces
-    (last action taken per state) for blackbox encoding.
+    Maintains a Q-table updated via on-policy TD learning.
+    Drop-in replacement for VictimQLearning via algo_class=VictimSARSA.
     """
 
     def __init__(self, env_nS: int, env_nA: int, memory_size: int,
@@ -49,52 +50,15 @@ class VictimQLearning(VictimAlgorithm):
 
     def _init_structures(self) -> None:
         self.Q = np.zeros((self.env_nS, self.env_nA))
-        self.MEM = utils_buf.Memory(self.memory_size)
         self._transitions = np.ones((self.env_nS, 2)) * -1
         self._transitions[:, 0] = np.arange(self.env_nS)
-
-    @property
-    def transitions(self) -> np.ndarray:
-        return self._transitions
 
     def act(self, state: int) -> int:
         action_probs = softmax(self.Q[state])
         return np.random.choice(np.arange(len(action_probs)), p=action_probs)
 
-    def update(self, state: int, action: int, reward: float,
-               next_state: int, done: bool) -> None:
-        best_next_action = np.argmax(self.Q[next_state])
-        td_target = reward + self.discount_factor * self.Q[next_state][best_next_action]
-        td_delta = td_target - self.Q[state][action]
-        self.Q[state][action] += self.alpha * td_delta
-
-    def _run_episode(self, env: VictimEnvironment) -> Dict[str, Any]:
-        obs = env.reset()
-        state = obs[0] if isinstance(obs, tuple) else obs
-        episode_reward = 0
-        transitions = []
-
-        max_steps = _get_max_steps(env)
-        for t in range(max_steps):
-            action = self.act(state)
-            result = env.step(action)
-            next_state, reward, terminated, truncated, _ = result if len(result) == 5 else (*result[:3], False, result[3])
-            done = terminated or truncated
-
-            self._transitions[state, 1] = action
-            self.update(state, action, reward, next_state, done)
-            transitions.append((state, action))
-            episode_reward += reward
-
-            if done:
-                break
-            state = next_state
-
-        return {
-            'reward': episode_reward,
-            'length': t + 1,
-            'transitions': transitions,
-        }
+    def reset(self) -> None:
+        self._init_structures()
 
     def train(self, env: VictimEnvironment, num_episodes: int) -> Dict[str, Any]:
         stats: Dict[str, Any] = {
@@ -111,16 +75,39 @@ class VictimQLearning(VictimAlgorithm):
 
         return stats
 
-    def reset(self) -> None:
-        self._init_structures()
+    def _run_episode(self, env: VictimEnvironment) -> Dict[str, Any]:
+        obs = env.reset()
+        state = obs[0] if isinstance(obs, tuple) else obs
+        action = self.act(state)
+        episode_reward = 0.0
+        transitions = []
 
-    def save(self, path: str) -> None:
-        np.save(f"{path}_q_table.npy", self.Q)
+        max_steps = _get_max_steps(env)
+        for t in range(max_steps):
+            result = env.step(action)
+            next_state, reward, terminated, truncated, _ = result if len(result) == 5 else (*result[:3], False, result[3])
+            done = terminated or truncated
+            self._transitions[state, 1] = action
+            transitions.append((state, action))
 
-    def load(self, path: str) -> None:
-        self.Q = np.load(f"{path}_q_table.npy")
+            next_action = self.act(next_state)
 
-    # --- VictimAlgorithm ABC ---
+            # SARSA update: use actual next_action (on-policy)
+            td_target = reward + self.discount_factor * self.Q[next_state][next_action]
+            td_delta = td_target - self.Q[state][action]
+            self.Q[state][action] += self.alpha * td_delta
+
+            episode_reward += reward
+            if done:
+                break
+            state = next_state
+            action = next_action
+
+        return {
+            'reward': episode_reward,
+            'length': t + 1,
+            'transitions': transitions,
+        }
 
     def get_policy_matrix(self) -> np.ndarray:
         return self.Q
@@ -128,5 +115,8 @@ class VictimQLearning(VictimAlgorithm):
     def get_behavior_trace(self) -> np.ndarray:
         return self._transitions.copy()
 
-    def get_greedy_actions(self) -> np.ndarray:
-        return np.argmax(self.Q, axis=1)
+    def save(self, path: str) -> None:
+        np.save(f"{path}_q_table.npy", self.Q)
+
+    def load(self, path: str) -> None:
+        self.Q = np.load(f"{path}_q_table.npy")
