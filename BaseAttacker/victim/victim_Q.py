@@ -52,6 +52,7 @@ class VictimQLearning(VictimAlgorithm):
         self.MEM = utils_buf.Memory(self.memory_size)
         self._transitions = np.ones((self.env_nS, 2)) * -1
         self._transitions[:, 0] = np.arange(self.env_nS)
+        self._trajectory_buffer: list = []
 
     @property
     def transitions(self) -> np.ndarray:
@@ -73,6 +74,8 @@ class VictimQLearning(VictimAlgorithm):
         state = obs[0] if isinstance(obs, tuple) else obs
         episode_reward = 0
         transitions = []
+        prev_state = None
+        prev_action = None
 
         max_steps = _get_max_steps(env)
         for t in range(max_steps):
@@ -86,8 +89,13 @@ class VictimQLearning(VictimAlgorithm):
             transitions.append((state, action))
             episode_reward += reward
 
+            if prev_state is not None:
+                self._trajectory_buffer.append((prev_state, prev_action, state, action))
+
             if done:
                 break
+            prev_state = state
+            prev_action = action
             state = next_state
 
         return {
@@ -95,6 +103,11 @@ class VictimQLearning(VictimAlgorithm):
             'length': t + 1,
             'transitions': transitions,
         }
+
+    def get_trajectories(self) -> list:
+        out = list(self._trajectory_buffer)
+        self._trajectory_buffer.clear()
+        return out
 
     def train(self, env: VictimEnvironment, num_episodes: int) -> Dict[str, Any]:
         stats: Dict[str, Any] = {
@@ -113,6 +126,7 @@ class VictimQLearning(VictimAlgorithm):
 
     def reset(self) -> None:
         self._init_structures()
+        self._trajectory_buffer = []
 
     def save(self, path: str) -> None:
         np.save(f"{path}_q_table.npy", self.Q)

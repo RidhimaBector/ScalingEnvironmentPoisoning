@@ -54,20 +54,25 @@ class ReplayBuffer(Buffer):
 	def saveBuffer(self, filename):
 		np.save(filename +'_ptr.npy', np.array([self.ptr]))
 		np.save(filename +'_size.npy', np.array([self.size]))
-		np.save(filename +'_state.npy', self.state)
-		np.save(filename +'_action.npy', self.action)
-		np.save(filename +'_next_state.npy', self.next_state)
-		np.save(filename +'_reward.npy', self.reward)
-		np.save(filename +'_not_done.npy', self.not_done)
+		np.save(filename +'_state.npy', self.state[:self.size])
+		np.save(filename +'_action.npy', self.action[:self.size])
+		np.save(filename +'_next_state.npy', self.next_state[:self.size])
+		np.save(filename +'_reward.npy', self.reward[:self.size])
+		np.save(filename +'_not_done.npy', self.not_done[:self.size])
 
 	def loadBuffer(self, filename):
 		self.ptr = np.load(filename +'_ptr.npy')[0]
 		self.size = np.load(filename +'_size.npy')[0]
-		self.state = np.load(filename +'_state.npy')
-		self.action = np.load(filename +'_action.npy')
-		self.next_state = np.load(filename +'_next_state.npy')
-		self.reward = np.load(filename +'_reward.npy')
-		self.not_done = np.load(filename +'_not_done.npy')
+		saved_state = np.load(filename +'_state.npy')
+		saved_action = np.load(filename +'_action.npy')
+		saved_next_state = np.load(filename +'_next_state.npy')
+		saved_reward = np.load(filename +'_reward.npy')
+		saved_not_done = np.load(filename +'_not_done.npy')
+		self.state[:self.size] = saved_state
+		self.action[:self.size] = saved_action
+		self.next_state[:self.size] = saved_next_state
+		self.reward[:self.size] = saved_reward
+		self.not_done[:self.size] = saved_not_done
 
 	def __len__(self):
 		return self.size

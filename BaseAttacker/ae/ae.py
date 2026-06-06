@@ -1,4 +1,7 @@
 
+import os
+from typing import Dict, List, Optional
+
 import numpy as np
 import torch
 import torch.nn as nn
@@ -126,6 +129,78 @@ class AutoEncoder():
     def load(self, filename):
         load_model = self.Model.load_state_dict(torch.load(filename, map_location=device, weights_only=True))
         return load_model
+
+
+class AEObservationEncoder:
+    """Replicates main-branch state: AE(behavior_trace)(5D) + altitude(nS D).
+
+    Encodes each victim's behavior_trace through the pre-trained AutoEncoder,
+    then concatenates with the env dynamics (altitude) passed in at encode time.
+    State dim = (5 + dynamics_dim) * num_victims — matches main's 21D for 1 victim.
+
+    Args:
+        dynamics_dim: Size of env dynamics vector (nS for Grid3D = 16).
+        model_path: Path to pre-trained AE weights (without _AutoEncoder suffix).
+        num_victims: Number of victim agents K.
+    """
+
+    EMBEDDING_SIZE = 5
+
+    def __init__(self, dynamics_dim: int, model_path: str, num_victims: int = 1):
+        self._dynamics_dim = dynamics_dim
+        self._num_victims = num_victims
+
+        self._ae = AutoEncoder(
+            enc_in_size=dynamics_dim * 2,  # behavior_trace is (nS, 2), flattened = nS*2
+            enc_out_size=5,
+            dec_in_size=6,
+            dec_out_size=5,
+            lr=0.001,
+        )
+        self._ae.load(model_path)
+
+    @classmethod
+    def from_population(cls, population, model_path: Optional[str] = None) -> 'AEObservationEncoder':
+        """Build with dimensions inferred from the victim population."""
+        if model_path is None:
+            here = os.path.dirname(os.path.abspath(__file__))
+            model_path = os.path.join(here, "models", "340240_f-o_AutoEncoder_SftMx")
+        return cls(
+            dynamics_dim=population.env.dynamics_dim,
+            model_path=model_path,
+            num_victims=population.num_victims,
+        )
+
+    @property
+    def embedding_dim(self) -> int:
+        return (self.EMBEDDING_SIZE + self._dynamics_dim) * self._num_victims
+
+    def encode(self, victim_data: List[Dict], env_dynamics: Optional[np.ndarray] = None) -> np.ndarray:
+        """Encode victim data into observation using AE + altitude.
+
+        Args:
+            victim_data: List of per-victim result dicts (behavior_trace required).
+            env_dynamics: Env altitude vector (nS,). Zeros if None.
+        """
+        dyn = (
+            np.asarray(env_dynamics).flatten()[:self._dynamics_dim]
+            if env_dynamics is not None
+            else np.zeros(self._dynamics_dim)
+        )
+
+        parts = []
+        for i in range(self._num_victims):
+            data = victim_data[i] if i < len(victim_data) else {}
+            trace = np.asarray(
+                data.get('behavior_trace', np.zeros((self._dynamics_dim, 2)))
+            ).reshape(1, -1)  # (1, nS*2) — AE encoder does view(-1, 32)
+            ae_emb = self._ae.Policy_Embedding(trace)[-1]  # (5,)
+            parts.append(np.concatenate([ae_emb, dyn]))
+
+        return np.concatenate(parts)
+
+    def get_initial_embedding(self) -> np.ndarray:
+        return np.zeros(self.embedding_dim)
 
 
 if __name__ == "__main__":

@@ -16,6 +16,8 @@
 import os
 import pkgutil
 import importlib.util
+import subprocess
+import time
 
 # Python 3.14 removed pkgutil.find_loader; patch it for sacred compatibility
 if not hasattr(pkgutil, 'find_loader'):
@@ -33,6 +35,40 @@ from sacred.observers import MongoObserver, FileStorageObserver
 ex = Experiment('environment_poisoning_attack')
 
 
+def _ensure_mongo_running(host='localhost', port=27017, timeout=15) -> bool:
+    """Check if MongoDB is responsive; start it via brew if not."""
+    import socket
+    def _is_up():
+        try:
+            with socket.create_connection((host, port), timeout=2):
+                return True
+        except OSError:
+            return False
+
+    if _is_up():
+        return True
+
+    print("MongoDB not running — starting via brew services...")
+    try:
+        subprocess.run(
+            ['brew', 'services', 'start', 'mongodb-community'],
+            check=True, capture_output=True
+        )
+    except (subprocess.CalledProcessError, FileNotFoundError) as e:
+        print(f"Warning: Could not start MongoDB: {e}")
+        return False
+
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if _is_up():
+            print("MongoDB started.")
+            return True
+        time.sleep(1)
+
+    print("Warning: MongoDB did not become ready in time.")
+    return False
+
+
 def setup_observers(ex, mongo_url=None, db_name=None, use_file_observer=True):
     """
     Set up observers for the experiment.
@@ -48,12 +84,13 @@ def setup_observers(ex, mongo_url=None, db_name=None, use_file_observer=True):
     db_name = db_name or os.environ.get('SACRED_DB_NAME', 'env_poisoning')
 
     mongo_connected = False
-    try:
-        ex.observers.append(MongoObserver(url=mongo_url, db_name=db_name))
-        print(f"MongoDB observer connected: {mongo_url}/{db_name}")
-        mongo_connected = True
-    except Exception as e:
-        print(f"Warning: Could not connect to MongoDB ({e}). Using file observer only.")
+    if _ensure_mongo_running():
+        try:
+            ex.observers.append(MongoObserver(url=mongo_url, db_name=db_name))
+            print(f"MongoDB observer connected: {mongo_url}/{db_name}")
+            mongo_connected = True
+        except Exception as e:
+            print(f"Warning: Could not connect to MongoDB ({e}). Using file observer only.")
 
     # File observer: only add as fallback when MongoDB is unavailable
     if use_file_observer and not mongo_connected:
@@ -77,11 +114,14 @@ def default_config():
     eval_freq_episode = 20
     eps_greedy_start_episodes = 30
     victim_n_episodes = 80
+    keep_checkpoints = 3  # number of recent model checkpoints to keep on disk
 
     # DDPG hyperparameters
     batch_size = 256
     discount = 0.9
     tau = 0.005
+    attack_rate = 0.001    # critic learning rate
+    attack_prate = 0.0001  # actor learning rate
     expl_noise = 0.1
     policy_noise = 0.2
     noise_clip = 0.5
@@ -112,6 +152,17 @@ def default_config():
 
     # Victim environment: "grid3d" (default)
     env = "grid3d"
+
+    # Optional grid shape as [rows, cols]. None = use env default (e.g. [4,4] for Grid3D).
+    # Example: env_shape=[6,6] for a 6x6 grid.
+    env_shape = None
+
+    # Shorthand for square grids: grid_size=6 → (6,6). Overrides env_shape if set.
+    grid_size = None
+
+    # Observation encoder: "whitebox" (VictimEncoder: Q+dynamics+trace) or
+    # "ae" (pre-trained AE on behavior_trace + altitude, replicates main branch)
+    encoder_mode = "whitebox"
 
 
 @ex.named_config
@@ -289,7 +340,7 @@ def _setup_victim_observers():
     victim_db = f"{db_name}_victims"
 
     victim_mongo_connected = False
-    if os.environ.get('SACRED_FILE_ONLY', '').lower() not in ('1', 'true', 'yes'):
+    if os.environ.get('SACRED_FILE_ONLY', '').lower() not in ('1', 'true', 'yes') and _ensure_mongo_running():
         try:
             victim_ex.observers.append(MongoObserver(url=mongo_url, db_name=victim_db))
             print(f"Victim MongoDB observer connected: {mongo_url}/{victim_db}")

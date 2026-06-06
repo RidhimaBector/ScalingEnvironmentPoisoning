@@ -129,6 +129,17 @@ class AttackEnvironment(Env):
             'victim_results': results,
         }
 
+        # Surface per-victim scalar metrics into info so log_timestep() picks them up.
+        # Single victim: flat keys (distance_K, effort, ...).
+        # Multi-victim: namespaced keys (victim_0.distance_K, ...).
+        multi = len(results) > 1
+        for res in results:
+            k = res.get('victim_idx', 0)
+            prefix = f'victim_{k}.' if multi else ''
+            for name, value in res.items():
+                if isinstance(value, (int, float)) and name != 'victim_idx':
+                    info[f'{prefix}{name}'] = value
+
         return obs, reward, terminated, False, info
 
     def render(self, mode='human'):

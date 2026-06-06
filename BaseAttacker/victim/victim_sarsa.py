@@ -52,6 +52,7 @@ class VictimSARSA(VictimAlgorithm):
         self.Q = np.zeros((self.env_nS, self.env_nA))
         self._transitions = np.ones((self.env_nS, 2)) * -1
         self._transitions[:, 0] = np.arange(self.env_nS)
+        self._trajectory_buffer: list = []
 
     def act(self, state: int) -> int:
         action_probs = softmax(self.Q[state])
@@ -59,6 +60,12 @@ class VictimSARSA(VictimAlgorithm):
 
     def reset(self) -> None:
         self._init_structures()
+        self._trajectory_buffer = []
+
+    def get_trajectories(self) -> list:
+        out = list(self._trajectory_buffer)
+        self._trajectory_buffer.clear()
+        return out
 
     def train(self, env: VictimEnvironment, num_episodes: int) -> Dict[str, Any]:
         stats: Dict[str, Any] = {
@@ -96,6 +103,8 @@ class VictimSARSA(VictimAlgorithm):
             td_target = reward + self.discount_factor * self.Q[next_state][next_action]
             td_delta = td_target - self.Q[state][action]
             self.Q[state][action] += self.alpha * td_delta
+
+            self._trajectory_buffer.append((state, action, next_state, next_action))
 
             episode_reward += reward
             if done:

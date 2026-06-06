@@ -32,41 +32,40 @@ def create_target_policy(nS: int, nA: int, path_type: str = "Mp") -> np.ndarray:
     """
     target = np.zeros((nS, nA))
 
-    # For 4x4 grid with 4 actions (specific target paths)
-    if nS == 16 and nA == 4:
+    # Infer grid shape from nS (assumes square or near-square grid)
+    ncols = int(round(nS ** 0.5))
+    nrows = nS // ncols
+
+    if nA >= 4 and nrows * ncols == nS and path_type in ("Mp", "M", "H", "E"):
+        # Actions: 0=NORTH, 1=EAST, 2=SOUTH, 3=WEST
         if path_type == "Mp":
-            # Mp target path: right along top, down right side, left along bottom
-            # Actions: 0=UP, 1=RIGHT/EAST, 2=DOWN/SOUTH, 3=LEFT/WEST
-            target[0][1] = 1   # State 0: EAST
-            target[1][1] = 1   # State 1: EAST
-            target[2][1] = 1   # State 2: EAST
-            target[3][2] = 1   # State 3: SOUTH
-            target[7][2] = 1   # State 7: SOUTH
-            target[11][2] = 1  # State 11: SOUTH
-            target[15][3] = 1  # State 15: WEST
-            target[14][3] = 1  # State 14: WEST
-            target[13][3] = 1  # State 13: WEST
-        elif path_type == "M" or path_type == "H":
-            # M and H target paths (partial)
-            target[0][1] = 1   # State 0: EAST
-            target[1][1] = 1   # State 1: EAST
-            target[2][1] = 1   # State 2: EAST
-            target[3][2] = 1   # State 3: SOUTH
-            target[7][2] = 1   # State 7: SOUTH
-            target[11][2] = 1  # State 11: SOUTH
+            # Top row (except top-right corner): EAST
+            for c in range(ncols - 1):
+                target[c][1] = 1
+            # Right column (except top-right corner): SOUTH
+            for r in range(nrows - 1):
+                target[r * ncols + (ncols - 1)][2] = 1
+            # Bottom row (except bottom-right corner): WEST
+            for c in range(ncols - 1, 0, -1):
+                target[(nrows - 1) * ncols + c][3] = 1
+        elif path_type in ("M", "H"):
+            # Top row (except top-right corner): EAST
+            for c in range(ncols - 1):
+                target[c][1] = 1
+            # Right column (except corners): SOUTH
+            for r in range(nrows - 1):
+                target[r * ncols + (ncols - 1)][2] = 1
         elif path_type == "E":
-            # E target path (down left side, right along bottom)
-            target[0][2] = 1   # State 0: SOUTH
-            target[4][2] = 1   # State 4: SOUTH
-            target[8][2] = 1   # State 8: SOUTH
-            target[12][1] = 1  # State 12: EAST
-            target[13][1] = 1  # State 13: EAST
+            # Left column (except bottom-left corner): SOUTH
+            for r in range(nrows - 1):
+                target[r * ncols][2] = 1
+            # Bottom row (except bottom-left corner): EAST
+            for c in range(1, ncols):
+                target[(nrows - 1) * ncols + c][1] = 1
     else:
-        # Generic fallback: for each state, prefer action 0 with small prob on others
+        # Generic fallback: uniform preference for action 0
         for s in range(nS):
-            target[s] = np.ones(nA) * 0.001
             target[s][0] = 1.0
-            target[s] = target[s] / np.sum(target[s])
 
     return target
 

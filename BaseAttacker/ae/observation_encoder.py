@@ -40,17 +40,19 @@ class ObservationEncoder:
     def embedding_dim(self) -> int:
         return self._inner.embedding_dim
 
-    def encode(self, victim_data: List[Dict]) -> np.ndarray:
+    def encode(self, victim_data: List[Dict], env_dynamics=None) -> np.ndarray:
         """Encode victim result dicts into a 1D observation array.
 
         Args:
             victim_data: List of per-victim result dicts from
                 AttackEnvironment.step() info['victim_results'].
+            env_dynamics: Optional env dynamics array (e.g. altitude).
+                Passed through to the inner encoder; ignored by VictimEncoder.
 
         Returns:
             1D numpy array of shape (embedding_dim,).
         """
-        return self._inner.encode(victim_data)
+        return self._inner.encode(victim_data, env_dynamics=env_dynamics)
 
     def get_initial_embedding(self) -> np.ndarray:
         """Return a zero embedding for the start of an episode.

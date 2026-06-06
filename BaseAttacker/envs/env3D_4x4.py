@@ -5,9 +5,10 @@
 import math
 import os
 import sys
-from typing import Tuple
+from typing import Dict, Tuple
 
 import numpy as np
+import ot
 from gymnasium import spaces
 from gymnasium.utils import seeding
 
@@ -106,29 +107,18 @@ class Grid3D(VictimEnvironmentABC):
 
 
     def _base_altitude(self) -> np.ndarray:
+        rows, cols = self.shape
         A = np.zeros(self.shape)
-        #A[0] = [8, 7, 5, 4]
-        #A[1] = [9, 6, 4, 2]
-        #A[2] = [8, 5, 4, 1]
-        #A[3] = [8, 4, 2, 0]
-        A[0] = [8.00, 8.00, 8.00, 8.00] #[8, 7, 5, 4]
-        A[1] = [6.00, 6.00, 6.00, 8.00] #[9, 6, 4, 2]
-        A[2] = [4.00, 4.00, 6.00, 8.00] #[8, 5, 4, 1]
-        A[3] = [2.00, 4.00, 6.00, 8.00] #[8, 4, 2, 0]
-
-        """A[0] = [8.00, 8.25, 8.50, 8.75] #[8, 7, 5, 4]
-        A[1] = [6.00, 6.00, 6.00, 9.00] #[9, 6, 4, 2]
-        A[2] = [5.00, 5.00, 5.00, 9.25] #[8, 5, 4, 1]
-        A[3] = [4.00, 3.00, 2.00, 1.00] """#[8, 4, 2, 0]
-
-        return A
+        denom = max(rows + cols - 2, 1)
+        for r in range(rows):
+            for c in range(cols):
+                # gradient: top-left=8, bottom-right=2, matching original 4x4 pattern
+                A[r, c] = round(8.0 - 6.0 * (r + c) / denom, 2)
+        return np.clip(A, 2.0, 8.0)
 
 
     def _defined_altitude(self) -> np.ndarray:
-        if GRID_DIMENSIONS == (4,4):
-            return self._base_altitude()
-        else:
-            return self._generate_altitude()
+        return self._base_altitude()
 
 
     def _calculate_dynamics(self, shape, nA, nS, A):
@@ -277,6 +267,7 @@ class Grid3D(VictimEnvironmentABC):
         # environment transition
         self.T = self._calculate_dynamics(self.shape, self.nA, self.nS, self.altitude)
         self.INIT_T = self.T.copy()
+        self._prev_dynamics = None
 
         # always start in state (0,0)
         #self.isd = np.zeros(self.nS)
@@ -411,6 +402,7 @@ class Grid3D(VictimEnvironmentABC):
         Args:
             perturbation: Array of shape (nS,) with values typically in [-1, 1].
         """
+        self._prev_dynamics = self.get_dynamics().copy()
         new_altitude = np.clip(
             self.altitude + perturbation.reshape(self.shape), 0.0, 10.0
         )
@@ -428,6 +420,39 @@ class Grid3D(VictimEnvironmentABC):
     def reset_dynamics(self) -> None:
         """Reset altitude and transitions to original values."""
         self.reset_altitude()
+
+    def compute_distance_metrics(self, algo, target: np.ndarray) -> Dict[str, float]:
+        """Wasserstein and KL-rate distances from victim's policy to target.
+
+        Builds the cost matrix from self.shape so no grid size is hardcoded.
+        Computes six variants: complete/grid/behavior × W/K.
+
+        Args:
+            algo: Victim algorithm (must implement get_policy_matrix()).
+            target: Target policy matrix of shape (nS, nA).
+
+        Returns:
+            Dict with six distance_* keys, all negated (higher = closer to target).
+        """
+        from utils.utils_attack import Attack_Cost_Compute_W, Attack_Cost_Compute_K
+
+        # Build cost matrix from grid shape — works for any rectangular grid
+        coords = np.array([[i, j] for i in range(self.shape[0]) for j in range(self.shape[1])])
+        M = ot.dist(coords, coords, metric='cityblock') * 20
+        np.fill_diagonal(M, 10)
+        M = np.repeat(M, self.nA, axis=1)
+        M = np.repeat(M, self.nA, axis=0)
+        np.fill_diagonal(M, 0)
+
+        Q = algo.get_policy_matrix()
+        return {
+            'distance_K':          -Attack_Cost_Compute_K(self, self.INIT_T, Q, target, M, distance_type=0),
+            'distance_grid_K':     -Attack_Cost_Compute_K(self, self.INIT_T, Q, target, M, distance_type=1),
+            'distance_behavior_K': -Attack_Cost_Compute_K(self, self.INIT_T, Q, target, M, distance_type=2),
+            'distance_W':          -Attack_Cost_Compute_W(self, self.INIT_T, Q, target, M, distance_type=0),
+            'distance_grid_W':     -Attack_Cost_Compute_W(self, self.INIT_T, Q, target, M, distance_type=1),
+            'distance_behavior_W': -Attack_Cost_Compute_W(self, self.INIT_T, Q, target, M, distance_type=2),
+        }
 
     @property
     def dynamics_dim(self) -> int:

@@ -230,11 +230,14 @@ class VictimSystem:
         result = {
             'behavior_trace': self._behavior_traces[k].copy(),
             'victim_idx': k,
+            'trajectories': algo.get_trajectories(),
         }
 
         if self.privacy_mode == PrivacyMode.FULL_WHITEBOX:
             result.update(algo.get_whitebox_data())
             result.update(env.get_whitebox_data())
+            result.update(env.compute_distance_metrics(algo, self._target))
+            result['effort'] = env.compute_effort()
 
         return result
 

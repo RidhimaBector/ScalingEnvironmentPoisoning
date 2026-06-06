@@ -102,3 +102,16 @@ class VictimAlgorithm(ABC):
             Array of shape (nS,) with greedy action indices.
         """
         return np.argmax(self.get_policy_matrix(), axis=1)
+
+    def get_trajectories(self) -> list:
+        """Return recent (pre_state, pre_action, state, action) tuples and clear the buffer.
+
+        Override in subclasses to collect per-step transitions during training.
+        The LSTM trajectory encoder reads this key from victim_data.
+
+        Returns:
+            List of (pre_state, pre_action, state, action) 4-tuples.
+            pre_state / state: raw env observation (int for Discrete, array for Box).
+            pre_action / action: int action index.
+        """
+        return []

@@ -51,6 +51,7 @@ class VictimREINFORCE(VictimAlgorithm):
         self.H = np.zeros((self.env_nS, self.env_nA))
         self._transitions = np.ones((self.env_nS, 2)) * -1
         self._transitions[:, 0] = np.arange(self.env_nS)
+        self._trajectory_buffer: list = []
 
     def act(self, state: int) -> int:
         probs = softmax(self.H[state])
@@ -58,6 +59,12 @@ class VictimREINFORCE(VictimAlgorithm):
 
     def reset(self) -> None:
         self._init_structures()
+        self._trajectory_buffer = []
+
+    def get_trajectories(self) -> list:
+        out = list(self._trajectory_buffer)
+        self._trajectory_buffer.clear()
+        return out
 
     def train(self, env: VictimEnvironment, num_episodes: int) -> Dict[str, Any]:
         stats: Dict[str, Any] = {
@@ -108,6 +115,12 @@ class VictimREINFORCE(VictimAlgorithm):
             grad = -probs.copy()
             grad[a_t] += 1.0
             self.H[s_t] += self.alpha * G_t * grad
+
+        # Collect (pre_state, pre_action, state, action) for trajectory encoder
+        for i in range(1, len(trajectory)):
+            pre_s, pre_a, _ = trajectory[i - 1]
+            s, a, _ = trajectory[i]
+            self._trajectory_buffer.append((pre_s, pre_a, s, a))
 
         return {
             'reward': episode_reward,
