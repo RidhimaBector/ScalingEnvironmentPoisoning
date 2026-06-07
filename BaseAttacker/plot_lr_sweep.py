@@ -40,15 +40,17 @@ def smooth(values, window=100):
     return np.convolve(values, np.ones(window) / window, mode='valid')
 
 
-def load_runs(db, rates=None, run_ids=None):
+def load_runs(db, rates=None, run_ids=None, encoder_mode=None):
     """Return dict: attack_rate -> list of (steps, accuracy) arrays."""
     if run_ids:
         runs = [db.runs.find_one({'_id': rid}) for rid in run_ids]
         runs = [r for r in runs if r]
     else:
-        query = {'config.encoder_mode': 'lstm'}
-        if rates:
-            query['config.attack_rate'] = {'$in': [float(r) for r in rates]}
+        if rates is None:
+            rates = [0.0001, 0.001, 0.01]
+        query = {'config.attack_rate': {'$in': [float(r) for r in rates]}}
+        if encoder_mode:
+            query['config.encoder_mode'] = encoder_mode
         runs = list(db.runs.find(query))
 
     data = defaultdict(list)
@@ -56,6 +58,10 @@ def load_runs(db, rates=None, run_ids=None):
         cfg = run.get('config', {})
         rate = cfg.get('attack_rate', '?')
         run_id = run['_id']
+        status = run.get('status')
+        if status and status != 'COMPLETED':
+            print(f'  run {run_id} (rate={rate}): status={status}, skipping')
+            continue
         steps, acc = get_metric(db, run_id, 'episode.accuracy')
         if steps is None or len(steps) == 0:
             print(f'  run {run_id} (rate={rate}): no accuracy data yet, skipping')
@@ -85,17 +91,20 @@ def plot_sweep(data, out_path, smooth_window=100):
             ax.plot(xs, sm, color=color, linewidth=0.8, alpha=0.3)
             all_smoothed.append((xs, sm))
 
-        # Mean ± std band across seeds (interpolate to common x grid)
+        # Mean ± std band across seeds (interpolate to common x grid).
+        # Ignore short/partial runs so one interrupted seed can't drop the whole rate.
+        max_len = max(len(xs) for xs, _ in all_smoothed)
+        long_runs = [(xs, sm) for xs, sm in all_smoothed if len(xs) >= max_len * 0.9]
         if len(all_smoothed) > 1:
-            x_min = max(xs[0]  for xs, _ in all_smoothed)
-            x_max = min(xs[-1] for xs, _ in all_smoothed)
+            x_min = max(xs[0]  for xs, _ in long_runs)
+            x_max = min(xs[-1] for xs, _ in long_runs)
             if x_min < x_max:
                 grid = np.arange(x_min, x_max + 1)
-                interp = np.array([np.interp(grid, xs, sm) for xs, sm in all_smoothed])
+                interp = np.array([np.interp(grid, xs, sm) for xs, sm in long_runs])
                 mean = interp.mean(axis=0)
                 std  = interp.std(axis=0)
                 ax.plot(grid, mean, color=color, linewidth=2.5,
-                        label=f'{label}  (n={len(runs)}, peak={mean.max():.3f})')
+                        label=f'{label}  (n={len(long_runs)}, peak={mean.max():.3f})')
                 ax.fill_between(grid, mean - std, mean + std, color=color, alpha=0.15)
         else:
             xs, sm = all_smoothed[0]
@@ -121,7 +130,9 @@ def plot_sweep(data, out_path, smooth_window=100):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--rates',    nargs='+', default=None,
-                        help='Filter by specific attack_rate values')
+                        help='Filter by attack_rate values (default: 0.0001 0.001 0.01)')
+    parser.add_argument('--encoder_mode', type=str, default=None,
+                        help='Filter by encoder_mode (e.g. whitebox, lstm, ae)')
     parser.add_argument('--run_ids',  nargs='+', type=int, default=None,
                         help='Specific Sacred run IDs to include')
     parser.add_argument('--smooth',   type=int,  default=100,
@@ -134,7 +145,8 @@ def main():
 
     db = connect(args.mongo_url, args.db)
     print('Loading runs...')
-    data = load_runs(db, rates=args.rates, run_ids=args.run_ids)
+    data = load_runs(db, rates=args.rates, run_ids=args.run_ids,
+                     encoder_mode=args.encoder_mode)
     plot_sweep(data, args.out, smooth_window=args.smooth)
 
 
