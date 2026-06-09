@@ -57,6 +57,24 @@ class _TrajectoryMemory:
     def __len__(self) -> int:
         return len(self.memory)
 
+    def get_recent(self, n: int) -> List[_Transition4]:
+        """Return the n most recent transitions in temporal order."""
+        size = len(self.memory)
+        n = min(n, size)
+        if size < self.capacity:
+            return self.memory[-n:]
+        end = self._pos
+        start = end - n
+        if start >= 0:
+            return self.memory[start:end]
+        return self.memory[start:] + self.memory[:end]
+
+    def get_ordered(self) -> List[_Transition4]:
+        """Return all transitions oldest-first (corrects wrap-around ordering)."""
+        if len(self.memory) < self.capacity:
+            return list(self.memory)
+        return self.memory[self._pos:] + self.memory[:self._pos]
+
     def clear(self) -> None:
         self.memory.clear()
         self._pos = 0
@@ -252,11 +270,6 @@ class LSTMTrajectoryEncoder(Encoder):
                     float(a),
                 )
 
-        # Train if at least one victim has enough data (2 chunks) and target is ready
-        if (len(self._target_memory) >= self._seq_len
-                and any(len(m) >= 2 * self._seq_len for m in self._victim_memories)):
-            self._train_step()
-
         parts = []
         for k in range(self._num_victims):
             if (len(self._victim_memories[k]) >= self._seq_len
@@ -269,6 +282,12 @@ class LSTMTrajectoryEncoder(Encoder):
 
     def get_initial_embedding(self) -> np.ndarray:
         return np.zeros(self.embedding_dim, dtype=np.float32)
+
+    def train_encoder(self) -> None:
+        """Train on buffered trajectories. Call once per episode, not per timestep."""
+        if (len(self._target_memory) >= self._seq_len
+                and any(len(m) >= 2 * self._seq_len for m in self._victim_memories)):
+            self._train_step()
 
     # ---------------------------------------------------------------- #
     #  Factory                                                           #
@@ -457,8 +476,12 @@ class LSTMTrajectoryEncoder(Encoder):
         """Train the encoder on all victims that have >= 2 * seq_len transitions."""
         self._model.train()
 
+        target_ordered = self._target_memory.get_ordered()
+        B_seq = target_ordered[:self._seq_len]
+
         for victim_mem in self._victim_memories:
-            n_chunks = len(victim_mem) // self._seq_len
+            ordered = victim_mem.get_ordered()
+            n_chunks = len(ordered) // self._seq_len
             if n_chunks < 2:
                 continue  # need encoder chunk + decoder chunk
 
@@ -468,15 +491,15 @@ class LSTMTrajectoryEncoder(Encoder):
                     i_end = i_start + self._seq_len
 
                     # Encoder inputs: actual trajectory chunk A and target chunk B
-                    A_enc = victim_mem.memory[i_start:i_end]
-                    B_enc = self._target_memory.memory[:self._seq_len]
+                    A_enc = ordered[i_start:i_end]
+                    B_enc = B_seq
                     A_enc_in = self._build_enc_tensor(A_enc)  # (seq_len, 1, state_dim+1)
                     B_enc_in = self._build_enc_tensor(B_enc)  # (seq_len, 1, state_dim+1)
                     enc_in = torch.cat([A_enc_in, B_enc_in], dim=1)  # (seq_len, 2, state_dim+1)
 
                     # Decoder inputs: next seq_len chunk for A, same first chunk for B
-                    A_dec = victim_mem.memory[i_end:i_end + self._seq_len]
-                    B_dec = self._target_memory.memory[:self._seq_len]
+                    A_dec = ordered[i_end:i_end + self._seq_len]
+                    B_dec = B_seq
 
                     A_fc_in, A_fc_tgt, A_lstm_in, A_lstm_tgt = self._build_dec_tensors(A_dec)
                     B_fc_in, B_fc_tgt, B_lstm_in, B_lstm_tgt = self._build_dec_tensors(B_dec)
@@ -509,8 +532,8 @@ class LSTMTrajectoryEncoder(Encoder):
         Returns:
             Float32 array of shape (embedding_dim,).
         """
-        A = victim_memory.memory[-self._seq_len:]
-        B = target_memory.memory[-self._seq_len:]
+        A = victim_memory.get_recent(self._seq_len)
+        B = target_memory.get_recent(self._seq_len)
 
         A_in = self._build_enc_tensor(A)              # (seq_len, 1, state_dim+1)
         B_in = self._build_enc_tensor(B)              # (seq_len, 1, state_dim+1)

@@ -223,6 +223,7 @@ class DDPG(AttackAlgorithm):
             q_batch = self.critic(to_tensor(state_batch), to_tensor(action_batch))
             value_loss = criterion(q_batch, target_q_batch)
             value_loss.backward()
+            torch.nn.utils.clip_grad_norm_(self.critic.parameters(), max_norm=1.0)
             self.critic_optim.step()
 
             self.actor.zero_grad()
@@ -285,6 +286,7 @@ class DDPG(AttackAlgorithm):
                 q_batch = self.critic(to_tensor(state_batch), to_tensor(action_batch))
                 value_loss = criterion(q_batch, target_q_batch)
                 value_loss.backward()
+                torch.nn.utils.clip_grad_norm_(self.critic.parameters(), max_norm=1.0)
                 self.critic_optim.step()
 
                 # Actor update

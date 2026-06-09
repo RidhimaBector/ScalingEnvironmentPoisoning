@@ -26,6 +26,15 @@ def Attack_Done_Identify(target: np.ndarray, policy_matrix: np.ndarray, policy: 
     return done, accuracy, accuracy_softmax, accuracy_softmax_complete
 
 
+def accuracy_from_behavior_trace(behavior_trace: np.ndarray, target: np.ndarray) -> float:
+    """Blackbox-safe accuracy: uses last observed greedy action per state."""
+    target_map = np.sum(target, axis=1)
+    target_actions = np.argmax(target, axis=1)
+    trace_actions = behavior_trace[:, 1].astype(int)
+    accuracy = np.sum(target_map * (trace_actions == target_actions)) / np.sum(target_map)
+    return float(accuracy)
+
+
 def Attack_Effort(current_env_dynamics, env):
     prev_env_dynamics = current_env_dynamics.copy()
     current_env_dynamics_updated = env.env_dynamics.copy()

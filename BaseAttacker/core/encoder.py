@@ -10,6 +10,7 @@ from typing import Dict, List, Optional
 import numpy as np
 
 
+
 class Encoder(ABC):
     """ABC for encoders in the attack framework.
 
@@ -52,3 +53,19 @@ class Encoder(ABC):
         Returns:
             1D numpy array of shape (embedding_dim,).
         """
+
+    def train_encoder(self) -> None:
+        """Train the encoder on buffered data. No-op for non-trainable encoders."""
+
+    def compute_reward(self, victim_data: List[Dict], target: np.ndarray) -> float:
+        """Compute attack reward from available victim data.
+
+        Default: behavior_trace-based (blackbox-safe). Override for whitebox.
+        """
+        from utils.utils_attack import accuracy_from_behavior_trace
+        accuracies = []
+        for data in victim_data:
+            trace = data.get('behavior_trace')
+            if trace is not None:
+                accuracies.append(accuracy_from_behavior_trace(np.asarray(trace), target))
+        return float(np.mean(accuracies)) if accuracies else 0.0

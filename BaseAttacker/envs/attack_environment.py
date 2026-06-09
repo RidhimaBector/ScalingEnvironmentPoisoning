@@ -9,6 +9,7 @@ from agent.attack_dispatch import AttackDispatch
 from agent.victim_system import VictimSystem
 from envs.target_def import create_target_policy
 from utils.utils_attack import Attack_Done_Identify
+from core.encoder import Encoder
 
 
 class AttackEnvironment(Env):
@@ -38,12 +39,14 @@ class AttackEnvironment(Env):
         victim_train_episodes: int = 80,
         config: Any = None,
         target_path_type: str = "Mp",
+        encoder: Optional[Encoder] = None,
     ):
         super().__init__()
 
         self._victim_population = victim_population
         self._dispatch = attack_dispatch or AttackDispatch()
         self._victim_train_episodes = victim_train_episodes
+        self._encoder = encoder
 
         # Target policy
         if target_policy is not None:
@@ -55,10 +58,15 @@ class AttackEnvironment(Env):
 
         env_nS = victim_population.nS
 
-        # Gym spaces — obs is raw env_dynamics (nS,); action is perturbation (nS,)
-        self.observation_space = spaces.Box(
-            low=-np.inf, high=np.inf, shape=(env_nS,), dtype=np.float64
-        )
+        # Obs space: encoded embedding when encoder is injected; raw dynamics otherwise
+        if encoder is not None:
+            self.observation_space = spaces.Box(
+                low=-np.inf, high=np.inf, shape=(encoder.embedding_dim,), dtype=np.float64
+            )
+        else:
+            self.observation_space = spaces.Box(
+                low=-np.inf, high=np.inf, shape=(env_nS,), dtype=np.float64
+            )
         self.action_space = spaces.Box(
             low=-1.0, high=1.0, shape=(env_nS,), dtype=np.float64
         )
@@ -83,7 +91,10 @@ class AttackEnvironment(Env):
         self._step_count = 0
         self._victim_population.reset()
 
-        obs = self._get_env_dynamics()
+        if self._encoder is not None:
+            obs = self._encoder.get_initial_embedding()
+        else:
+            obs = self._get_env_dynamics()
         return obs, {'step': 0, 'is_initial': True}
 
     def step(self, action: np.ndarray) -> Tuple[np.ndarray, float, bool, bool, Dict]:
@@ -112,22 +123,30 @@ class AttackEnvironment(Env):
         results = self._victim_population.run_experiments(self._victim_train_episodes)
 
         # 3. Metrics and reward
-        metrics = self._victim_population.get_accuracy_metrics(self._target)
-        reward = float(metrics['mean_accuracy'])
-        terminated = metrics['min_accuracy'] >= 1.0
-
-        obs = self._get_env_dynamics()
-
-        info = {
-            'step': self._step_count,
-            'accuracy': metrics['mean_accuracy'],
-            'min_accuracy': metrics['min_accuracy'],
-            'max_accuracy': metrics['max_accuracy'],
-            'std_accuracy': metrics['std_accuracy'],
-            'mean_accuracy_sftmx': metrics.get('mean_accuracy_sftmx', 0.0),
-            'per_victim_accuracy': metrics.get('per_victim_accuracy', []),
-            'victim_results': results,
-        }
+        if self._encoder is not None:
+            obs = self._encoder.encode(results, self._get_env_dynamics())
+            reward = self._encoder.compute_reward(results, self._target)
+            terminated = reward >= 1.0
+            info = {
+                'step': self._step_count,
+                'accuracy': reward,
+                'victim_results': results,
+            }
+        else:
+            metrics = self._victim_population.get_accuracy_metrics(self._target)
+            reward = float(metrics['mean_accuracy'])
+            terminated = metrics['min_accuracy'] >= 1.0
+            obs = self._get_env_dynamics()
+            info = {
+                'step': self._step_count,
+                'accuracy': metrics['mean_accuracy'],
+                'min_accuracy': metrics['min_accuracy'],
+                'max_accuracy': metrics['max_accuracy'],
+                'std_accuracy': metrics['std_accuracy'],
+                'mean_accuracy_sftmx': metrics.get('mean_accuracy_sftmx', 0.0),
+                'per_victim_accuracy': metrics.get('per_victim_accuracy', []),
+                'victim_results': results,
+            }
 
         # Surface per-victim scalar metrics into info so log_timestep() picks them up.
         # Single victim: flat keys (distance_K, effort, ...).

@@ -124,6 +124,18 @@ class VictimEncoder(Encoder):
     def get_initial_embedding(self) -> np.ndarray:
         return np.zeros(self.embedding_dim)
 
+    def compute_reward(self, victim_data: List[Dict], target: np.ndarray) -> float:
+        from utils.utils_attack import Attack_Done_Identify
+        accuracies = []
+        for data in victim_data:
+            q = data.get('policy_matrix')
+            if q is not None:
+                _, acc, _, _ = Attack_Done_Identify(target.copy(), np.asarray(q))
+                accuracies.append(acc)
+        if not accuracies:
+            return super().compute_reward(victim_data, target)
+        return float(np.mean(accuracies))
+
 
 def _pad_or_clip(arr: np.ndarray, target: int) -> np.ndarray:
     """Clip or zero-pad a 1-D array to exactly target elements."""

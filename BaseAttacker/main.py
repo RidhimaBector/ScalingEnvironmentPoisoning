@@ -111,13 +111,14 @@ def build_population(args, privacy_mode: PrivacyMode, victim_tracker=None):
         )
 
 
-def build_attack_env(population, args):
-    """Create the AttackEnvironment (pure MDP wrapper, no encoder)."""
+def build_attack_env(population, args, encoder=None):
+    """Create the AttackEnvironment, optionally with injected encoder."""
     return AttackEnvironment(
         victim_population=population,
         attack_dispatch=AttackDispatch(),
         victim_train_episodes=getattr(args, 'victim_n_episodes', 80),
         config=config,
+        encoder=encoder,
     )
 
 
@@ -208,9 +209,8 @@ def train(attack_env, attack_algo, obs_encoder, action_translator,
     os.makedirs(model_dir, exist_ok=True)
 
     for episode in range(max_episodes):
-        # Reset all victims
-        attack_env.reset()
-        obs = obs_encoder.get_initial_embedding()
+        # Reset all victims; obs comes from the env (encoder injected)
+        obs, _ = attack_env.reset()
         episode_reward = 0.0
         episode_start = time.time()
         info = {}
@@ -223,8 +223,7 @@ def train(attack_env, attack_algo, obs_encoder, action_translator,
                 raw_action = attack_algo.act(np.array(obs))
 
             action = action_translator.translate(raw_action)
-            env_obs, reward, terminated, truncated, info = attack_env.step(action)
-            next_obs = obs_encoder.encode(info['victim_results'], env_dynamics=env_obs)
+            next_obs, reward, terminated, truncated, info = attack_env.step(action)
 
             attack_algo.store_transition(obs, raw_action, next_obs, reward, terminated)
             episode_reward += reward
@@ -237,22 +236,27 @@ def train(attack_env, attack_algo, obs_encoder, action_translator,
             if terminated:
                 break
 
-        if episode >= num_warmup_episodes and attack_algo.ready_to_train():
-            attack_algo.update(episode=episode)
+        # Train encoder once per episode (LSTM only; no-op for other encoders)
+        obs_encoder.train_encoder()
 
-        loss_log = attack_algo.get_loss_log()
+        last_losses: dict = {}
+        if episode >= num_warmup_episodes and attack_algo.ready_to_train():
+            last_losses = attack_algo.update(episode=episode) or {}
+
+        cur_accuracy = info.get('accuracy', 0.0)
         episode_metrics = {
-            'accuracy': info.get('accuracy', 0.0),
-            'min_accuracy': info.get('min_accuracy', 0.0),
+            'accuracy': cur_accuracy,
+            'min_accuracy': info.get('min_accuracy', cur_accuracy),
             'episode_reward': episode_reward,
             'time': time.time() - episode_start,
         }
+        episode_metrics.update(last_losses)  # e.g. critic_loss, actor_loss (algo-specific)
 
         if attack_tracker is not None:
-            loss_val = loss_log[-1][2] if loss_log else None
+            # Pass critic_loss as legacy ddpg_loss scalar for backward compat
+            loss_val = last_losses.get('critic_loss')
             attack_tracker.log_episode(episode, episode_metrics, loss_val)
 
-        cur_accuracy = info.get('accuracy', 0.0)
         if cur_accuracy > best_accuracy:
             best_accuracy = cur_accuracy
             attack_algo.save(os.path.join(model_dir, "best_model"))
@@ -289,7 +293,7 @@ def sacred_main(_run, _config):
     victim_tracker = VictimExperimentTracker(sacred_run=victim_run)
     attack_tracker = AttackExperimentTracker(sacred_run=_run)
 
-    privacy_mode_str = _config.get('privacy_mode', 'full_whitebox')
+    privacy_mode_str = _config.get('privacy_mode', 'full_blackbox')
     privacy_mode = (
         PrivacyMode.FULL_WHITEBOX
         if privacy_mode_str == 'full_whitebox'
@@ -316,23 +320,23 @@ def sacred_main(_run, _config):
     args.discount = _config.get('discount', 0.9)
     args.tau = _config.get('tau', 0.005)
     args.victim_n_episodes = _config.get('victim_n_episodes', 80)
-    args.num_victims = _config.get('num_victims', 1)
+    args.num_victims = _config.get('num_victims', 1)  # default: 1
     args.victim_algo = _config.get('victim_algo', 'qlearning')
     args.env = _config.get('env', 'grid3d')
     args.env_shape = _config.get('env_shape', None)
     args.grid_size = _config.get('grid_size', None)
     args.attack_algo = _config.get('attack_algo', 'ddpg')
     args.keep_checkpoints = _config.get('keep_checkpoints', 3)
-    args.encoder_mode = _config.get('encoder_mode', 'whitebox')
+    args.encoder_mode = _config.get('encoder_mode', 'lstm')
     args.victim_alpha = _config.get('victim_alpha', 0.1)
     args.attack_rate = _config.get('attack_rate', 0.001)
     args.attack_prate = _config.get('attack_prate', 0.0001)
 
     population = build_population(args, privacy_mode, victim_tracker)
-    attack_env = build_attack_env(population, args)
     obs_encoder, action_translator = build_encoders(population, args)
+    attack_env = build_attack_env(population, args, encoder=obs_encoder)
 
-    state_dim = obs_encoder.embedding_dim
+    state_dim = attack_env.observation_space.shape[0]
     action_dim = attack_env.action_space.shape[0]
     max_action = float(attack_env.action_space.high[0])
     attack_algo = build_attack_algo(state_dim, action_dim, max_action, args)

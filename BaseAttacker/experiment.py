@@ -105,7 +105,7 @@ def default_config():
     """Default experiment configuration."""
     # Experiment settings
     experiment_name = "env_poisoning_attack"
-    privacy_mode = "full_whitebox"  # full_whitebox | full_blackbox
+    privacy_mode = "full_blackbox"  # full_whitebox | full_blackbox
 
     # Training parameters
     seed = 0
@@ -142,7 +142,7 @@ def default_config():
     model_dir = None  # Will be auto-generated if None
 
     # Victim population
-    num_victims = 3
+    num_victims = 1
 
     # Victim algorithm: "qlearning", "sarsa", or "reinforce"
     victim_algo = "qlearning"
@@ -160,9 +160,10 @@ def default_config():
     # Shorthand for square grids: grid_size=6 → (6,6). Overrides env_shape if set.
     grid_size = None
 
-    # Observation encoder: "whitebox" (VictimEncoder: Q+dynamics+trace) or
-    # "ae" (pre-trained AE on behavior_trace + altitude, replicates main branch)
-    encoder_mode = "whitebox"
+    # Observation encoder: "lstm" (LSTMTrajectoryEncoder, fully blackbox) or
+    # "whitebox" (VictimEncoder: Q+dynamics+trace) or
+    # "ae" (pre-trained AE on behavior_trace + altitude)
+    encoder_mode = "lstm"
 
 
 @ex.named_config
@@ -316,7 +317,7 @@ def victim_default_config():
     """Default config for victim experiment."""
     experiment_name = "victim_tracking"
     num_victims = 1
-    privacy_mode = "full_whitebox"
+    privacy_mode = "full_blackbox"
     victim_n_episodes = 80
     seed = 0
 

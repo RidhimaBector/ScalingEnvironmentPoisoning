@@ -1,8 +1,8 @@
 LSTM_ENCODER:
   EMBEDDING_DIM: 128    # LSTM hidden size = output embedding dimension
-  SEQ_LEN: 1000         # trajectory window length per encoder chunk
-  MEMORY_SIZE: 5000     # capacity of each victim's circular trajectory buffer
-  N_EPOCHS: 2           # training epochs per encode() call
+  SEQ_LEN: 50           # trajectory window length per encoder chunk (was 1000 — overkill for 36-state grid)
+  MEMORY_SIZE: 500      # capacity of each victim's circular trajectory buffer (scaled with SEQ_LEN)
+  N_EPOCHS: 2           # training epochs per train_encoder() call
   LR: 0.001             # SGD learning rate
 
 AE:

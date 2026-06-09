@@ -79,6 +79,40 @@ def load_all_seeds(db, run_ids, metric_name):
     return eps_common, aligned   # (n_seeds, n_episodes)
 
 
+def discover_loss_metrics(db, run_ids):
+    """Auto-discover all episode-level loss metrics across a set of runs.
+
+    Scans Sacred metric names of the form 'episode.<key>' where key ends in
+    '_loss'. Returns an ordered list of (display_name, sacred_metric_name) pairs.
+
+    Falls back to the legacy 'ddpg_loss' (critic only) if no episode.*_loss
+    metrics are found — preserving backward compat with older runs.
+
+    Args:
+        db: MongoDB database object.
+        run_ids: List of Sacred run IDs to inspect.
+
+    Returns:
+        List of (display_name, sacred_metric_name) pairs, e.g.:
+            [('critic_loss', 'episode.critic_loss'),
+             ('actor_loss',  'episode.actor_loss')]
+    """
+    found = set()
+    for rid in run_ids:
+        docs = db.metrics.find({'run_id': rid, 'name': {'$regex': '^episode\\.'}},
+                               {'name': 1})
+        for doc in docs:
+            key = doc['name'][len('episode.'):]  # strip 'episode.' prefix
+            if key.endswith('_loss'):
+                found.add(key)
+
+    if found:
+        return [(name, f'episode.{name}') for name in sorted(found)]
+
+    # Legacy fallback: old runs only logged the critic as 'ddpg_loss'
+    return [('critic_loss', 'ddpg_loss')]
+
+
 # ---------------------------------------------------------------------------
 # Figures
 # ---------------------------------------------------------------------------
@@ -166,24 +200,44 @@ def fig_reward(db, run_ids, out_dir, label_prefix='AE encoder'):
 
 
 def fig_ddpg_loss(db, run_ids, out_dir, label_prefix='AE encoder'):
-    eps, matrix = load_all_seeds(db, run_ids, 'ddpg_loss')
-    if matrix is None:
+    loss_metrics = discover_loss_metrics(db, run_ids)
+    if not loss_metrics:
         return
 
-    fig, ax = plt.subplots(figsize=(10, 4))
-    colors = plt.cm.tab10(np.linspace(0, 1, len(run_ids)))
-    for i, (rid, c) in enumerate(zip(run_ids, colors)):
-        eps_i, vals_i = load_episode_series(db, rid, 'ddpg_loss')
-        sm = smooth(vals_i, 50)
-        pad = len(eps_i) - len(sm)
-        ax.plot(eps_i[pad//2: pad//2+len(sm)], sm, color=c, linewidth=1,
-                alpha=0.6, label=f'seed {i}')
+    # Fixed colours for known losses; fall back to a cycling palette for others
+    _known_colors = {'critic_loss': 'crimson', 'actor_loss': 'purple'}
+    _palette = plt.cm.tab10(np.linspace(0, 0.9, max(len(loss_metrics), 1)))
 
-    _plot_mean_std(ax, eps, matrix, color='crimson', label='Mean ± 1σ',
-                   alpha_fill=0.15, smooth_w=50)
-    ax.set_xlabel('Episode'); ax.set_ylabel('Loss')
-    ax.set_title(f'DDPG Loss  |  {label_prefix}')
-    ax.legend(fontsize=8); ax.grid(True, alpha=0.3)
+    fig, ax = plt.subplots(figsize=(10, 4))
+    seed_colors = plt.cm.tab10(np.linspace(0, 1, len(run_ids)))
+
+    for li, (display_name, metric_name) in enumerate(loss_metrics):
+        line_color = _known_colors.get(display_name, _palette[li])
+        label = display_name.replace('_', ' ').title()
+
+        # Per-seed thin lines (dashed for non-critic to reduce clutter)
+        linestyle = '-' if li == 0 else '--'
+        for i, rid in enumerate(run_ids):
+            eps_i, vals_i = load_episode_series(db, rid, metric_name)
+            if vals_i is None:
+                continue
+            sm = smooth(vals_i, 50)
+            pad = len(eps_i) - len(sm)
+            ax.plot(eps_i[pad//2: pad//2+len(sm)], sm,
+                    color=seed_colors[i], linewidth=0.8, alpha=0.4,
+                    linestyle=linestyle)
+
+        # Mean ± std across seeds
+        eps, matrix = load_all_seeds(db, run_ids, metric_name)
+        if matrix is not None:
+            _plot_mean_std(ax, eps, matrix, color=line_color,
+                           label=f'{label} ± 1σ', alpha_fill=0.15, smooth_w=50)
+
+    ax.set_xlabel('Episode')
+    ax.set_ylabel('Loss')
+    ax.set_title(f'Algorithm Loss  |  {label_prefix}')
+    ax.legend(fontsize=8)
+    ax.grid(True, alpha=0.3)
 
     path = os.path.join(out_dir, 'ddpg_loss_seeds.png')
     fig.tight_layout()
@@ -196,7 +250,7 @@ def fig_dashboard(db, run_ids, out_dir, label_prefix='AE encoder'):
     """4-panel summary averaged over seeds."""
     eps_acc, mat_acc = load_all_seeds(db, run_ids, 'episode.accuracy')
     eps_rew, mat_rew = load_all_seeds(db, run_ids, 'episode.episode_reward')
-    eps_loss, mat_loss = load_all_seeds(db, run_ids, 'ddpg_loss')
+    loss_metrics = discover_loss_metrics(db, run_ids)
     _, mat_sftmx     = load_all_seeds(db, run_ids, 'episode.accuracy')  # placeholder
 
     fig, axes = plt.subplots(2, 2, figsize=(14, 10))
@@ -232,13 +286,19 @@ def fig_dashboard(db, run_ids, out_dir, label_prefix='AE encoder'):
     ax.set_title('Episode Reward (avg over seeds)')
     ax.legend(fontsize=8); ax.grid(True, alpha=0.3)
 
-    # Panel 4: DDPG loss
+    # Panel 4: Algorithm losses (auto-discovered)
     ax = axes[1, 1]
-    if mat_loss is not None:
-        _plot_mean_std(ax, eps_loss, mat_loss, 'crimson', 'Mean loss ± 1σ',
-                       smooth_w=50)
+    _known_colors = {'critic_loss': 'crimson', 'actor_loss': 'purple'}
+    _palette = plt.cm.tab10(np.linspace(0, 0.9, max(len(loss_metrics), 1)))
+    for li, (display_name, metric_name) in enumerate(loss_metrics):
+        line_color = _known_colors.get(display_name, _palette[li])
+        label = display_name.replace('_', ' ').title()
+        eps_l, mat_l = load_all_seeds(db, run_ids, metric_name)
+        if mat_l is not None:
+            _plot_mean_std(ax, eps_l, mat_l, line_color,
+                           f'{label} ± 1σ', smooth_w=50)
     ax.set_xlabel('Episode'); ax.set_ylabel('Loss')
-    ax.set_title('DDPG Loss (avg over seeds)')
+    ax.set_title('Algorithm Loss (avg over seeds)')
     ax.legend(fontsize=8); ax.grid(True, alpha=0.3)
 
     n_ep = len(eps_acc)

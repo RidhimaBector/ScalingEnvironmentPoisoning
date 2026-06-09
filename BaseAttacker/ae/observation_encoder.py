@@ -61,3 +61,9 @@ class ObservationEncoder:
             1D numpy array of shape (embedding_dim,).
         """
         return self._inner.get_initial_embedding()
+
+    def train_encoder(self) -> None:
+        self._inner.train_encoder()
+
+    def compute_reward(self, victim_data: List[Dict], target) -> float:
+        return self._inner.compute_reward(victim_data, target)

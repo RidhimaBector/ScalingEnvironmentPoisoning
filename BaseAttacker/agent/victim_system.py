@@ -196,12 +196,20 @@ class VictimSystem:
             result = self._collect_victim_result(k, env, algo)
             results.append(result)
 
-            # Log to Sacred if tracker available
+            # Log to Sacred if tracker available — use only observable data
             if self.victim_tracker is not None:
-                policy = algo.get_policy_matrix()
-                done, acc, acc_sftmx, acc_sftmx_complete = Attack_Done_Identify(
-                    self._target.copy(), policy
-                )
+                if self.privacy_mode == PrivacyMode.FULL_WHITEBOX:
+                    policy = algo.get_policy_matrix()
+                    _, acc, acc_sftmx, acc_sftmx_complete = Attack_Done_Identify(
+                        self._target.copy(), policy
+                    )
+                else:
+                    from utils.utils_attack import accuracy_from_behavior_trace
+                    acc = accuracy_from_behavior_trace(
+                        self._behavior_traces[k], self._target
+                    )
+                    acc_sftmx = 0.0
+                    acc_sftmx_complete = 0.0
                 self.victim_tracker.log_victim_step(
                     victim_idx=k,
                     metrics={
