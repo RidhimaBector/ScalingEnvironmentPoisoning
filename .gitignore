@@ -23,9 +23,7 @@ R_0818/
 *.npy
 *.json
 
-# Plots and images
-*.png
-*.jpg
+# Images (figures/ directory is tracked; loose image files elsewhere are not)
 images/
 
 # macOS
