@@ -9,6 +9,7 @@ Usage:
 
 import argparse
 import os
+import sys
 
 import matplotlib
 matplotlib.use('Agg')
@@ -16,6 +17,15 @@ import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 import numpy as np
 from pymongo import MongoClient
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from demo_policy import (
+    train_natural_victim, run_attack_episode,
+    draw_panel, draw_altitude_diff_panel, get_greedy_path,
+)
+from envs.env3D_4x4 import Grid3D
+from envs.target_def import create_target_policy
+from utils.utils_attack import Attack_Done_Identify
 
 # ---------------------------------------------------------------------------
 # Data loading
@@ -47,6 +57,94 @@ def smooth(values, window=50):
         window = max(1, len(values) // 5)
     kernel = np.ones(window) / window
     return np.convolve(values, kernel, mode='valid')
+
+
+# ---------------------------------------------------------------------------
+# Policy visualization helpers
+# ---------------------------------------------------------------------------
+
+def _grid_dimensions_from_config(config):
+    grid_size = config.get('grid_size')
+    env_shape = config.get('env_shape')
+    if grid_size:
+        return (int(grid_size), int(grid_size))
+    if env_shape:
+        return tuple(env_shape)
+    return None  # use Grid3D default (4x4)
+
+
+def compute_policy_data(run_dir, config):
+    """Train natural victim and run one attack episode; return dict of policy data."""
+    grid_dim = _grid_dimensions_from_config(config)
+    max_timesteps   = config.get('max_timesteps', 15)
+    victim_episodes = config.get('victim_n_episodes', 80)
+    nat_episodes    = 12000
+
+    print('  Computing natural victim policy...')
+    nat_Q, nat_acc, natural_alt = train_natural_victim(nat_episodes, grid_dim)
+    nat_greedy = np.argmax(nat_Q, axis=1)
+
+    print(f'  Running attack episode from {run_dir}...')
+    atk_Q, atk_acc, avg_alt = run_attack_episode(
+        run_dir, max_timesteps, victim_episodes, grid_dim
+    )
+    atk_greedy = np.argmax(atk_Q, axis=1)
+
+    env_ref = Grid3D(**(dict(grid_dimensions=grid_dim) if grid_dim else {}))
+    nS, nA = env_ref.nS, env_ref.nA
+    nrows, ncols = env_ref.shape
+    goal_s = (nrows - 1) * ncols
+
+    tgt_mat    = create_target_policy(nS, nA)
+    tgt_greedy = np.argmax(tgt_mat, axis=1)
+    tgt_greedy[np.max(tgt_mat, axis=1) == 0] = -1
+
+    tgt_path = get_greedy_path(tgt_greedy, ncols, 0, goal_s)
+    nat_path = get_greedy_path(nat_greedy, ncols, 0, goal_s)
+    atk_path = get_greedy_path(atk_greedy, ncols, 0, goal_s)
+
+    return dict(
+        nat_greedy=nat_greedy, nat_acc=nat_acc, natural_alt=natural_alt, nat_path=nat_path,
+        atk_greedy=atk_greedy, atk_acc=atk_acc, avg_alt=avg_alt,      atk_path=atk_path,
+        tgt_greedy=tgt_greedy, tgt_mat=tgt_mat, tgt_path=tgt_path,
+    )
+
+
+def fig_policy_heatmap(policy_data, out_dir, run_id):
+    """Save standalone before/after policy heatmap (same as demo_policy.py)."""
+    from matplotlib.patches import Patch
+    from matplotlib.lines import Line2D
+
+    d = policy_data
+    fig, axes = plt.subplots(1, 2, figsize=(12, 6))
+    fig.subplots_adjust(wspace=0.12)
+
+    draw_panel(axes[0], d['nat_greedy'], d['tgt_greedy'], d['natural_alt'],
+               'Before (Initial Grid + Natural Victim)',
+               accuracy=d['nat_acc'], path=d['nat_path'])
+    draw_panel(axes[1], d['atk_greedy'], d['tgt_greedy'], d['avg_alt'],
+               'After (Poisoned Grid + Attacked Victim)',
+               accuracy=d['atk_acc'], path=d['atk_path'])
+
+    legend_elements = [
+        Patch(facecolor=[0.0, 0.85, 0.2], alpha=0.7, label='Matches target policy'),
+        Patch(facecolor=[0.9, 0.1, 0.1], alpha=0.7, label='Wrong action'),
+        Patch(facecolor=[0.6, 0.6, 0.6], alpha=0.5, label='No target (free state)'),
+        Line2D([0], [0], marker='$0$', color='yellow', markersize=10,
+               linestyle='None', label='Optimal path step'),
+    ]
+    fig.legend(handles=legend_elements, loc='lower center', ncol=4,
+               fontsize=9, bbox_to_anchor=(0.5, -0.04))
+    fig.suptitle(
+        f'Environment Poisoning — Before vs After  |  run={run_id}\n'
+        f'natural acc={d["nat_acc"]:.3f}  →  attacked acc={d["atk_acc"]:.3f}',
+        fontsize=13, fontweight='bold',
+    )
+
+    path = os.path.join(out_dir, 'before_after_heatmap.png')
+    fig.savefig(path, dpi=150, bbox_inches='tight')
+    plt.close(fig)
+    print(f'  Saved {path}')
 
 
 # ---------------------------------------------------------------------------
@@ -181,8 +279,8 @@ def fig_episode_reward(db, run_id, out_dir, config):
     print(f'  Saved {path}')
 
 
-def fig_summary_dashboard(db, run_id, out_dir, config):
-    """4-panel summary figure."""
+def fig_summary_dashboard(db, run_id, out_dir, config, policy_data=None):
+    """Summary dashboard: 4 training panels + optional 2 policy panels."""
     ep_steps, ep_acc = get_metric(db, run_id, 'episode.accuracy')
     _,  ep_min       = get_metric(db, run_id, 'episode.min_accuracy')
     _,  ep_rew       = get_metric(db, run_id, 'episode.episode_reward')
@@ -194,13 +292,16 @@ def fig_summary_dashboard(db, run_id, out_dir, config):
     ep_nums    = ts_steps[mask] // 1000
     sftmx_vals = ts_sftmx[mask]
 
-    fig = plt.figure(figsize=(14, 10))
-    gs  = gridspec.GridSpec(2, 2, hspace=0.35, wspace=0.3)
+    has_policy = policy_data is not None
+    nrows_fig = 3 if has_policy else 2
+    fig = plt.figure(figsize=(14, 5 * nrows_fig))
+    gs  = gridspec.GridSpec(nrows_fig, 2, hspace=0.4, wspace=0.3)
+
+    w = 100
 
     # --- Panel 1: Accuracy ---
     ax1 = fig.add_subplot(gs[0, 0])
     ax1.plot(ep_steps, ep_acc, alpha=0.2, color='steelblue', linewidth=0.5)
-    w = 100
     sm_acc = smooth(ep_acc, w)
     sm_min = smooth(ep_min, w)
     pad = len(ep_steps) - len(sm_acc)
@@ -256,6 +357,18 @@ def fig_summary_dashboard(db, run_id, out_dir, config):
     ax4.set_xlabel('Episode'); ax4.set_ylabel('Loss')
     ax4.set_title('DDPG Loss'); ax4.grid(True, alpha=0.3)
 
+    # --- Panels 5 & 6: Policy heatmaps (if available) ---
+    if has_policy:
+        d = policy_data
+        ax5 = fig.add_subplot(gs[2, 0])
+        ax6 = fig.add_subplot(gs[2, 1])
+        draw_panel(ax5, d['nat_greedy'], d['tgt_greedy'], d['natural_alt'],
+                   f'Before — Natural Victim  (acc={d["nat_acc"]:.3f})',
+                   path=d['nat_path'])
+        draw_panel(ax6, d['atk_greedy'], d['tgt_greedy'], d['avg_alt'],
+                   f'After — Attacked Victim  (acc={d["atk_acc"]:.3f})',
+                   path=d['atk_path'])
+
     # Title
     n_ep = int(ep_steps[-1]) + 1
     fig.suptitle(
@@ -299,6 +412,8 @@ def main():
     parser.add_argument('--out',       type=str,   default=None)
     parser.add_argument('--mongo_url', type=str,   default='localhost:27017')
     parser.add_argument('--db',        type=str,   default='env_poisoning')
+    parser.add_argument('--no_policy', action='store_true',
+                        help='Skip policy heatmap generation (faster)')
     args = parser.parse_args()
 
     db = connect(args.mongo_url, args.db)
@@ -316,12 +431,32 @@ def main():
 
     print_stats(db, run_id, config)
 
+    # Locate the saved model directory from run info
+    model_dir = run_info.get('info', {}).get('model_dir')
+    if model_dir and not os.path.isabs(model_dir):
+        model_dir = os.path.join(os.path.dirname(__file__), model_dir)
+
+    # Compute policy data once (used by both dashboard and standalone figure)
+    policy_data = None
+    if not args.no_policy:
+        if model_dir and os.path.exists(model_dir + '/best_model_actor'):
+            print(f'\nComputing policy visualizations (model: {model_dir})...')
+            try:
+                policy_data = compute_policy_data(model_dir, config)
+            except Exception as e:
+                print(f'  WARNING: policy computation failed ({e}), skipping heatmaps.')
+        else:
+            print(f'\nNo best_model found at {model_dir!r} — skipping policy heatmaps.')
+
     print(f'\nGenerating figures → {out_dir}')
-    fig_summary_dashboard(db, run_id, out_dir, config)
+    fig_summary_dashboard(db, run_id, out_dir, config, policy_data=policy_data)
     fig_accuracy(db, run_id, out_dir, config)
     fig_softmax_accuracy(db, run_id, out_dir, config)
     fig_episode_reward(db, run_id, out_dir, config)
     fig_ddpg_loss(db, run_id, out_dir, config)
+
+    if policy_data is not None:
+        fig_policy_heatmap(policy_data, out_dir, run_id)
 
     print('\nDone.')
 

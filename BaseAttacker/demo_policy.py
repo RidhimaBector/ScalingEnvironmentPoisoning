@@ -62,9 +62,9 @@ ACTION_DY = [-0.27, 0.0,  0.27,  0.0]
 # Victim training helpers
 # ---------------------------------------------------------------------------
 
-def train_natural_victim(num_episodes: int):
+def train_natural_victim(num_episodes: int, grid_dimensions=None):
     """Train Q-learning victim on the unperturbed Grid3D."""
-    env = Grid3D()
+    env = Grid3D(**(dict(grid_dimensions=grid_dimensions) if grid_dimensions else {}))
     victim = VictimQLearning(env.nS, env.nA, memory_size=2000)
     print(f'  Training natural victim ({num_episodes} episodes)...')
     victim.train(env, num_episodes)
@@ -74,9 +74,10 @@ def train_natural_victim(num_episodes: int):
     return victim.get_policy_matrix(), acc, env.altitude.copy()
 
 
-def run_attack_episode(run_dir: str, max_timesteps: int, victim_episodes: int):
+def run_attack_episode(run_dir: str, max_timesteps: int, victim_episodes: int,
+                       grid_dimensions=None):
     """Load saved DDPG best_model, run one attack episode, return Q-table."""
-    env = Grid3D()
+    env = Grid3D(**(dict(grid_dimensions=grid_dimensions) if grid_dimensions else {}))
     victim = VictimQLearning(env.nS, env.nA, memory_size=2000)
 
     pop = VictimSystem(env=env, algorithm=victim, config=None)
@@ -112,17 +113,65 @@ def run_attack_episode(run_dir: str, max_timesteps: int, victim_episodes: int):
 # ---------------------------------------------------------------------------
 
 def _altitude_to_rgb(altitude: np.ndarray) -> np.ndarray:
-    """Convert altitude array [0-10] to RGB (blue=low, yellow=mid, red=high)."""
+    """Convert altitude array [0-10] to RGB.
+
+    Color scale:
+      altitude 2 (low)  → blue   (cold)
+      altitude 5 (mid)  → green  (mid)
+      altitude 8 (high) → red    (hot)
+    """
     norm = altitude / 10.0
     rgb = np.zeros((*altitude.shape, 3), dtype=float)
-    rgb[:, :, 0] = np.clip(2 * norm - 1, 0, 1)
-    rgb[:, :, 1] = np.clip(1 - np.abs(2 * norm - 1), 0, 1)
-    rgb[:, :, 2] = np.clip(1 - 2 * norm, 0, 1)
+    rgb[:, :, 0] = np.clip(2 * norm - 1, 0, 1)   # red channel
+    rgb[:, :, 1] = np.clip(1 - np.abs(2 * norm - 1), 0, 1)  # green channel
+    rgb[:, :, 2] = np.clip(1 - 2 * norm, 0, 1)   # blue channel
     return rgb
 
 
-def draw_panel(ax, greedy, tgt_greedy, altitude, title, accuracy=None):
-    """Draw one policy panel: altitude heatmap + correct/wrong overlays + arrows."""
+def get_greedy_path(greedy, ncols, start, goal, max_steps=100):
+    """Trace the greedy policy from start until goal is reached or max_steps exceeded.
+
+    Returns list of states visited in order (includes start and goal).
+    If the policy loops or never reaches goal, returns the partial path.
+    """
+    # Action → (row_delta, col_delta)
+    DELTAS = [(-1, 0), (0, 1), (1, 0), (0, -1)]  # N, E, S, W
+    path = [start]
+    visited = {start}
+    s = start
+    for _ in range(max_steps):
+        if s == goal:
+            break
+        a = greedy[s]
+        if a < 0:
+            break
+        r, c = divmod(s, ncols)
+        dr, dc = DELTAS[a]
+        nr, nc = r + dr, c + dc
+        next_s = nr * ncols + nc
+        path.append(next_s)
+        if next_s in visited:
+            break  # loop detected
+        visited.add(next_s)
+        s = next_s
+    return path
+
+
+def draw_panel(ax, greedy, tgt_greedy, altitude, title, accuracy=None, path=None):
+    """Draw one policy panel: altitude heatmap + correct/wrong overlays + arrows.
+
+    Color legend:
+      Cell background — altitude level:
+        Blue  = low altitude (≈2)
+        Green = mid altitude (≈5)
+        Red   = high altitude (≈8)
+      Cell overlay — policy correctness vs target:
+        Green (semi-transparent) = action matches the target policy
+        Red   (semi-transparent) = action does NOT match the target policy
+        Grey  (semi-transparent) = no target defined for this state (free)
+      White arrows — greedy action the policy takes at each state
+      Yellow numbers (bottom-left) — step order along the optimal path
+    """
     nrows, ncols = altitude.shape
     nS = nrows * ncols
     rgb = _altitude_to_rgb(altitude)
@@ -166,6 +215,15 @@ def draw_panel(ax, greedy, tgt_greedy, altitude, title, accuracy=None):
             arrowprops=dict(arrowstyle='->', color='white', lw=2.2),
             zorder=4,
         )
+
+    # Optimal path: yellow step numbers in bottom-left of each visited cell
+    if path is not None:
+        for step, s in enumerate(path):
+            r, c = divmod(s, ncols)
+            label = 'G' if step == len(path) - 1 else str(step)
+            ax.text(c - 0.38, r + 0.40, label,
+                    fontsize=8, color='yellow', ha='left', va='bottom',
+                    fontweight='bold', zorder=6)
 
     ax.set_xlim(-0.5, ncols - 0.5)
     ax.set_ylim(nrows - 0.5, -0.5)
@@ -214,13 +272,19 @@ def main():
                         help='Victim training episodes per attack step')
     parser.add_argument('--out',               type=str,  default='figures',
                         help='Output directory for the figure')
+    parser.add_argument('--grid_size',         type=int,  default=None,
+                        help='Square grid side length (e.g. 6 for 6x6). Default: 4x4.')
     args = parser.parse_args()
+
+    grid_dim = (args.grid_size, args.grid_size) if args.grid_size else None
 
     os.makedirs(os.path.join(SCRIPT_DIR, args.out), exist_ok=True)
 
-    env_ref = Grid3D()
+    env_ref = Grid3D(**(dict(grid_dimensions=grid_dim) if grid_dim else {}))
     nS, nA = env_ref.nS, env_ref.nA
+    nrows, ncols = env_ref.shape
     natural_alt = env_ref.altitude.copy()
+    goal_s = (nrows - 1) * ncols  # bottom-left for any grid size
 
     # Target greedy actions (-1 = no preference at that state)
     tgt_mat = create_target_policy(nS, nA)
@@ -229,8 +293,12 @@ def main():
 
     # --- Natural victim ---
     print('\n[1/2] Natural victim')
-    nat_Q, nat_acc, _ = train_natural_victim(args.natural_episodes)
+    nat_Q, nat_acc, _ = train_natural_victim(args.natural_episodes, grid_dim)
     nat_greedy = np.argmax(nat_Q, axis=1)
+
+    # Trace optimal paths (deterministic greedy policy, start→goal)
+    tgt_path = get_greedy_path(tgt_greedy, ncols, 0, goal_s)
+    nat_path = get_greedy_path(nat_greedy, ncols, 0, goal_s)
 
     # --- Attacked victim (averaged over seeds) ---
     print(f'\n[2/2] Attacked victim  ({len(args.run_dirs)} seed(s))')
@@ -238,7 +306,8 @@ def main():
     for i, run_dir in enumerate(args.run_dirs):
         print(f'  seed {i}: {run_dir}')
         try:
-            Q, acc, alt = run_attack_episode(run_dir, args.max_timesteps, args.victim_episodes)
+            Q, acc, alt = run_attack_episode(run_dir, args.max_timesteps, args.victim_episodes,
+                                             grid_dim)
             Q_list.append(Q); acc_list.append(acc); alt_list.append(alt)
             print(f'  → accuracy = {acc:.4f}')
         except FileNotFoundError as e:
@@ -247,33 +316,38 @@ def main():
     if not Q_list:
         print('\nNo valid run dirs found — showing natural victim only.')
         fig, axes = plt.subplots(1, 2, figsize=(10, 5))
-        draw_panel(axes[0], tgt_greedy, tgt_greedy, natural_alt, 'Target Policy (Mp)', accuracy=1.0)
+        draw_panel(axes[0], tgt_greedy, tgt_greedy, natural_alt,
+                   'Target Policy (Mp)', accuracy=1.0, path=tgt_path)
         draw_panel(axes[1], nat_greedy, tgt_greedy, natural_alt,
-                   f'Natural Victim ({args.natural_episodes} eps)', accuracy=nat_acc)
+                   f'Natural Victim ({args.natural_episodes} eps)', accuracy=nat_acc, path=nat_path)
     else:
         avg_Q   = np.mean(Q_list, axis=0)
         avg_alt = np.mean(alt_list, axis=0)
         atk_greedy = np.argmax(avg_Q, axis=1)
         _, atk_acc, _, _ = Attack_Done_Identify(tgt_mat, avg_Q)
+        atk_path = get_greedy_path(atk_greedy, ncols, 0, goal_s)
         print(f'\n  Mean accuracy = {np.mean(acc_list):.4f} ± {np.std(acc_list):.4f}')
 
         fig, axes = plt.subplots(1, 4, figsize=(20, 5))
         fig.subplots_adjust(wspace=0.08)
 
         draw_panel(axes[0], tgt_greedy, tgt_greedy, natural_alt,
-                   'Target Policy (Mp)', accuracy=1.0)
+                   'Target Policy (Mp)', accuracy=1.0, path=tgt_path)
         draw_panel(axes[1], nat_greedy, tgt_greedy, natural_alt,
-                   f'Natural Victim\n({args.natural_episodes} eps)', accuracy=nat_acc)
-        draw_panel(axes[2], atk_greedy, tgt_greedy, natural_alt,
-                   f'Attacked Victim\n({len(Q_list)} seed(s))', accuracy=atk_acc)
+                   f'Natural Victim\n({args.natural_episodes} eps)', accuracy=nat_acc, path=nat_path)
+        draw_panel(axes[2], atk_greedy, tgt_greedy, avg_alt,
+                   f'Attacked Victim\n({len(Q_list)} seed(s))', accuracy=atk_acc, path=atk_path)
         draw_altitude_diff_panel(axes[3], natural_alt, avg_alt,
                                  'Altitude Change\n(attacked − natural)')
 
         from matplotlib.patches import Patch
+        from matplotlib.lines import Line2D
         legend_elements = [
             Patch(facecolor=[0.0, 0.85, 0.2], alpha=0.7, label='Matches target'),
             Patch(facecolor=[0.9, 0.1, 0.1], alpha=0.7, label='Wrong action'),
             Patch(facecolor=[0.6, 0.6, 0.6], alpha=0.5, label='No target (free)'),
+            Line2D([0], [0], marker='$0$', color='yellow', markersize=10,
+                   linestyle='None', label='Optimal path step (yellow numbers)'),
         ]
         fig.legend(handles=legend_elements, loc='lower center', ncol=3,
                    fontsize=10, bbox_to_anchor=(0.5, -0.05))
@@ -288,6 +362,48 @@ def main():
     fig.savefig(out_path, dpi=150, bbox_inches='tight')
     plt.close(fig)
     print(f'\nSaved → {out_path}')
+
+    # --- Before / After 2-panel figure ---
+    if Q_list:
+        _save_before_after(
+            natural_alt, nat_greedy, nat_acc, nat_path,
+            avg_alt, atk_greedy, atk_acc, atk_path,
+            tgt_greedy, args.out,
+        )
+
+
+def _save_before_after(natural_alt, nat_greedy, nat_acc, nat_path,
+                       avg_alt, atk_greedy, atk_acc, atk_path,
+                       tgt_greedy, out_dir):
+    """Save a 2-panel before/after heatmap: initial altitudes+victim vs end altitudes+victim."""
+    from matplotlib.patches import Patch
+
+    fig, axes = plt.subplots(1, 2, figsize=(12, 6))
+    fig.subplots_adjust(wspace=0.12)
+
+    draw_panel(axes[0], nat_greedy, tgt_greedy, natural_alt,
+               'Before (Initial Grid + Natural Victim)', accuracy=nat_acc, path=nat_path)
+    draw_panel(axes[1], atk_greedy, tgt_greedy, avg_alt,
+               'After (Poisoned Grid + Attacked Victim)', accuracy=atk_acc, path=atk_path)
+
+    legend_elements = [
+        Patch(facecolor=[0.0, 0.85, 0.2], alpha=0.7, label='Matches target policy'),
+        Patch(facecolor=[0.9, 0.1, 0.1], alpha=0.7, label='Wrong action'),
+        Patch(facecolor=[0.6, 0.6, 0.6], alpha=0.5, label='No target (free state)'),
+    ]
+    fig.legend(handles=legend_elements, loc='lower center', ncol=3,
+               fontsize=10, bbox_to_anchor=(0.5, -0.04))
+    fig.suptitle(
+        'Environment Poisoning — Before vs After\n'
+        f'Altitude numbers shown per cell  |  '
+        f'natural acc={nat_acc:.3f}  →  attacked acc={atk_acc:.3f}',
+        fontsize=13, fontweight='bold',
+    )
+
+    out_path = os.path.join(SCRIPT_DIR, out_dir, 'before_after_heatmap.png')
+    fig.savefig(out_path, dpi=150, bbox_inches='tight')
+    plt.close(fig)
+    print(f'Saved → {out_path}')
 
 
 if __name__ == '__main__':

@@ -82,38 +82,21 @@ class Grid3D(VictimEnvironmentABC):
     def _generate_altitude(self) -> np.ndarray:
         rows, cols = self.shape
         A = np.zeros(self.shape)
-
-        # Create a gradient from top-left to bottom-right
-        # Using linear space to generate values between 8 and 2
-        row_values = np.linspace(8, 2, rows)
-
-        # Fill the array with a gradient pattern
-        for i in range(rows):
-            # Create a row that gradually increases from left to right
-            # but maintains the general descent from top to bottom
-            base_value = row_values[i]
-            # Add some variation within each row while keeping values mostly in 4-8 range
-            row = np.linspace(base_value - 2, base_value + 2, cols)
-            # Ensure the rightmost column maintains higher elevation
-            row[-1] = 8.0  # Keep the right edge at elevation 8
-            A[i] = row
-
-        # Clip values to ensure they stay within 0-10 range
-        A = np.clip(A, 0, 10)
-        # Round to nearest integer
-        A = np.round(A).astype(int)
-
-        return A
+        # Row-based gradient: top row=8, bottom row=2, uniform across columns.
+        # Going south is consistently downhill → natural victim prefers straight south.
+        for r in range(rows):
+            A[r, :] = round(8.0 - 6.0 * r / max(rows - 1, 1), 2)
+        return np.clip(A, 2.0, 8.0)
 
 
     def _base_altitude(self) -> np.ndarray:
         rows, cols = self.shape
         A = np.zeros(self.shape)
-        denom = max(rows + cols - 2, 1)
+        # Row-based gradient: top row=8, bottom row=2, uniform across columns.
+        # Going south is consistently downhill → natural victim prefers straight south.
+        # Goal is bottom-left so the natural path 0→(rows-1)*cols is all southward steps.
         for r in range(rows):
-            for c in range(cols):
-                # gradient: top-left=8, bottom-right=2, matching original 4x4 pattern
-                A[r, c] = round(8.0 - 6.0 * (r + c) / denom, 2)
+            A[r, :] = round(8.0 - 6.0 * r / max(rows - 1, 1), 2)
         return np.clip(A, 2.0, 8.0)
 
 
@@ -233,7 +216,7 @@ class Grid3D(VictimEnvironmentABC):
         next_s = np.random.choice(np.arange(len(prob)), p=prob)
         prob_next_s = prob[next_s]
 
-        target_state = np.ravel_multi_index((self.shape[0]-1, self.shape[1]-1), self.shape)
+        target_state = np.ravel_multi_index((self.shape[0]-1, 0), self.shape)
         is_done = next_s == target_state
         return prob_next_s, next_s, -1.0, is_done
 
@@ -273,7 +256,7 @@ class Grid3D(VictimEnvironmentABC):
         #self.isd = np.zeros(self.nS)
         #self.isd[0] = 1.0 #[np.ravel_multi_index((0,0), self.shape)] = 1.0
         # target state
-        #self.goal_s = 12 # Victim Goal State               #self.target_s = 12 #np.ravel_multi_index((3,3), self.shape) #Change_Target_Behavior #E-(3,2), M-(3,3), Mp-(3,0), H-(3,0)
+        # goal = bottom-left: np.ravel_multi_index((rows-1, 0), shape)
 
         self.lastaction = None # for rendering
         self.action_space = spaces.Discrete(self.nA)
@@ -492,7 +475,7 @@ class Grid3D(VictimEnvironmentABC):
             position = np.unravel_index(s, self.shape)
             if self.s == s:
                 output = " x "
-            elif position == (3,3): #Change_Target_Behavior #E-(3,2), M-(3,3), Mp-(3,0), H-(3,0)
+            elif position == (self.shape[0]-1, 0):
                 output = " T "
             else:
                 output = " o "

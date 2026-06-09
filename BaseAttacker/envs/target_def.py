@@ -39,13 +39,14 @@ def create_target_policy(nS: int, nA: int, path_type: str = "Mp") -> np.ndarray:
     if nA >= 4 and nrows * ncols == nS and path_type in ("Mp", "M", "H", "E"):
         # Actions: 0=NORTH, 1=EAST, 2=SOUTH, 3=WEST
         if path_type == "Mp":
+            # Perimeter path: top row east → right column south → bottom row west → goal (bottom-left)
             # Top row (except top-right corner): EAST
             for c in range(ncols - 1):
                 target[c][1] = 1
             # Right column (except top-right corner): SOUTH
             for r in range(nrows - 1):
                 target[r * ncols + (ncols - 1)][2] = 1
-            # Bottom row (except bottom-right corner): WEST
+            # Bottom row (except bottom-left corner, which is the goal): WEST
             for c in range(ncols - 1, 0, -1):
                 target[(nrows - 1) * ncols + c][3] = 1
         elif path_type in ("M", "H"):
