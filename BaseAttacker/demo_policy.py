@@ -14,18 +14,26 @@ Usage:
 
 import argparse
 import os
+import re
 import sys
 
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import numpy as np
+from gymnasium import spaces
+from pymongo import MongoClient
+from yacs.config import CfgNode as CN
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from ae.ae import AEObservationEncoder
+from ae.lstm_encoder import LSTMTrajectoryEncoder
 from ae.observation_encoder import ObservationEncoder
+from ae.action_translator import ActionTranslator
 from ae.victim_encoder import VictimEncoder
-from agent.victim_system import VictimSystem
+from agent.attack_dispatch import AttackDispatch
+from agent.victim_system import VictimSystem, PrivacyMode
 from attack.DDPG import DDPG
 from envs.env3D_4x4 import Grid3D
 from envs.target_def import create_target_policy
@@ -58,6 +66,65 @@ DDPG_KWARGS = dict(
 ACTION_DX = [0.0,  0.27,  0.0, -0.27]
 ACTION_DY = [-0.27, 0.0,  0.27,  0.0]
 
+PRIVACY_MODE_MAP = {
+    'full_whitebox': PrivacyMode.FULL_WHITEBOX,
+    'partial_blackbox': PrivacyMode.FULL_BLACKBOX,
+    'full_blackbox': PrivacyMode.FULL_BLACKBOX,
+}
+
+
+def _load_yaml_config():
+    yaml_path = os.path.join(SCRIPT_DIR, 'config', 'config_default.yaml')
+    with open(yaml_path) as f:
+        cfg = CN.load_cfg(f)
+    cfg.freeze()
+    return cfg
+
+
+def _sacred_run_id_from_dir(run_dir: str):
+    match = re.search(r'sacred_run_(\d+)_', os.path.basename(run_dir.rstrip('/')))
+    return int(match.group(1)) if match else None
+
+
+def load_run_config(run_dir: str, mongo_url: str = 'localhost:27017',
+                    db_name: str = 'env_poisoning') -> dict:
+    """Load Sacred run config from MongoDB using the sacred_run_<id>_ dir name."""
+    run_id = _sacred_run_id_from_dir(run_dir)
+    if run_id is None:
+        return {}
+    run = MongoClient(mongo_url)[db_name].runs.find_one({'_id': run_id})
+    return run.get('config', {}) if run else {}
+
+
+def _build_victim_population(grid_dimensions, privacy_mode: str, yaml_config):
+    env = Grid3D(**(dict(grid_dimensions=grid_dimensions) if grid_dimensions else {}))
+    algo_kwargs = dict(yaml_config.VICTIM.DEFAULT_KWARGS)
+    victim = VictimQLearning(env.nS, env.nA, **algo_kwargs)
+    privacy = PRIVACY_MODE_MAP.get(privacy_mode, PrivacyMode.FULL_BLACKBOX)
+    return VictimSystem(
+        env=env,
+        algorithm=victim,
+        config=yaml_config,
+        privacy_mode=privacy,
+    )
+
+
+def _build_observation_encoder(population, encoder_mode: str, yaml_config):
+    """Mirror main.build_encoders() so DDPG input dim matches training."""
+    if encoder_mode == 'ae':
+        inner = AEObservationEncoder.from_population(population)
+    elif encoder_mode == 'lstm':
+        inner = LSTMTrajectoryEncoder.from_population(population, yaml_config)
+        inner.populate_target_memory(
+            population.env,
+            population.target,
+            n_steps=yaml_config.LSTM_ENCODER.SEQ_LEN * 2,
+        )
+    else:
+        inner = VictimEncoder.from_population(population)
+    return ObservationEncoder(inner)
+
+
 # ---------------------------------------------------------------------------
 # Victim training helpers
 # ---------------------------------------------------------------------------
@@ -75,17 +142,24 @@ def train_natural_victim(num_episodes: int, grid_dimensions=None):
 
 
 def run_attack_episode(run_dir: str, max_timesteps: int, victim_episodes: int,
-                       grid_dimensions=None):
+                       grid_dimensions=None, encoder_mode: str = None,
+                       privacy_mode: str = None, run_config: dict = None):
     """Load saved DDPG best_model, run one attack episode, return Q-table."""
-    env = Grid3D(**(dict(grid_dimensions=grid_dimensions) if grid_dimensions else {}))
-    victim = VictimQLearning(env.nS, env.nA, memory_size=2000)
+    run_config = run_config or load_run_config(run_dir)
+    encoder_mode = encoder_mode or run_config.get('encoder_mode', 'whitebox')
+    privacy_mode = privacy_mode or run_config.get('privacy_mode', 'full_blackbox')
 
-    pop = VictimSystem(env=env, algorithm=victim, config=None)
-    inner = VictimEncoder.from_population(pop)
-    enc = ObservationEncoder(inner)
+    yaml_config = _load_yaml_config()
+    population = _build_victim_population(grid_dimensions, privacy_mode, yaml_config)
+    enc = _build_observation_encoder(population, encoder_mode, yaml_config)
+    dispatch = AttackDispatch()
+    translator = ActionTranslator.from_space(
+        spaces.Box(-1.0, 1.0, shape=(population.nS,), dtype=np.float64)
+    )
 
-    ddpg = DDPG(nb_states=enc.embedding_dim, nb_actions=env.nS, **DDPG_KWARGS)
-    model_path = os.path.join(SCRIPT_DIR, run_dir, 'best_model')
+    ddpg = DDPG(nb_states=enc.embedding_dim, nb_actions=population.nS, **DDPG_KWARGS)
+    run_path = run_dir if os.path.isabs(run_dir) else os.path.join(SCRIPT_DIR, run_dir)
+    model_path = os.path.join(run_path, 'best_model')
     if not os.path.exists(model_path + '_actor'):
         raise FileNotFoundError(f'No saved model at {model_path}')
     ddpg.load(model_path)
@@ -93,16 +167,13 @@ def run_attack_episode(run_dir: str, max_timesteps: int, victim_episodes: int,
 
     obs = enc.get_initial_embedding()
     for _ in range(max_timesteps):
-        action = ddpg.select_on_policy_action(obs)
-        env.apply_perturbation(action)
-        victim.train(env, victim_episodes)
-        obs = enc.encode(
-            [{'behavior_trace': victim.get_behavior_trace(),
-              'q_table': victim.get_policy_matrix(),
-              'dynamics': env.get_dynamics()}],
-            env_dynamics=env.get_dynamics(),
-        )
+        raw_action = ddpg.select_on_policy_action(obs)
+        dispatch.apply(population, translator.translate(raw_action))
+        results = population.run_experiments(victim_episodes)
+        obs = enc.encode(results, population.get_env_dynamics())
 
+    victim = population.algorithm
+    env = population.env
     target = create_target_policy(env.nS, env.nA)
     _, acc, _, _ = Attack_Done_Identify(target, victim.get_policy_matrix())
     return victim.get_policy_matrix(), acc, env.altitude.copy()
@@ -274,6 +345,10 @@ def main():
                         help='Output directory for the figure')
     parser.add_argument('--grid_size',         type=int,  default=None,
                         help='Square grid side length (e.g. 6 for 6x6). Default: 4x4.')
+    parser.add_argument('--encoder_mode',      type=str,  default=None,
+                        help='Encoder used during training (default: read from Sacred/MongoDB)')
+    parser.add_argument('--privacy_mode',      type=str,  default=None,
+                        help='Privacy mode used during training (default: read from Sacred/MongoDB)')
     args = parser.parse_args()
 
     grid_dim = (args.grid_size, args.grid_size) if args.grid_size else None
@@ -306,8 +381,13 @@ def main():
     for i, run_dir in enumerate(args.run_dirs):
         print(f'  seed {i}: {run_dir}')
         try:
-            Q, acc, alt = run_attack_episode(run_dir, args.max_timesteps, args.victim_episodes,
-                                             grid_dim)
+            run_config = load_run_config(run_dir)
+            Q, acc, alt = run_attack_episode(
+                run_dir, args.max_timesteps, args.victim_episodes, grid_dim,
+                encoder_mode=args.encoder_mode,
+                privacy_mode=args.privacy_mode,
+                run_config=run_config,
+            )
             Q_list.append(Q); acc_list.append(acc); alt_list.append(alt)
             print(f'  → accuracy = {acc:.4f}')
         except FileNotFoundError as e:

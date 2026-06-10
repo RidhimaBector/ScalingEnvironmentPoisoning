@@ -59,6 +59,17 @@ def smooth(values, window=50):
     return np.convolve(values, kernel, mode='valid')
 
 
+def _per_episode_timestep_metric(db, run_id, metric_name):
+    """Return (episode_numbers, values) aggregated from timestep metrics, or (None, None)."""
+    ts_steps, ts_vals = get_metric(db, run_id, metric_name)
+    if ts_steps is None or ts_vals is None or len(ts_steps) == 0:
+        return None, None
+    mask = ts_steps % 1000 == 14
+    if not np.any(mask):
+        return None, None
+    return ts_steps[mask] // 1000, ts_vals[mask]
+
+
 # ---------------------------------------------------------------------------
 # Policy visualization helpers
 # ---------------------------------------------------------------------------
@@ -86,7 +97,8 @@ def compute_policy_data(run_dir, config):
 
     print(f'  Running attack episode from {run_dir}...')
     atk_Q, atk_acc, avg_alt = run_attack_episode(
-        run_dir, max_timesteps, victim_episodes, grid_dim
+        run_dir, max_timesteps, victim_episodes, grid_dim,
+        run_config=config,
     )
     atk_greedy = np.argmax(atk_Q, axis=1)
 
@@ -187,14 +199,11 @@ def fig_accuracy(db, run_id, out_dir, config):
 
 
 def fig_softmax_accuracy(db, run_id, out_dir, config):
-    ts_steps, ts_acc    = get_metric(db, run_id, 'timestep.accuracy')
-    _,         ts_sftmx = get_metric(db, run_id, 'timestep.mean_accuracy_sftmx')
-
-    # Aggregate to per-episode: use last timestep of each episode (step % 1000 == 14)
-    mask = ts_steps % 1000 == 14
-    ep_nums   = ts_steps[mask] // 1000
-    acc_vals  = ts_acc[mask]
-    sftmx_vals = ts_sftmx[mask]
+    ep_nums, acc_vals = _per_episode_timestep_metric(db, run_id, 'timestep.accuracy')
+    _, sftmx_vals = _per_episode_timestep_metric(db, run_id, 'timestep.mean_accuracy_sftmx')
+    if ep_nums is None or sftmx_vals is None:
+        print('  No softmax accuracy metric found, skipping acc_vs_softacc.png.')
+        return
 
     fig, ax = plt.subplots(figsize=(10, 5))
     w = 100
@@ -285,12 +294,10 @@ def fig_summary_dashboard(db, run_id, out_dir, config, policy_data=None):
     _,  ep_min       = get_metric(db, run_id, 'episode.min_accuracy')
     _,  ep_rew       = get_metric(db, run_id, 'episode.episode_reward')
     loss_steps, loss = get_metric(db, run_id, 'ddpg_loss')
-    ts_steps, ts_acc = get_metric(db, run_id, 'timestep.accuracy')
-    _,  ts_sftmx     = get_metric(db, run_id, 'timestep.mean_accuracy_sftmx')
-
-    mask = ts_steps % 1000 == 14
-    ep_nums    = ts_steps[mask] // 1000
-    sftmx_vals = ts_sftmx[mask]
+    ep_nums, sftmx_vals = _per_episode_timestep_metric(
+        db, run_id, 'timestep.mean_accuracy_sftmx'
+    )
+    has_softmax = sftmx_vals is not None
 
     has_policy = policy_data is not None
     nrows_fig = 3 if has_policy else 2
@@ -313,17 +320,23 @@ def fig_summary_dashboard(db, run_id, out_dir, config, policy_data=None):
     ax1.set_title('Attack Accuracy'); ax1.set_ylim(0, 1.05)
     ax1.legend(fontsize=8); ax1.grid(True, alpha=0.3)
 
-    # --- Panel 2: @Acc vs @SoftAcc ---
+    # --- Panel 2: @Acc vs @SoftAcc (softmax only logged for whitebox runs) ---
     ax2 = fig.add_subplot(gs[0, 1])
-    sm_sftmx = smooth(sftmx_vals, w)
-    sm_acc2  = smooth(ep_acc, w)
-    pad2 = len(ep_nums) - len(sm_sftmx)
-    xs2  = ep_nums[pad2 // 2: pad2 // 2 + len(sm_sftmx)]
-    ax2.plot(xs2, sm_acc2[:len(xs2)], color='steelblue', linewidth=2, label='@Acc')
-    ax2.plot(xs2, sm_sftmx,          color='darkorange', linewidth=2, label='@SoftAcc')
+    sm_acc2 = smooth(ep_acc, w)
+    pad2 = len(ep_steps) - len(sm_acc2)
+    xs2 = ep_steps[pad2 // 2: pad2 // 2 + len(sm_acc2)]
+    ax2.plot(xs2, sm_acc2, color='steelblue', linewidth=2, label='@Acc')
+    if has_softmax:
+        sm_sftmx = smooth(sftmx_vals, w)
+        pad_s = len(ep_nums) - len(sm_sftmx)
+        xs_s = ep_nums[pad_s // 2: pad_s // 2 + len(sm_sftmx)]
+        ax2.plot(xs_s, sm_sftmx, color='darkorange', linewidth=2, label='@SoftAcc')
+        ax2.set_title('@Acc vs @SoftAcc')
+    else:
+        ax2.set_title('@Acc (no @SoftAcc for blackbox/LSTM)')
     ax2.axhline(1.0, color='green', linestyle='--', linewidth=1, alpha=0.6)
     ax2.set_xlabel('Episode'); ax2.set_ylabel('Accuracy')
-    ax2.set_title('@Acc vs @SoftAcc'); ax2.set_ylim(0, 1.05)
+    ax2.set_ylim(0, 1.05)
     ax2.legend(fontsize=8); ax2.grid(True, alpha=0.3)
 
     # --- Panel 3: Episode Reward ---
