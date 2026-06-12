@@ -177,6 +177,7 @@ def build_attack_algo(state_dim, action_dim, max_action, args):
             "eps_greedy_start_episodes": getattr(args, 'eps_greedy_start_episodes', 30),
             "rate": getattr(args, 'attack_rate', 0.001),
             "prate": getattr(args, 'attack_prate', 0.0001),
+            "updates_per_step": getattr(args, 'updates_per_step', getattr(config.ATTACK.DEFAULT_KWARGS, 'updates_per_step', 1)),
         })
         return DDPG(**attack_kwargs)
 

@@ -53,6 +53,7 @@ ATTACK:
     tau: 0.005
     discount: 0.9
     epsilon_divisor: 1000
+    updates_per_step: 1
     is_training: true
   PPO_KWARGS:
     hidden1: 256

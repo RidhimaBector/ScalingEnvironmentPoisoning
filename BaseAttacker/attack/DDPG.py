@@ -116,7 +116,7 @@ class DDPG(AttackAlgorithm):
 
     Implements both Algorithm (legacy) and AttackAlgorithm (new ABC).
     """
-    def __init__(self, seed, nb_states, nb_actions, max_action, hidden1, hidden2, init_w, prate, rate, ou_theta, ou_mu, ou_sigma, bsize, tau, discount, epsilon_divisor, eps_greedy_start_episodes, is_training, **kwargs):
+    def __init__(self, seed, nb_states, nb_actions, max_action, hidden1, hidden2, init_w, prate, rate, ou_theta, ou_mu, ou_sigma, bsize, tau, discount, epsilon_divisor, eps_greedy_start_episodes, is_training, updates_per_step=1, **kwargs):
 
         if seed > 0:
             self.seed(seed)
@@ -152,6 +152,7 @@ class DDPG(AttackAlgorithm):
         self.discount = discount
         self.depsilon = 1.0 / epsilon_divisor
         self.eps_greedy_start_episodes = eps_greedy_start_episodes
+        self.updates_per_step = updates_per_step
         #
         self.epsilon = 1.0
         self.is_training = True
@@ -200,13 +201,12 @@ class DDPG(AttackAlgorithm):
         return len(self._buffer) >= self.batch_size
 
     def update(self, episode=0):
-        """Run 1 epoch x 15 batches of critic/actor updates."""
-        atk_n_batch = 15
+        """Run self.updates_per_step batches of critic/actor updates."""
         loss_critic = 0.0
         loss_actor = 0.0
         self.is_training = True
 
-        for _ in range(atk_n_batch):
+        for _ in range(self.updates_per_step):
             state_batch, action_batch, next_state_batch, \
                 reward_batch, terminal_batch = self._buffer.sample(self.batch_size)
 
@@ -233,16 +233,17 @@ class DDPG(AttackAlgorithm):
             )
             policy_loss = policy_loss.mean()
             policy_loss.backward()
+            torch.nn.utils.clip_grad_norm_(self.actor.parameters(), max_norm=1.0)
             self.actor_optim.step()
 
             soft_update(self.actor_target, self.actor, self.tau)
             soft_update(self.critic_target, self.critic, self.tau)
 
             loss_critic += value_loss.item()
-            loss_actor += policy_loss.item()
+            loss_actor += (-policy_loss.item())  # log +Q_mean (positive = actor improving)
 
-        avg_critic = loss_critic / atk_n_batch
-        avg_actor = loss_actor / atk_n_batch
+        avg_critic = loss_critic / self.updates_per_step
+        avg_actor = loss_actor / self.updates_per_step
         self._loss_log.append([episode, 0, avg_critic, avg_actor])
         return {'critic_loss': avg_critic, 'actor_loss': avg_actor}
 
@@ -297,6 +298,7 @@ class DDPG(AttackAlgorithm):
                 )
                 policy_loss = policy_loss.mean()
                 policy_loss.backward()
+                torch.nn.utils.clip_grad_norm_(self.actor.parameters(), max_norm=1.0)
                 self.actor_optim.step()
 
                 # Target update
@@ -304,7 +306,7 @@ class DDPG(AttackAlgorithm):
                 soft_update(self.critic_target, self.critic, self.tau)
 
                 loss_critic += value_loss.item()
-                loss_actor += policy_loss.item()
+                loss_actor += (-policy_loss.item())  # log +Q_mean
 
             ddpg_loss.append([i_episode, i_atk_n_epoch, loss_critic/atk_n_batch, loss_actor/atk_n_batch])
 
