@@ -13,6 +13,7 @@ env/
 sacred_runs/
 sacred_runs_victims/
 results/
+logs/
 metrics/
 storage/
 R_0818/
