@@ -6,6 +6,7 @@ environment dynamics to steer victims toward a target policy.
 """
 
 import copy
+import os
 from typing import Any, Dict, List
 
 import numpy as np
@@ -116,7 +117,8 @@ class DDPG(AttackAlgorithm):
 
     Implements both Algorithm (legacy) and AttackAlgorithm (new ABC).
     """
-    def __init__(self, seed, nb_states, nb_actions, max_action, hidden1, hidden2, init_w, prate, rate, ou_theta, ou_mu, ou_sigma, bsize, tau, discount, epsilon_divisor, eps_greedy_start_episodes, is_training, updates_per_step=1, expl_noise=0.0, **kwargs):
+    def __init__(self, seed, nb_states, nb_actions, max_action, hidden1, hidden2, init_w, prate, rate, ou_theta, ou_mu, ou_sigma, bsize, tau, discount, epsilon_divisor, eps_greedy_start_episodes, is_training, updates_per_step=1, expl_noise=0.0,
+                 td3=False, policy_noise=0.2, noise_clip=0.5, policy_freq=2, **kwargs):
 
         if seed > 0:
             self.seed(seed)
@@ -138,6 +140,19 @@ class DDPG(AttackAlgorithm):
         self.critic = Critic(self.nb_states, self.nb_actions, **net_cfg)
         self.critic_target = Critic(self.nb_states, self.nb_actions, **net_cfg)
         self.critic_optim  = Adam(self.critic.parameters(), lr=rate)
+
+        # TD3 options: twin critics (min of two targets), target policy smoothing,
+        # delayed actor updates. td3=False keeps plain DDPG.
+        self.td3 = td3
+        self.policy_noise = policy_noise
+        self.noise_clip = noise_clip
+        self.policy_freq = policy_freq if td3 else 1
+        self._n_updates = 0
+        if td3:
+            self.critic2 = Critic(self.nb_states, self.nb_actions, **net_cfg)
+            self.critic2_target = Critic(self.nb_states, self.nb_actions, **net_cfg)
+            self.critic2_optim = Adam(self.critic2.parameters(), lr=rate)
+            hard_update(self.critic2_target, self.critic2)
 
         hard_update(self.actor_target, self.actor) # Make sure target is with the same weight
         hard_update(self.critic_target, self.critic)
@@ -213,11 +228,18 @@ class DDPG(AttackAlgorithm):
             state_batch, action_batch, next_state_batch, \
                 reward_batch, terminal_batch = self._buffer.sample(self.batch_size)
 
+            self._n_updates += 1
             with torch.no_grad():
-                next_q_values = self.critic_target(
-                    to_tensor(next_state_batch),
-                    self.actor_target(to_tensor(next_state_batch))
-                )
+                next_action = self.actor_target(to_tensor(next_state_batch))
+                if self.td3:
+                    smoothing = (torch.randn_like(next_action) * self.policy_noise
+                                 ).clamp(-self.noise_clip, self.noise_clip)
+                    next_action = (next_action + smoothing).clamp(-self.max_action, self.max_action)
+                next_q_values = self.critic_target(to_tensor(next_state_batch), next_action)
+                if self.td3:
+                    next_q_values = torch.min(
+                        next_q_values,
+                        self.critic2_target(to_tensor(next_state_batch), next_action))
 
             target_q_batch = to_tensor(reward_batch) + \
                 self.discount * to_tensor(terminal_batch.astype(np.float64)) * next_q_values
@@ -228,22 +250,32 @@ class DDPG(AttackAlgorithm):
             value_loss.backward()
             torch.nn.utils.clip_grad_norm_(self.critic.parameters(), max_norm=1.0)
             self.critic_optim.step()
+            if self.td3:
+                self.critic2.zero_grad()
+                value_loss2 = criterion(
+                    self.critic2(to_tensor(state_batch), to_tensor(action_batch)), target_q_batch)
+                value_loss2.backward()
+                torch.nn.utils.clip_grad_norm_(self.critic2.parameters(), max_norm=1.0)
+                self.critic2_optim.step()
 
-            self.actor.zero_grad()
-            policy_loss = -self.critic(
-                to_tensor(state_batch),
-                self.actor(to_tensor(state_batch))
-            )
-            policy_loss = policy_loss.mean()
-            policy_loss.backward()
-            torch.nn.utils.clip_grad_norm_(self.actor.parameters(), max_norm=1.0)
-            self.actor_optim.step()
+            if self._n_updates % self.policy_freq == 0:
+                self.actor.zero_grad()
+                policy_loss = -self.critic(
+                    to_tensor(state_batch),
+                    self.actor(to_tensor(state_batch))
+                )
+                policy_loss = policy_loss.mean()
+                policy_loss.backward()
+                torch.nn.utils.clip_grad_norm_(self.actor.parameters(), max_norm=1.0)
+                self.actor_optim.step()
+                loss_actor += (-policy_loss.item()) * self.policy_freq  # log +Q_mean
 
-            soft_update(self.actor_target, self.actor, self.tau)
-            soft_update(self.critic_target, self.critic, self.tau)
+                soft_update(self.actor_target, self.actor, self.tau)
+                soft_update(self.critic_target, self.critic, self.tau)
+                if self.td3:
+                    soft_update(self.critic2_target, self.critic2, self.tau)
 
             loss_critic += value_loss.item()
-            loss_actor += (-policy_loss.item())  # log +Q_mean (positive = actor improving)
 
         avg_critic = loss_critic / self.updates_per_step
         avg_actor = loss_actor / self.updates_per_step
@@ -344,6 +376,8 @@ class DDPG(AttackAlgorithm):
 
         torch.save(self.actor.state_dict(), filename + "_actor")
         torch.save(self.actor_optim.state_dict(), filename + "_actor_optimizer")
+        if self.td3:
+            torch.save(self.critic2.state_dict(), filename + "_critic2")
 
 
     def load(self, filename):
@@ -354,6 +388,9 @@ class DDPG(AttackAlgorithm):
         self.actor.load_state_dict(torch.load(filename + "_actor", map_location=torch.device('cpu')))
         self.actor_optim.load_state_dict(torch.load(filename + "_actor_optimizer", map_location=torch.device('cpu')))
         self.actor_target = copy.deepcopy(self.actor)
+        if self.td3 and os.path.exists(filename + "_critic2"):
+            self.critic2.load_state_dict(torch.load(filename + "_critic2", map_location=torch.device('cpu')))
+            self.critic2_target = copy.deepcopy(self.critic2)
 
 
     def seed(self,s):

@@ -88,6 +88,8 @@ def main():
     ap.add_argument('--episodes', type=int, default=20)
     ap.add_argument('--out', default=None)
     ap.add_argument('--lstm_no_dynamics', action='store_true')
+    ap.add_argument('--td3', action='store_true')
+    ap.add_argument('--normalize_obs', action='store_true')
     a = ap.parse_args()
 
     class Args: pass
@@ -96,7 +98,8 @@ def main():
                          env_shape=None, victim_alpha=0.1, seed=0, encoder_mode=a.encoder_mode,
                          ae_model_path=a.ae_model_path, victim_n_episodes=a.victim_n_episodes,
                          attack_algo='ddpg', reward_mode='trace', expl_noise=0.0,
-                         lstm_append_dynamics=not a.lstm_no_dynamics)
+                         lstm_append_dynamics=not a.lstm_no_dynamics,
+                         td3=a.td3, normalize_obs=a.normalize_obs)
 
     pop = build_population(args, PrivacyMode.FULL_BLACKBOX)
     obs_enc, translator = build_encoders(pop, args)

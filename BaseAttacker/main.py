@@ -134,7 +134,8 @@ def build_encoders(population, args):
 
     if encoder_mode == 'ae':
         inner = AEObservationEncoder.from_population(
-            population, model_path=getattr(args, 'ae_model_path', None))
+            population, model_path=getattr(args, 'ae_model_path', None),
+            normalize_dynamics=getattr(args, 'normalize_obs', False))
     elif encoder_mode == 'lstm':
         inner = LSTMTrajectoryEncoder.from_population(population, config)
         inner.populate_target_memory(
@@ -148,8 +149,11 @@ def build_encoders(population, args):
     # LSTM embedding carries no information about the current altitude; optionally
     # append it (the attacker knows the perturbations it has applied).
     append_dyn = encoder_mode == 'lstm' and getattr(args, 'lstm_append_dynamics', True)
+    norm = getattr(args, 'normalize_obs', False)
     obs_encoder = ObservationEncoder(
-        inner, append_dynamics_dim=population.env.dynamics_dim if append_dyn else 0)
+        inner, append_dynamics_dim=population.env.dynamics_dim if append_dyn else 0,
+        normalize_dynamics=norm,
+        initial_dynamics=population.env.get_dynamics() if (append_dyn and norm) else None)
 
     ref_env = population.env
     if hasattr(ref_env, 'perturbation_space'):
@@ -186,6 +190,7 @@ def build_attack_algo(state_dim, action_dim, max_action, args):
             "updates_per_step": getattr(args, 'updates_per_step', getattr(config.ATTACK.DEFAULT_KWARGS, 'updates_per_step', 1)),
             "bsize": getattr(args, 'batch_size', 256),
             "expl_noise": getattr(args, 'expl_noise', 0.0),
+            "td3": getattr(args, 'td3', False),
         })
         return DDPG(**attack_kwargs)
 
@@ -228,8 +233,21 @@ def train(attack_env, attack_algo, obs_encoder, action_translator,
         greedy_sum = path_sum = 0.0
         n_steps = 0
 
+        # Structured exploration: in a "push" episode every cell is pushed in one fixed
+        # random direction (up / down / hold) for the whole episode, so the replay buffer
+        # covers altitude maps far from the natural one. Plain per-step random actions
+        # average out to ~no change. Used for half of the warm-up episodes and for a
+        # fraction explore_push_prob of later episodes.
+        push_prob = getattr(args, 'explore_push_prob', 0.0)
+        warm = episode < num_warmup_episodes
+        push = push_prob > 0 and np.random.rand() < (0.5 if warm else push_prob)
+        push_dir = np.random.choice([-1.0, 0.0, 1.0], size=attack_env.action_space.shape)
+
         for timestep in range(max_timesteps):
-            if episode < num_warmup_episodes:
+            if push:
+                raw_action = np.clip(
+                    push_dir + np.random.normal(0.0, 0.2, size=push_dir.shape), -1.0, 1.0)
+            elif warm:
                 raw_action = attack_env.action_space.sample()
             else:
                 raw_action = attack_algo.act(np.array(obs))
@@ -281,7 +299,8 @@ def train(attack_env, attack_algo, obs_encoder, action_translator,
 
         # Best model = best 50-episode moving average of the episode reward
         # (single-episode accuracy is too noisy to select on).
-        recent_rewards.append(episode_reward)
+        if not push:
+            recent_rewards.append(episode_reward)
         if len(recent_rewards) > 50:
             recent_rewards.pop(0)
         avg_reward = float(np.mean(recent_rewards))
@@ -365,6 +384,9 @@ def sacred_main(_run, _config):
     args.reward_mode = _config.get('reward_mode', 'traj')
     args.ae_model_path = _config.get('ae_model_path', None)
     args.lstm_append_dynamics = _config.get('lstm_append_dynamics', True)
+    args.td3 = _config.get('td3', False)
+    args.normalize_obs = _config.get('normalize_obs', False)
+    args.explore_push_prob = _config.get('explore_push_prob', 0.0)
 
     population = build_population(args, privacy_mode, victim_tracker)
     obs_encoder, action_translator = build_encoders(population, args)

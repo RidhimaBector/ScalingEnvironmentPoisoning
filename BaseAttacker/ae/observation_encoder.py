@@ -33,12 +33,15 @@ class ObservationEncoder:
         inner_encoder: VictimEncoder (or any Encoder ABC implementation).
     """
 
-    def __init__(self, inner_encoder: Encoder, append_dynamics_dim: int = 0):
+    def __init__(self, inner_encoder: Encoder, append_dynamics_dim: int = 0,
+                 normalize_dynamics: bool = False, initial_dynamics=None):
         # append_dynamics_dim > 0: concatenate the env dynamics the attacker itself
         # controls (altitude = base + its own accumulated perturbations) to the
         # embedding, so a trajectory-only encoder still knows what it has done so far.
         self._inner = inner_encoder
         self._dyn_dim = append_dynamics_dim
+        self._normalize = normalize_dynamics
+        self._initial_dynamics = None if initial_dynamics is None else np.asarray(initial_dynamics).flatten()
 
     @property
     def embedding_dim(self) -> int:
@@ -59,6 +62,8 @@ class ObservationEncoder:
         emb = self._inner.encode(victim_data, env_dynamics=env_dynamics)
         if self._dyn_dim:
             dyn = np.zeros(self._dyn_dim) if env_dynamics is None else np.asarray(env_dynamics).flatten()[:self._dyn_dim]
+            if self._normalize:
+                dyn = (dyn - 5.0) / 5.0
             emb = np.concatenate([np.asarray(emb, dtype=np.float64), dyn])
         return emb
 
@@ -70,7 +75,12 @@ class ObservationEncoder:
         """
         emb = self._inner.get_initial_embedding()
         if self._dyn_dim:
-            emb = np.concatenate([np.asarray(emb, dtype=np.float64), np.zeros(self._dyn_dim)])
+            dyn = np.zeros(self._dyn_dim)
+            if self._initial_dynamics is not None:
+                dyn = self._initial_dynamics[:self._dyn_dim]
+                if self._normalize:
+                    dyn = (dyn - 5.0) / 5.0
+            emb = np.concatenate([np.asarray(emb, dtype=np.float64), dyn])
         return emb
 
     def train_encoder(self) -> None:

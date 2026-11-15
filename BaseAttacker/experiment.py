@@ -129,6 +129,9 @@ def default_config():
     reward_mode = "traj"
     ae_model_path = None   # None = ae/models/<default>; else path to AE weights
     lstm_append_dynamics = True  # lstm mode: append current altitude (16D) to the 128D embedding
+    td3 = False            # twin critics + target smoothing + delayed actor updates
+    normalize_obs = False  # altitude in the observation scaled to [-1, 1]; first obs = real altitude
+    explore_push_prob = 0.0  # fraction of episodes that push each cell in one fixed random direction
     policy_noise = 0.2
     noise_clip = 0.5
     policy_freq = 2

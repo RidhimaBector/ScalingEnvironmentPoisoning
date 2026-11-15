@@ -148,9 +148,14 @@ class AEObservationEncoder(Encoder):
 
     EMBEDDING_SIZE = 5
 
-    def __init__(self, dynamics_dim: int, model_path: str, num_victims: int = 1):
+    def __init__(self, dynamics_dim: int, model_path: str, num_victims: int = 1,
+                 normalize_dynamics: bool = False, initial_dynamics: Optional[np.ndarray] = None):
         self._dynamics_dim = dynamics_dim
         self._num_victims = num_victims
+        # normalize_dynamics: feed altitude as (alt - 5) / 5 in [-1, 1] instead of raw [0, 10]
+        self._normalize = normalize_dynamics
+        # initial_dynamics: unperturbed altitude, used for the first observation of an episode
+        self._initial_dynamics = None if initial_dynamics is None else np.asarray(initial_dynamics).flatten()
 
         self._ae = AutoEncoder(
             enc_in_size=dynamics_dim * 2,  # behavior_trace is (nS, 2), flattened = nS*2
@@ -162,7 +167,8 @@ class AEObservationEncoder(Encoder):
         self._ae.load(model_path)
 
     @classmethod
-    def from_population(cls, population, model_path: Optional[str] = None) -> 'AEObservationEncoder':
+    def from_population(cls, population, model_path: Optional[str] = None,
+                        normalize_dynamics: bool = False) -> 'AEObservationEncoder':
         """Build with dimensions inferred from the victim population."""
         if model_path is None:
             here = os.path.dirname(os.path.abspath(__file__))
@@ -171,6 +177,8 @@ class AEObservationEncoder(Encoder):
             dynamics_dim=population.env.dynamics_dim,
             model_path=model_path,
             num_victims=population.num_victims,
+            normalize_dynamics=normalize_dynamics,
+            initial_dynamics=population.env.get_dynamics() if normalize_dynamics else None,
         )
 
     @property
@@ -189,12 +197,15 @@ class AEObservationEncoder(Encoder):
             if env_dynamics is not None
             else np.zeros(self._dynamics_dim)
         )
+        if self._normalize:
+            dyn = (dyn - 5.0) / 5.0
 
         parts = []
         for i in range(self._num_victims):
             data = victim_data[i] if i < len(victim_data) else {}
             trace = np.asarray(
-                data.get('behavior_trace', np.zeros((self._dynamics_dim, 2)))
+                data.get('behavior_trace', np.column_stack(
+                    [np.arange(self._dynamics_dim), -np.ones(self._dynamics_dim)]))
             ).astype(np.float64).copy()
             # Unvisited states are -1 in the trace; the AE was trained with class 4.
             trace[trace[:, 1] < 0, 1] = 4
@@ -205,6 +216,9 @@ class AEObservationEncoder(Encoder):
         return np.concatenate(parts)
 
     def get_initial_embedding(self) -> np.ndarray:
+        if self._initial_dynamics is not None:
+            # All states unvisited + the unperturbed altitude
+            return self.encode([{} for _ in range(self._num_victims)], self._initial_dynamics)
         return np.zeros(self.embedding_dim)
 
 

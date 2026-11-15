@@ -132,7 +132,12 @@ class AttackEnvironment(Env):
                 accuracy_from_trajectories(r.get('trajectories', []), self._target)
                 for r in results
             ]))
-            reward = traj_acc if self._reward_mode == "traj" else trace_acc
+            if self._reward_mode == "traj":
+                reward = traj_acc
+            elif self._reward_mode == "mix":
+                reward = 0.5 * (trace_acc + traj_acc)
+            else:
+                reward = trace_acc
             # Never terminate on the noisy observed signal: run the full horizon.
             terminated = False
             info = {
