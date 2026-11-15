@@ -33,12 +33,16 @@ class ObservationEncoder:
         inner_encoder: VictimEncoder (or any Encoder ABC implementation).
     """
 
-    def __init__(self, inner_encoder: Encoder):
+    def __init__(self, inner_encoder: Encoder, append_dynamics_dim: int = 0):
+        # append_dynamics_dim > 0: concatenate the env dynamics the attacker itself
+        # controls (altitude = base + its own accumulated perturbations) to the
+        # embedding, so a trajectory-only encoder still knows what it has done so far.
         self._inner = inner_encoder
+        self._dyn_dim = append_dynamics_dim
 
     @property
     def embedding_dim(self) -> int:
-        return self._inner.embedding_dim
+        return self._inner.embedding_dim + self._dyn_dim
 
     def encode(self, victim_data: List[Dict], env_dynamics=None) -> np.ndarray:
         """Encode victim result dicts into a 1D observation array.
@@ -52,7 +56,11 @@ class ObservationEncoder:
         Returns:
             1D numpy array of shape (embedding_dim,).
         """
-        return self._inner.encode(victim_data, env_dynamics=env_dynamics)
+        emb = self._inner.encode(victim_data, env_dynamics=env_dynamics)
+        if self._dyn_dim:
+            dyn = np.zeros(self._dyn_dim) if env_dynamics is None else np.asarray(env_dynamics).flatten()[:self._dyn_dim]
+            emb = np.concatenate([np.asarray(emb, dtype=np.float64), dyn])
+        return emb
 
     def get_initial_embedding(self) -> np.ndarray:
         """Return a zero embedding for the start of an episode.
@@ -60,7 +68,10 @@ class ObservationEncoder:
         Returns:
             1D numpy array of shape (embedding_dim,).
         """
-        return self._inner.get_initial_embedding()
+        emb = self._inner.get_initial_embedding()
+        if self._dyn_dim:
+            emb = np.concatenate([np.asarray(emb, dtype=np.float64), np.zeros(self._dyn_dim)])
+        return emb
 
     def train_encoder(self) -> None:
         self._inner.train_encoder()

@@ -7,6 +7,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from core.encoder import Encoder
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
@@ -131,7 +133,7 @@ class AutoEncoder():
         return load_model
 
 
-class AEObservationEncoder:
+class AEObservationEncoder(Encoder):
     """Replicates main-branch state: AE(behavior_trace)(5D) + altitude(nS D).
 
     Encodes each victim's behavior_trace through the pre-trained AutoEncoder,
@@ -193,7 +195,10 @@ class AEObservationEncoder:
             data = victim_data[i] if i < len(victim_data) else {}
             trace = np.asarray(
                 data.get('behavior_trace', np.zeros((self._dynamics_dim, 2)))
-            ).reshape(1, -1)  # (1, nS*2) — AE encoder does view(-1, 32)
+            ).astype(np.float64).copy()
+            # Unvisited states are -1 in the trace; the AE was trained with class 4.
+            trace[trace[:, 1] < 0, 1] = 4
+            trace = trace.reshape(1, -1)  # (1, nS*2) — AE encoder does view(-1, 32)
             ae_emb = self._ae.Policy_Embedding(trace)[-1]  # (5,)
             parts.append(np.concatenate([ae_emb, dyn]))
 

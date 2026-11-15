@@ -8,7 +8,7 @@ from gymnasium import Env, spaces
 from agent.attack_dispatch import AttackDispatch
 from agent.victim_system import VictimSystem
 from envs.target_def import create_target_policy
-from utils.utils_attack import Attack_Done_Identify
+from utils.utils_attack import Attack_Done_Identify, accuracy_from_trajectories, greedy_path
 from core.encoder import Encoder
 
 
@@ -40,6 +40,7 @@ class AttackEnvironment(Env):
         config: Any = None,
         target_path_type: str = "Mp",
         encoder: Optional[Encoder] = None,
+        reward_mode: str = "trace",
     ):
         super().__init__()
 
@@ -47,6 +48,7 @@ class AttackEnvironment(Env):
         self._dispatch = attack_dispatch or AttackDispatch()
         self._victim_train_episodes = victim_train_episodes
         self._encoder = encoder
+        self._reward_mode = reward_mode
 
         # Target policy
         if target_policy is not None:
@@ -125,11 +127,19 @@ class AttackEnvironment(Env):
         # 3. Metrics and reward
         if self._encoder is not None:
             obs = self._encoder.encode(results, self._get_env_dynamics())
-            reward = self._encoder.compute_reward(results, self._target)
-            terminated = reward >= 1.0
+            trace_acc = self._encoder.compute_reward(results, self._target)
+            traj_acc = float(np.mean([
+                accuracy_from_trajectories(r.get('trajectories', []), self._target)
+                for r in results
+            ]))
+            reward = traj_acc if self._reward_mode == "traj" else trace_acc
+            # Never terminate on the noisy observed signal: run the full horizon.
+            terminated = False
             info = {
                 'step': self._step_count,
                 'accuracy': reward,
+                'trace_accuracy': trace_acc,
+                'traj_accuracy': traj_acc,
                 'victim_results': results,
             }
         else:
@@ -147,6 +157,9 @@ class AttackEnvironment(Env):
                 'per_victim_accuracy': metrics.get('per_victim_accuracy', []),
                 'victim_results': results,
             }
+
+        # Oracle diagnostics (evaluation only; never fed to the attacker).
+        info.update(self._oracle_metrics())
 
         # Surface per-victim scalar metrics into info so log_timestep() picks them up.
         # Single victim: flat keys (distance_K, effort, ...).
@@ -173,6 +186,25 @@ class AttackEnvironment(Env):
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
+
+    def _oracle_metrics(self) -> Dict[str, float]:
+        """Ground-truth poisoning success from the victims' true greedy policies.
+
+        greedy_accuracy: fraction of target states whose argmax-Q action is the target action.
+        path_match: 1.0 if the greedy rollout from the start state visits exactly
+            the target path, else 0.0 (mean over victims).
+        """
+        accs, matches = [], []
+        tgt_actions = np.argmax(self._target, axis=1)
+        for env, algo in self._victim_population._victims:
+            greedy = np.asarray(algo.get_greedy_actions())
+            _, acc, _, _ = Attack_Done_Identify(self._target.copy(), algo.get_policy_matrix())
+            accs.append(acc)
+            goal = int(np.ravel_multi_index((env.shape[0] - 1, 0), env.shape))
+            want = greedy_path(env.INIT_T, tgt_actions, 0, goal)
+            got = greedy_path(env.T, greedy, 0, goal)
+            matches.append(float(got == want))
+        return {'greedy_accuracy': float(np.mean(accs)), 'path_match': float(np.mean(matches))}
 
     def _get_env_dynamics(self) -> np.ndarray:
         return self._victim_population.get_env_dynamics().flatten()

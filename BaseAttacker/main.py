@@ -119,6 +119,7 @@ def build_attack_env(population, args, encoder=None):
         victim_train_episodes=getattr(args, 'victim_n_episodes', 80),
         config=config,
         encoder=encoder,
+        reward_mode=getattr(args, 'reward_mode', 'trace'),
     )
 
 
@@ -132,7 +133,8 @@ def build_encoders(population, args):
     encoder_mode = getattr(args, 'encoder_mode', 'whitebox')
 
     if encoder_mode == 'ae':
-        inner = AEObservationEncoder.from_population(population)
+        inner = AEObservationEncoder.from_population(
+            population, model_path=getattr(args, 'ae_model_path', None))
     elif encoder_mode == 'lstm':
         inner = LSTMTrajectoryEncoder.from_population(population, config)
         inner.populate_target_memory(
@@ -143,7 +145,11 @@ def build_encoders(population, args):
     else:
         inner = VictimEncoder.from_population(population)
 
-    obs_encoder = ObservationEncoder(inner)
+    # LSTM embedding carries no information about the current altitude; optionally
+    # append it (the attacker knows the perturbations it has applied).
+    append_dyn = encoder_mode == 'lstm' and getattr(args, 'lstm_append_dynamics', True)
+    obs_encoder = ObservationEncoder(
+        inner, append_dynamics_dim=population.env.dynamics_dim if append_dyn else 0)
 
     ref_env = population.env
     if hasattr(ref_env, 'perturbation_space'):
@@ -178,6 +184,8 @@ def build_attack_algo(state_dim, action_dim, max_action, args):
             "rate": getattr(args, 'attack_rate', 0.001),
             "prate": getattr(args, 'attack_prate', 0.0001),
             "updates_per_step": getattr(args, 'updates_per_step', getattr(config.ATTACK.DEFAULT_KWARGS, 'updates_per_step', 1)),
+            "bsize": getattr(args, 'batch_size', 256),
+            "expl_noise": getattr(args, 'expl_noise', 0.0),
         })
         return DDPG(**attack_kwargs)
 
@@ -205,7 +213,8 @@ def train(attack_env, attack_algo, obs_encoder, action_translator,
     keep_checkpoints = getattr(args, 'keep_checkpoints', 3)
 
     num_warmup_episodes = attack_algo.warmup_episodes
-    best_accuracy = 0.0
+    best_accuracy = 0.0   # best 50-episode mean episode reward so far
+    recent_rewards = []
 
     os.makedirs(model_dir, exist_ok=True)
 
@@ -216,6 +225,8 @@ def train(attack_env, attack_algo, obs_encoder, action_translator,
         episode_start = time.time()
         info = {}
         min_acc_episode = 1.0
+        greedy_sum = path_sum = 0.0
+        n_steps = 0
 
         for timestep in range(max_timesteps):
             if episode < num_warmup_episodes:
@@ -229,6 +240,9 @@ def train(attack_env, attack_algo, obs_encoder, action_translator,
             attack_algo.store_transition(obs, raw_action, next_obs, reward, terminated)
             episode_reward += reward
             min_acc_episode = min(min_acc_episode, info.get('accuracy', 0.0))
+            greedy_sum += info.get('greedy_accuracy', 0.0)
+            path_sum += info.get('path_match', 0.0)
+            n_steps += 1
 
             if attack_tracker is not None:
                 attack_tracker.log_timestep(episode, timestep, info)
@@ -250,6 +264,13 @@ def train(attack_env, attack_algo, obs_encoder, action_translator,
             'min_accuracy': info.get('min_accuracy', cur_accuracy),
             'episode_reward': episode_reward,
             'time': time.time() - episode_start,
+            # Oracle (ground-truth) poisoning success, for evaluation only
+            'greedy_accuracy': info.get('greedy_accuracy', 0.0),
+            'path_match': info.get('path_match', 0.0),
+            'greedy_accuracy_mean': greedy_sum / max(n_steps, 1),
+            'path_match_mean': path_sum / max(n_steps, 1),
+            'final_altitude_change': float(np.abs(
+                attack_env.victim_system.env.altitude - attack_env.victim_system.env.altitude_default).mean()),
         }
         episode_metrics.update(last_losses)  # e.g. critic_loss, actor_loss (algo-specific)
 
@@ -258,8 +279,14 @@ def train(attack_env, attack_algo, obs_encoder, action_translator,
             loss_val = last_losses.get('critic_loss')
             attack_tracker.log_episode(episode, episode_metrics, loss_val)
 
-        if cur_accuracy > best_accuracy:
-            best_accuracy = cur_accuracy
+        # Best model = best 50-episode moving average of the episode reward
+        # (single-episode accuracy is too noisy to select on).
+        recent_rewards.append(episode_reward)
+        if len(recent_rewards) > 50:
+            recent_rewards.pop(0)
+        avg_reward = float(np.mean(recent_rewards))
+        if episode >= num_warmup_episodes + 50 and avg_reward > best_accuracy:
+            best_accuracy = avg_reward
             attack_algo.save(os.path.join(model_dir, "best_model"))
 
         ckpt_marker = ""
@@ -275,7 +302,8 @@ def train(attack_env, attack_algo, obs_encoder, action_translator,
         print(
             f"[{episode+1:{len(str(max_episodes))}d}/{max_episodes}]"
             f"  acc={cur_accuracy:.4f}  min={min_acc_episode:.4f}"
-            f"  best={best_accuracy:.4f}  reward={episode_reward:.2f}"
+            f"  best_avg_reward={best_accuracy:.2f}  reward={episode_reward:.2f}"
+            f"  greedy={info.get('greedy_accuracy', 0.0):.2f}  path={info.get('path_match', 0.0):.0f}"
             f"{ckpt_marker}"
         )
 
@@ -332,6 +360,11 @@ def sacred_main(_run, _config):
     args.victim_alpha = _config.get('victim_alpha', 0.1)
     args.attack_rate = _config.get('attack_rate', 0.001)
     args.attack_prate = _config.get('attack_prate', 0.0001)
+    args.updates_per_step = _config.get('updates_per_step', 15)
+    args.expl_noise = _config.get('expl_noise', 0.1)
+    args.reward_mode = _config.get('reward_mode', 'traj')
+    args.ae_model_path = _config.get('ae_model_path', None)
+    args.lstm_append_dynamics = _config.get('lstm_append_dynamics', True)
 
     population = build_population(args, privacy_mode, victim_tracker)
     obs_encoder, action_translator = build_encoders(population, args)

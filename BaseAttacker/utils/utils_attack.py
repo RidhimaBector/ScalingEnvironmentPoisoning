@@ -154,3 +154,36 @@ def Attack_Cost_Compute_K(env, init_T, policy_matrix, target, cost_matrix, dista
     cost = float(np.sum(q_stationary.reshape(env.nS, env.nA) * DKL_matrix))
 
     return cost
+
+
+def accuracy_from_trajectories(trajectories, target: np.ndarray) -> float:
+    """Blackbox-safe accuracy from observed (pre_s, pre_a, s, a) tuples.
+
+    For every target state: the fraction of the victim's observed actions in
+    that state that equal the target action (0 if the state was never visited).
+    Returns the mean over target states.
+    """
+    nS, nA = target.shape
+    counts = np.zeros((nS, nA))
+    for pre_s, pre_a, s, a in trajectories:
+        counts[int(pre_s), int(pre_a)] += 1
+    if trajectories:
+        counts[int(trajectories[-1][2]), int(trajectories[-1][3])] += 1
+    target_map = np.sum(target, axis=1)
+    target_actions = np.argmax(target, axis=1)
+    visits = counts.sum(axis=1)
+    hit = counts[np.arange(nS), target_actions]
+    frac = np.where(visits > 0, hit / np.maximum(visits, 1), 0.0)
+    return float(np.sum(target_map * frac) / np.sum(target_map))
+
+
+def greedy_path(T: np.ndarray, greedy_actions: np.ndarray, start: int, goal: int, max_len: int = 64) -> list:
+    """Most-likely state sequence when following greedy_actions under dynamics T (nA, nS, nS)."""
+    s = int(start)
+    path = [s]
+    for _ in range(max_len):
+        s = int(np.argmax(T[int(greedy_actions[s])][s]))
+        path.append(s)
+        if s == goal:
+            break
+    return path

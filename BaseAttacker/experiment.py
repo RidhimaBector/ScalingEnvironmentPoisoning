@@ -122,7 +122,13 @@ def default_config():
     tau = 0.005
     attack_rate = 0.001    # critic learning rate
     attack_prate = 0.0001  # actor learning rate
-    expl_noise = 0.1
+    expl_noise = 0.1       # std of Gaussian exploration noise added to DDPG actions
+    updates_per_step = 15  # DDPG gradient updates per attack episode
+    # Attack reward: "trace" (last action per state) or "traj" (action frequencies
+    # over the victim's observed trajectories; blackbox-safe and less noisy)
+    reward_mode = "traj"
+    ae_model_path = None   # None = ae/models/<default>; else path to AE weights
+    lstm_append_dynamics = True  # lstm mode: append current altitude (16D) to the 128D embedding
     policy_noise = 0.2
     noise_clip = 0.5
     policy_freq = 2
@@ -421,7 +427,8 @@ def finish_victim_sacred(run, status='COMPLETED'):
         if status == 'COMPLETED':
             run._emit_completed(result=None)
         else:
-            run._emit_failed(fail_trace=status)
+            run.fail_trace = [status]
+            run._emit_failed()
         print(f"Victim Sacred experiment finished: {status}")
     except Exception as e:
         print(f"Warning: Error finishing victim Sacred experiment: {e}")

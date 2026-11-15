@@ -116,7 +116,7 @@ class DDPG(AttackAlgorithm):
 
     Implements both Algorithm (legacy) and AttackAlgorithm (new ABC).
     """
-    def __init__(self, seed, nb_states, nb_actions, max_action, hidden1, hidden2, init_w, prate, rate, ou_theta, ou_mu, ou_sigma, bsize, tau, discount, epsilon_divisor, eps_greedy_start_episodes, is_training, updates_per_step=1, **kwargs):
+    def __init__(self, seed, nb_states, nb_actions, max_action, hidden1, hidden2, init_w, prate, rate, ou_theta, ou_mu, ou_sigma, bsize, tau, discount, epsilon_divisor, eps_greedy_start_episodes, is_training, updates_per_step=1, expl_noise=0.0, **kwargs):
 
         if seed > 0:
             self.seed(seed)
@@ -153,6 +153,7 @@ class DDPG(AttackAlgorithm):
         self.depsilon = 1.0 / epsilon_divisor
         self.eps_greedy_start_episodes = eps_greedy_start_episodes
         self.updates_per_step = updates_per_step
+        self.expl_noise = expl_noise  # std of i.i.d. Gaussian exploration noise (never decays)
         #
         self.epsilon = 1.0
         self.is_training = True
@@ -169,6 +170,8 @@ class DDPG(AttackAlgorithm):
             self.actor(to_tensor(state.reshape(1, -1)))
         ).squeeze(0)
         action += self.is_training*max(self.epsilon, 0)*self.random_process.sample()
+        if self.is_training and self.expl_noise > 0:
+            action += np.random.normal(0.0, self.expl_noise, size=action.shape)
         action = np.clip(action, -1., 1.)
 
         if decay_epsilon:
