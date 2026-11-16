@@ -147,6 +147,10 @@ def default_config():
     td3 = False            # twin critics + target smoothing + delayed actor updates
     normalize_obs = False  # altitude in the observation scaled to [-1, 1]; first obs = real altitude
     push_cem = False      # adapt push directions towards high-reward push episodes
+    cem_batch = 16        # push episodes per adaptive-push update
+    cem_elite = 4         # highest-reward push episodes kept per update
+    cem_lr = 0.5          # step towards the elite direction frequencies
+    cem_floor = 0.05      # min probability per direction; < 0 = 0.25 / n_cells
     bc_weight = 0.0       # weight of imitating the top elite_k episodes in the actor loss
     elite_k = 20
     explore_push_prob = 0.0  # fraction of episodes that push each cell in one fixed random direction

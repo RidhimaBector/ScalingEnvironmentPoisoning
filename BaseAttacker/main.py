@@ -230,7 +230,15 @@ def train(attack_env, attack_algo, obs_encoder, action_translator,
     push_cem = getattr(args, 'push_cem', False)
     cem_probs = np.full(attack_env.action_space.shape + (3,), 1.0 / 3.0)
     cem_batch = []                      # (episode_reward, direction index per cell)
-    CEM_BATCH, CEM_ELITE, CEM_LR, CEM_FLOOR = 16, 4, 0.5, 0.05
+    CEM_BATCH = getattr(args, 'cem_batch', 16)
+    CEM_ELITE = getattr(args, 'cem_elite', 4)
+    CEM_LR = getattr(args, 'cem_lr', 0.5)
+    # Probability floor per direction. A fixed 0.05 means each cell leaves its best
+    # direction 10% of the time, so on 36 cells only ~2% of pushes are the best map.
+    # cem_floor < 0 scales it with the grid: 0.25 / n_cells per direction.
+    CEM_FLOOR = getattr(args, 'cem_floor', 0.05)
+    if CEM_FLOOR < 0:
+        CEM_FLOOR = 0.25 / int(np.prod(attack_env.action_space.shape))
     # Elite episodes for the imitation term: top elite_k by episode reward.
     bc_weight = getattr(args, 'bc_weight', 0.0)
     elite_k = getattr(args, 'elite_k', 20)
@@ -427,6 +435,10 @@ def sacred_main(_run, _config):
     args.normalize_obs = _config.get('normalize_obs', False)
     args.explore_push_prob = _config.get('explore_push_prob', 0.0)
     args.push_cem = _config.get('push_cem', False)
+    args.cem_batch = _config.get('cem_batch', 16)
+    args.cem_elite = _config.get('cem_elite', 4)
+    args.cem_lr = _config.get('cem_lr', 0.5)
+    args.cem_floor = _config.get('cem_floor', 0.05)
     args.bc_weight = _config.get('bc_weight', 0.0)
     args.elite_k = _config.get('elite_k', 20)
 
