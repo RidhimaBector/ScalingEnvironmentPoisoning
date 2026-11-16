@@ -111,6 +111,8 @@ class AttackEnvironment(Env):
         self._victim_population.reset()
 
         if self._encoder is not None:
+            if hasattr(self._encoder, 'reset_episode'):
+                self._encoder.reset_episode()
             obs = self._encoder.get_initial_embedding()
         else:
             obs = self._get_env_dynamics()

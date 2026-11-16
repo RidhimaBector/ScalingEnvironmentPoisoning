@@ -391,6 +391,17 @@ class LSTMTrajectoryEncoder(Encoder):
             else:
                 cur_raw = next_raw
 
+    def reset_episode(self) -> None:
+        """A new attack episode starts with a fresh victim: forget the old one's behaviour."""
+        for mem in self._victim_memories:
+            mem.clear()
+
+    def save(self, path: str) -> None:
+        torch.save(self._model.state_dict(), path)
+
+    def load(self, path: str) -> None:
+        self._model.load_state_dict(torch.load(path, map_location=self._device))
+
     def set_target_trajectories(self, transitions) -> None:
         """Use recorded target behaviour: a list of (pre_state, pre_action, state, action)."""
         self._target_memory.clear()

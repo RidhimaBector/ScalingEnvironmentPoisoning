@@ -85,7 +85,10 @@ class _LanderPhysics(gym.Env):
 
     continuous = False
 
-    def __init__(self):
+    def __init__(self, initial_random: float = INITIAL_RANDOM):
+        # Size of the random kick the lander gets at the start of an episode
+        # (1000 = original; larger is harder).
+        self.initial_random = float(initial_random)
         self.seed()
         self.viewer = None
 
@@ -226,8 +229,8 @@ class _LanderPhysics(gym.Env):
         self.lander.color1 = (0.5, 0.4, 0.9)
         self.lander.color2 = (0.3, 0.3, 0.5)
         self.lander.ApplyForceToCenter( (
-            self.np_random.uniform(-INITIAL_RANDOM, INITIAL_RANDOM),
-            self.np_random.uniform(-INITIAL_RANDOM, INITIAL_RANDOM)
+            self.np_random.uniform(-self.initial_random, self.initial_random),
+            self.np_random.uniform(-self.initial_random, self.initial_random)
             ), True)
 
         self.legs = []

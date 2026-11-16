@@ -10,6 +10,7 @@ lander) is only needed when that environment is actually selected.
 import importlib
 
 from victim.victim_dqn import VictimDQN
+from victim.victim_pg import VictimA2C, VictimVPG
 from victim.victim_Q import VictimQLearning
 from victim.victim_reinforce import VictimREINFORCE
 from victim.victim_sarsa import VictimSARSA
@@ -37,4 +38,6 @@ VICTIM_ALGO_MAP = {
     "sarsa": VictimSARSA,
     "reinforce": VictimREINFORCE,
     "dqn": VictimDQN,
+    "vpg": VictimVPG,
+    "a2c": VictimA2C,
 }

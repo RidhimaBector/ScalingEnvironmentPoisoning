@@ -10,6 +10,7 @@ Usage (from BaseAttacker/):
     python -m ae.train_ae --out ae/models/real_traces --epochs 60
 """
 import argparse
+import json
 import os
 import sys
 
@@ -84,6 +85,7 @@ def main():
     ap.add_argument('--out', default=None, help='default: ae/models/real_traces[_NxN]')
     ap.add_argument('--env', default='grid3d', choices=sorted(ENV_MAP), help='victim environment')
     ap.add_argument('--victim_algo', default='qlearning', choices=sorted(VICTIM_ALGO_MAP))
+    ap.add_argument('--env_kwargs', default='{}', help='JSON dict of environment constructor arguments')
     ap.add_argument('--grid_size', type=int, default=4, help='grid3d only: square grid N x N')
     ap.add_argument('--shape', type=int, nargs=2, default=None, metavar=('ROWS', 'COLS'),
                     help='rectangular grid; overrides --grid_size')
@@ -103,7 +105,7 @@ def main():
     if args.env == 'grid3d':
         env = ENV_MAP['grid3d'](grid_dimensions=tuple(args.shape or (args.grid_size, args.grid_size)))
     else:
-        env = ENV_MAP[args.env]()
+        env = ENV_MAP[args.env](**json.loads(args.env_kwargs))
     nS, nA = int(env.nS), int(env.nA)
     small = nS <= 16
     if args.out is None:

@@ -17,6 +17,8 @@ Usage:
 
 from typing import Dict, List
 
+import os
+
 import numpy as np
 
 from core.encoder import Encoder
@@ -94,6 +96,22 @@ class ObservationEncoder:
         """Similarity of victim behaviour to the target, if the inner encoder provides it."""
         fn = getattr(self._inner, 'target_similarity', None)
         return float(fn()) if fn is not None else 0.0
+
+    def reset_episode(self) -> None:
+        fn = getattr(self._inner, 'reset_episode', None)
+        if fn is not None:
+            fn()
+
+    def save(self, path: str) -> None:
+        """Save the inner encoder if it is trained online (no-op for fixed encoders)."""
+        fn = getattr(self._inner, 'save', None)
+        if fn is not None:
+            fn(path)
+
+    def load(self, path: str) -> None:
+        fn = getattr(self._inner, 'load', None)
+        if fn is not None and os.path.exists(path):
+            fn(path)
 
     def train_encoder(self) -> None:
         self._inner.train_encoder()

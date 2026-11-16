@@ -374,10 +374,12 @@ def train(attack_env, attack_algo, obs_encoder, action_translator,
         if episode >= num_warmup_episodes + 50 and avg_reward > best_accuracy:
             best_accuracy = avg_reward
             attack_algo.save(os.path.join(model_dir, "best_model"))
+            obs_encoder.save(os.path.join(model_dir, "best_model_encoder.pt"))
 
         ckpt_marker = ""
         if (episode + 1) % eval_freq == 0:
             attack_algo.save(os.path.join(model_dir, str(episode + 1)))
+            obs_encoder.save(os.path.join(model_dir, "latest_encoder.pt"))
             _delete_old_checkpoints(model_dir, episode + 1, eval_freq, keep_checkpoints)
             if attack_tracker is not None:
                 attack_tracker.log_checkpoint(
@@ -397,6 +399,23 @@ def train(attack_env, attack_algo, obs_encoder, action_translator,
 # ---------------------------------------------------------------------------
 # Sacred entry point
 # ---------------------------------------------------------------------------
+
+def _parse_kv(text) -> dict:
+    """'a:1,b:2.5,c:name' -> {'a': 1, 'b': 2.5, 'c': 'name'}"""
+    out = {}
+    for part in str(text or '').split(','):
+        if ':' not in part:
+            continue
+        key, value = part.split(':', 1)
+        for cast in (int, float):
+            try:
+                value = cast(value)
+                break
+            except (TypeError, ValueError):
+                pass
+        out[key.strip()] = value
+    return out
+
 
 @ex.main
 def sacred_main(_run, _config):
@@ -457,11 +476,13 @@ def sacred_main(_run, _config):
     args.explore_push_prob = _config.get('explore_push_prob', 0.0)
     args.obs_dynamics = _config.get('obs_dynamics', 'actions')
     args.effort_weight = _config.get('effort_weight', 0.0)
-    args.victim_kwargs = _config.get('victim_kwargs', None)
+    args.victim_kwargs = {**(_config.get('victim_kwargs') or {}), **_parse_kv(_config.get('victim_args', ''))}
     args.lstm_embedding_dim = _config.get('lstm_embedding_dim', None)
     args.lstm_seq_len = _config.get('lstm_seq_len', None)
     args.lstm_memory_size = _config.get('lstm_memory_size', None)
-    args.env_kwargs = _config.get('env_kwargs', None)
+    # Constructor arguments for the environment / victim, given on the command line as
+    # "name:value,name:value" (Sacred rejects new keys inside a dict-valued config entry).
+    args.env_kwargs = {**(_config.get('env_kwargs') or {}), **_parse_kv(_config.get('env_args', ''))}
     args.push_cem = _config.get('push_cem', False)
     args.cem_batch = _config.get('cem_batch', 16)
     args.cem_elite = _config.get('cem_elite', 4)
@@ -476,7 +497,8 @@ def sacred_main(_run, _config):
             'env', 'grid_size', 'env_shape', 'env_kwargs', 'victim_algo', 'encoder_mode',
             'ae_model_path', 'obs_dynamics', 'normalize_obs', 'td3', 'lstm_append_dynamics',
             'victim_n_episodes', 'max_timesteps', 'reward_mode', 'seed', 'effort_weight',
-            'victim_kwargs', 'lstm_embedding_dim', 'lstm_seq_len', 'lstm_memory_size')}, fh, indent=1)
+            'victim_kwargs', 'lstm_embedding_dim', 'lstm_seq_len', 'lstm_memory_size')}
+                   | {'env_kwargs': args.env_kwargs, 'victim_kwargs': args.victim_kwargs}, fh, indent=1)
 
     population = build_population(args, privacy_mode, victim_tracker)
     obs_encoder, action_translator = build_encoders(population, args)
