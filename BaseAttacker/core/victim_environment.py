@@ -60,6 +60,28 @@ class VictimEnvironment(Env, ABC):
             Integer dimension.
         """
 
+    def dynamics_bounds(self):
+        """(low, high) of the values in get_dynamics(), or None if unbounded/unknown.
+
+        Used only to scale the dynamics vector when it is part of the attacker's
+        observation. Environments without natural bounds can leave the default.
+        """
+        return None
+
+    def make_target_policy(self, path_type: str = "Mp"):
+        """Target policy matrix (nS, nA) the attacker should induce, or None.
+
+        Returning None lets the caller fall back to envs.target_def. Environments
+        other than the grid should define their own target here.
+        """
+        return None
+
+    def oracle_route_match(self, target_actions: np.ndarray, greedy_actions: np.ndarray):
+        """Evaluation only: 1.0 if following greedy_actions from the start reproduces the
+        target route under the current dynamics, else 0.0. None if the environment has
+        no notion of a route. Never shown to the attacker."""
+        return None
+
     def get_whitebox_data(self) -> dict:
         """Return internal environment state exposed in whitebox privacy mode.
 

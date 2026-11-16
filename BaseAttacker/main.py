@@ -9,6 +9,7 @@ Run with Sacred experiment tracking:
 
 import copy
 import datetime
+import json
 import os
 import time
 
@@ -37,19 +38,11 @@ from yacs.config import CfgNode as CN
 import pandas as pd
 
 
-VICTIM_ALGO_MAP = {
-    "qlearning": VictimQLearning,
-    "sarsa": VictimSARSA,
-    "reinforce": VictimREINFORCE,
-}
+from registry import ENV_MAP, VICTIM_ALGO_MAP  # noqa: E402  (name -> class)
 
 ATTACK_ALGO_MAP = {
     "ddpg": DDPG,
     "ppo": PPO,
-}
-
-ENV_MAP = {
-    "grid3d": Grid3D,
 }
 
 # YAML config
@@ -78,7 +71,7 @@ def build_population(args, privacy_mode: PrivacyMode, victim_tracker=None):
     elif env_shape:
         env_kwargs = {'grid_dimensions': tuple(env_shape)}
     else:
-        env_kwargs = {}
+        env_kwargs = dict(getattr(args, 'env_kwargs', None) or {})
 
     algo_kwargs = dict(config.VICTIM.DEFAULT_KWARGS)
     victim_alpha = getattr(args, 'victim_alpha', None)
@@ -120,6 +113,7 @@ def build_attack_env(population, args, encoder=None):
         config=config,
         encoder=encoder,
         reward_mode=getattr(args, 'reward_mode', 'trace'),
+        obs_dynamics=getattr(args, 'obs_dynamics', 'actions'),
     )
 
 
@@ -131,11 +125,24 @@ def build_encoders(population, args):
     encoder_mode='lstm'     → LSTMTrajectoryEncoder: LSTM over (s,a) sequences = 128D per victim
     """
     encoder_mode = getattr(args, 'encoder_mode', 'whitebox')
+    env = population.env
+    # Context = the non-behaviour part of the observation (see AttackEnvironment.obs_dynamics)
+    obs_dynamics = getattr(args, 'obs_dynamics', 'actions')
+    norm = getattr(args, 'normalize_obs', False)
+    if obs_dynamics == 'env':
+        context_dim = env.dynamics_dim
+        bounds = env.dynamics_bounds() if (norm and hasattr(env, 'dynamics_bounds')) else None
+        initial_context = env.get_dynamics() if norm else None
+    elif obs_dynamics == 'actions':
+        context_dim = int(np.prod(env.perturbation_space.shape))
+        bounds, initial_context = None, None     # running sum starts at zero
+    else:
+        context_dim, bounds, initial_context = 0, None, None
 
     if encoder_mode == 'ae':
         inner = AEObservationEncoder.from_population(
             population, model_path=getattr(args, 'ae_model_path', None),
-            normalize_dynamics=getattr(args, 'normalize_obs', False))
+            context_dim=context_dim, context_bounds=bounds, initial_context=initial_context)
     elif encoder_mode == 'lstm':
         inner = LSTMTrajectoryEncoder.from_population(population, config)
         inner.populate_target_memory(
@@ -149,11 +156,10 @@ def build_encoders(population, args):
     # LSTM embedding carries no information about the current altitude; optionally
     # append it (the attacker knows the perturbations it has applied).
     append_dyn = encoder_mode == 'lstm' and getattr(args, 'lstm_append_dynamics', True)
-    norm = getattr(args, 'normalize_obs', False)
     obs_encoder = ObservationEncoder(
-        inner, append_dynamics_dim=population.env.dynamics_dim if append_dyn else 0,
-        normalize_dynamics=norm,
-        initial_dynamics=population.env.get_dynamics() if (append_dyn and norm) else None)
+        inner, append_dynamics_dim=context_dim if append_dyn else 0,
+        normalize_dynamics=bounds is not None, dynamics_bounds=bounds,
+        initial_dynamics=initial_context if append_dyn else None)
 
     ref_env = population.env
     if hasattr(ref_env, 'perturbation_space'):
@@ -224,6 +230,8 @@ def train(attack_env, attack_algo, obs_encoder, action_translator,
     recent_rewards = []
 
     os.makedirs(model_dir, exist_ok=True)
+    attack_env.victim_system.env.reset_dynamics()
+    initial_dynamics = np.asarray(attack_env.victim_system.env.get_dynamics(), dtype=float).copy()
 
     # Adaptive push (cross-entropy method): per-cell probabilities of pushing
     # down / hold / up, moved towards the push episodes with the highest reward.
@@ -333,8 +341,9 @@ def train(attack_env, attack_algo, obs_encoder, action_translator,
             'path_match': info.get('path_match', 0.0),
             'greedy_accuracy_mean': greedy_sum / max(n_steps, 1),
             'path_match_mean': path_sum / max(n_steps, 1),
-            'final_altitude_change': float(np.abs(
-                attack_env.victim_system.env.altitude - attack_env.victim_system.env.altitude_default).mean()),
+            # Mean absolute change of the environment's dynamics vector at episode end
+            'dynamics_change': float(np.abs(
+                attack_env.victim_system.env.get_dynamics() - initial_dynamics).mean()),
         }
         episode_metrics.update(last_losses)  # e.g. critic_loss, actor_loss (algo-specific)
 
@@ -434,6 +443,8 @@ def sacred_main(_run, _config):
     args.td3 = _config.get('td3', False)
     args.normalize_obs = _config.get('normalize_obs', False)
     args.explore_push_prob = _config.get('explore_push_prob', 0.0)
+    args.obs_dynamics = _config.get('obs_dynamics', 'actions')
+    args.env_kwargs = _config.get('env_kwargs', None)
     args.push_cem = _config.get('push_cem', False)
     args.cem_batch = _config.get('cem_batch', 16)
     args.cem_elite = _config.get('cem_elite', 4)
@@ -441,6 +452,13 @@ def sacred_main(_run, _config):
     args.cem_floor = _config.get('cem_floor', 0.05)
     args.bc_weight = _config.get('bc_weight', 0.0)
     args.elite_k = _config.get('elite_k', 20)
+
+    # Settings a checkpoint needs to be reloaded later (read by eval_attack.py)
+    with open(os.path.join(model_dir, 'run_config.json'), 'w') as fh:
+        json.dump({k: _config.get(k) for k in (
+            'env', 'grid_size', 'env_shape', 'env_kwargs', 'victim_algo', 'encoder_mode',
+            'ae_model_path', 'obs_dynamics', 'normalize_obs', 'td3', 'lstm_append_dynamics',
+            'victim_n_episodes', 'max_timesteps', 'reward_mode', 'seed')}, fh, indent=1)
 
     population = build_population(args, privacy_mode, victim_tracker)
     obs_encoder, action_translator = build_encoders(population, args)

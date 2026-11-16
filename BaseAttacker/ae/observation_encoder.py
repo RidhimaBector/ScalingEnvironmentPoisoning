@@ -22,6 +22,14 @@ import numpy as np
 from core.encoder import Encoder
 
 
+def _scale(x, bounds):
+    """Map x from [low, high] to [-1, 1]; unchanged if bounds is None."""
+    if bounds is None:
+        return x
+    low, high = bounds
+    return (np.asarray(x, dtype=np.float64) - (low + high) / 2.0) / ((high - low) / 2.0)
+
+
 class ObservationEncoder:
     """Encodes victim results into observations for the attack algorithm.
 
@@ -34,13 +42,14 @@ class ObservationEncoder:
     """
 
     def __init__(self, inner_encoder: Encoder, append_dynamics_dim: int = 0,
-                 normalize_dynamics: bool = False, initial_dynamics=None):
+                 normalize_dynamics: bool = False, initial_dynamics=None, dynamics_bounds=None):
         # append_dynamics_dim > 0: concatenate the env dynamics the attacker itself
         # controls (altitude = base + its own accumulated perturbations) to the
         # embedding, so a trajectory-only encoder still knows what it has done so far.
         self._inner = inner_encoder
         self._dyn_dim = append_dynamics_dim
-        self._normalize = normalize_dynamics
+        # Scale the appended vector to [-1, 1] using the environment's own bounds.
+        self._bounds = dynamics_bounds if normalize_dynamics else None
         self._initial_dynamics = None if initial_dynamics is None else np.asarray(initial_dynamics).flatten()
 
     @property
@@ -62,8 +71,7 @@ class ObservationEncoder:
         emb = self._inner.encode(victim_data, env_dynamics=env_dynamics)
         if self._dyn_dim:
             dyn = np.zeros(self._dyn_dim) if env_dynamics is None else np.asarray(env_dynamics).flatten()[:self._dyn_dim]
-            if self._normalize:
-                dyn = (dyn - 5.0) / 5.0
+            dyn = _scale(dyn, self._bounds)
             emb = np.concatenate([np.asarray(emb, dtype=np.float64), dyn])
         return emb
 
@@ -78,8 +86,7 @@ class ObservationEncoder:
             dyn = np.zeros(self._dyn_dim)
             if self._initial_dynamics is not None:
                 dyn = self._initial_dynamics[:self._dyn_dim]
-                if self._normalize:
-                    dyn = (dyn - 5.0) / 5.0
+                dyn = _scale(dyn, self._bounds)
             emb = np.concatenate([np.asarray(emb, dtype=np.float64), dyn])
         return emb
 

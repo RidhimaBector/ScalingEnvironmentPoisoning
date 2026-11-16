@@ -8,7 +8,7 @@ from gymnasium import Env, spaces
 from agent.attack_dispatch import AttackDispatch
 from agent.victim_system import VictimSystem
 from envs.target_def import create_target_policy
-from utils.utils_attack import Attack_Done_Identify, accuracy_from_trajectories, greedy_path
+from utils.utils_attack import Attack_Done_Identify, accuracy_from_trajectories
 from core.encoder import Encoder
 
 
@@ -41,6 +41,7 @@ class AttackEnvironment(Env):
         target_path_type: str = "Mp",
         encoder: Optional[Encoder] = None,
         reward_mode: str = "trace",
+        obs_dynamics: str = "env",
     ):
         super().__init__()
 
@@ -49,15 +50,20 @@ class AttackEnvironment(Env):
         self._victim_train_episodes = victim_train_episodes
         self._encoder = encoder
         self._reward_mode = reward_mode
+        # What the attacker is shown next to the victim-behaviour embedding:
+        #   "actions": the running sum of the perturbations it has sent (no read access
+        #              to the environment; works for any environment)
+        #   "env":     the environment's own dynamics vector (legacy)
+        #   "none":    nothing
+        if obs_dynamics not in ("actions", "env", "none"):
+            raise ValueError(f"obs_dynamics must be actions|env|none, got {obs_dynamics!r}")
+        self._obs_dynamics = obs_dynamics
 
-        # Target policy
+        # Target policy: explicit > environment's own > grid default
         if target_policy is not None:
             self._target = target_policy
         else:
-            self._target = create_target_policy(
-                victim_population.nS, victim_population.nA, path_type=target_path_type,
-                shape=getattr(victim_population.env, 'shape', None),
-            )
+            self._target = victim_population.target
 
         env_nS = victim_population.nS
 
@@ -70,9 +76,14 @@ class AttackEnvironment(Env):
             self.observation_space = spaces.Box(
                 low=-np.inf, high=np.inf, shape=(env_nS,), dtype=np.float64
             )
-        self.action_space = spaces.Box(
-            low=-1.0, high=1.0, shape=(env_nS,), dtype=np.float64
-        )
+        ref_env = victim_population.env
+        if hasattr(ref_env, 'perturbation_space'):
+            self.action_space = ref_env.perturbation_space
+        else:
+            self.action_space = spaces.Box(
+                low=-1.0, high=1.0, shape=(env_nS,), dtype=np.float64
+            )
+        self._sent = np.zeros(self.action_space.shape)  # running sum of perturbations sent
 
         # Convenience attribute used by main.py to get the env dimension
         self.nS = env_nS
@@ -92,6 +103,7 @@ class AttackEnvironment(Env):
             self._victim_population.seed(seed)
 
         self._step_count = 0
+        self._sent = np.zeros(self.action_space.shape)
         self._victim_population.reset()
 
         if self._encoder is not None:
@@ -121,13 +133,16 @@ class AttackEnvironment(Env):
 
         # 1. Dispatch perturbation
         self._dispatch.apply(self._victim_population, action)
+        self._sent = self._sent + np.clip(
+            np.asarray(action, dtype=float).reshape(self._sent.shape),
+            self.action_space.low, self.action_space.high)
 
         # 2. Train all victims (logs to Sacred tracker if attached)
         results = self._victim_population.run_experiments(self._victim_train_episodes)
 
         # 3. Metrics and reward
         if self._encoder is not None:
-            obs = self._encoder.encode(results, self._get_env_dynamics())
+            obs = self._encoder.encode(results, self._attacker_context())
             trace_acc = self._encoder.compute_reward(results, self._target)
             traj_acc = float(np.mean([
                 accuracy_from_trajectories(r.get('trajectories', []), self._target)
@@ -206,11 +221,19 @@ class AttackEnvironment(Env):
             greedy = np.asarray(algo.get_greedy_actions())
             _, acc, _, _ = Attack_Done_Identify(self._target.copy(), algo.get_policy_matrix())
             accs.append(acc)
-            goal = int(np.ravel_multi_index((env.shape[0] - 1, 0), env.shape))
-            want = greedy_path(env.INIT_T, tgt_actions, 0, goal)
-            got = greedy_path(env.T, greedy, 0, goal)
-            matches.append(float(got == want))
-        return {'greedy_accuracy': float(np.mean(accs)), 'path_match': float(np.mean(matches))}
+            match = env.oracle_route_match(tgt_actions, greedy) if hasattr(env, 'oracle_route_match') else None
+            if match is not None:
+                matches.append(float(match))
+        return {'greedy_accuracy': float(np.mean(accs)),
+                'path_match': float(np.mean(matches)) if matches else 0.0}
+
+    def _attacker_context(self):
+        """The non-behaviour part of the attacker's observation (see obs_dynamics)."""
+        if self._obs_dynamics == "env":
+            return self._get_env_dynamics()
+        if self._obs_dynamics == "actions":
+            return self._sent.flatten().copy()
+        return None
 
     def _get_env_dynamics(self) -> np.ndarray:
         return self._victim_population.get_env_dynamics().flatten()

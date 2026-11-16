@@ -133,51 +133,69 @@ class AutoEncoder():
         return load_model
 
 
-def default_ae_name(rows: int, cols: int) -> str:
-    """File stem (under ae/models/) of the trace AE for a rows x cols grid."""
-    return "real_traces" if (rows, cols) == (4, 4) else f"real_traces_{rows}x{cols}"
+def default_ae_name(env) -> str:
+    """File stem (under ae/models/) of the trace AE for this environment."""
+    shape = getattr(env, 'shape', None)
+    if type(env).__name__ == 'Grid3D' and shape is not None:
+        rows, cols = shape
+        return "real_traces" if (rows, cols) == (4, 4) else f"real_traces_{rows}x{cols}"
+    return f"real_traces_{type(env).__name__.lower()}_{int(env.nS)}s{int(env.nA)}a"
+
+
+def _scale(x, bounds):
+    """Map x from [low, high] to [-1, 1]; unchanged if bounds is None."""
+    if bounds is None:
+        return x
+    low, high = bounds
+    return (np.asarray(x, dtype=np.float64) - (low + high) / 2.0) / ((high - low) / 2.0)
 
 
 class AEObservationEncoder(Encoder):
-    """Replicates main-branch state: AE(behavior_trace)(5D) + altitude(nS D).
+    """Observation = AE(behaviour trace) + a context vector, per victim.
 
-    Encodes each victim's behavior_trace through the pre-trained AutoEncoder,
-    then concatenates with the env dynamics (altitude) passed in at encode time.
-    State dim = (5 + dynamics_dim) * num_victims — matches main's 21D for 1 victim.
+    The behaviour trace (last action the victim took in each state) is compressed by
+    a pre-trained AutoEncoder. The context vector is whatever the attack environment
+    passes at encode time: the running sum of the attacker's own perturbations
+    (default), the environment's dynamics vector (legacy), or nothing.
+
+    Nothing here is specific to one environment: the number of states, the number of
+    actions, the embedding size and the hidden width are read from the checkpoint.
 
     Args:
-        dynamics_dim: Size of env dynamics vector (nS for Grid3D = 16).
-        model_path: Path to pre-trained AE weights (without _AutoEncoder suffix).
+        n_states: Number of victim states (length of the behaviour trace).
+        context_dim: Length of the context vector appended to the embedding (0 = none).
+        model_path: Path to pre-trained AE weights.
         num_victims: Number of victim agents K.
+        context_bounds: (low, high) to scale the context to [-1, 1], or None.
+        initial_context: Context for the first observation of an episode; if None the
+            first observation is all zeros.
     """
 
     EMBEDDING_SIZE = 5
 
-    def __init__(self, dynamics_dim: int, model_path: str, num_victims: int = 1,
-                 normalize_dynamics: bool = False, initial_dynamics: Optional[np.ndarray] = None):
-        self._dynamics_dim = dynamics_dim
+    def __init__(self, n_states: int, context_dim: int, model_path: str, num_victims: int = 1,
+                 context_bounds=None, initial_context: Optional[np.ndarray] = None):
+        self._n_states = n_states
+        self._context_dim = context_dim
         self._num_victims = num_victims
-        # normalize_dynamics: feed altitude as (alt - 5) / 5 in [-1, 1] instead of raw [0, 10]
-        self._normalize = normalize_dynamics
-        # initial_dynamics: unperturbed altitude, used for the first observation of an episode
-        self._initial_dynamics = None if initial_dynamics is None else np.asarray(initial_dynamics).flatten()
+        self._bounds = context_bounds
+        self._initial_context = None if initial_context is None else np.asarray(initial_context).flatten()
 
-        # Embedding size and hidden width are read from the checkpoint, so AEs trained
-        # for other grid sizes (ae/train_ae.py --grid_size N) load without extra flags.
         sd = torch.load(model_path, map_location=device, weights_only=True)
         emb = sd['encoder.fc3.weight'].shape[0]
         hidden = sd['encoder.fc1.weight'].shape[0]
-        if sd['encoder.fc1.weight'].shape[1] != dynamics_dim * 2:
+        n_classes = sd['decoder.fc2.weight'].shape[0]   # victim actions + 1 ("not visited yet")
+        if sd['encoder.fc1.weight'].shape[1] != n_states * 2:
             raise ValueError(
                 f"AE at {model_path} was trained for {sd['encoder.fc1.weight'].shape[1] // 2} states, "
-                f"but this grid has {dynamics_dim}. Train one with: "
-                f"python -m ae.train_ae --grid_size <N>")
+                f"but this environment has {n_states}. Train one with: python -m ae.train_ae")
         self.EMBEDDING_SIZE = emb
+        self._unvisited = n_classes - 1
         self._ae = AutoEncoder(
-            enc_in_size=dynamics_dim * 2,  # behavior_trace is (nS, 2), flattened = nS*2
+            enc_in_size=n_states * 2,  # behavior_trace is (nS, 2), flattened = nS*2
             enc_out_size=emb,
             dec_in_size=emb + 1,
-            dec_out_size=5,
+            dec_out_size=n_classes,
             lr=0.001,
             hidden=hidden,
         )
@@ -185,62 +203,63 @@ class AEObservationEncoder(Encoder):
 
     @classmethod
     def from_population(cls, population, model_path: Optional[str] = None,
-                        normalize_dynamics: bool = False) -> 'AEObservationEncoder':
+                        context_dim: Optional[int] = None, context_bounds=None,
+                        initial_context: Optional[np.ndarray] = None) -> 'AEObservationEncoder':
         """Build with dimensions inferred from the victim population."""
+        env = population.env
         if model_path is None:
             here = os.path.dirname(os.path.abspath(__file__))
-            # Default: AE retrained on real victim behaviour traces (ae/train_ae.py),
-            # 72% reconstruction vs 47% for the original 340240_f-o_AutoEncoder_SftMx.
-            rows, cols = population.env.shape
-            model_path = os.path.join(here, "models", default_ae_name(rows, cols) + "_AutoEncoder")
-            if not os.path.exists(model_path) and (rows, cols) == (4, 4):
+            model_path = os.path.join(here, "models", default_ae_name(env) + "_AutoEncoder")
+            if not os.path.exists(model_path) and default_ae_name(env) == "real_traces":
                 model_path = os.path.join(here, "models", "340240_f-o_AutoEncoder_SftMx")
         return cls(
-            dynamics_dim=population.env.dynamics_dim,
+            n_states=int(env.nS),
+            context_dim=env.dynamics_dim if context_dim is None else context_dim,
             model_path=model_path,
             num_victims=population.num_victims,
-            normalize_dynamics=normalize_dynamics,
-            initial_dynamics=population.env.get_dynamics() if normalize_dynamics else None,
+            context_bounds=context_bounds,
+            initial_context=initial_context,
         )
 
     @property
     def embedding_dim(self) -> int:
-        return (self.EMBEDDING_SIZE + self._dynamics_dim) * self._num_victims
+        return (self.EMBEDDING_SIZE + self._context_dim) * self._num_victims
 
     def encode(self, victim_data: List[Dict], env_dynamics: Optional[np.ndarray] = None) -> np.ndarray:
-        """Encode victim data into observation using AE + altitude.
+        """Encode victim data into the attacker's observation.
 
         Args:
             victim_data: List of per-victim result dicts (behavior_trace required).
-            env_dynamics: Env altitude vector (nS,). Zeros if None.
+            env_dynamics: The context vector (name kept from the Encoder interface).
+                Zeros if None.
         """
-        dyn = (
-            np.asarray(env_dynamics).flatten()[:self._dynamics_dim]
+        ctx = (
+            np.asarray(env_dynamics, dtype=np.float64).flatten()[:self._context_dim]
             if env_dynamics is not None
-            else np.zeros(self._dynamics_dim)
+            else np.zeros(self._context_dim)
         )
-        if self._normalize:
-            dyn = (dyn - 5.0) / 5.0
+        if env_dynamics is not None:
+            ctx = _scale(ctx, self._bounds)
 
         parts = []
         for i in range(self._num_victims):
             data = victim_data[i] if i < len(victim_data) else {}
             trace = np.asarray(
                 data.get('behavior_trace', np.column_stack(
-                    [np.arange(self._dynamics_dim), -np.ones(self._dynamics_dim)]))
+                    [np.arange(self._n_states), -np.ones(self._n_states)]))
             ).astype(np.float64).copy()
-            # Unvisited states are -1 in the trace; the AE was trained with class 4.
-            trace[trace[:, 1] < 0, 1] = 4
-            trace = trace.reshape(1, -1)  # (1, nS*2) — AE encoder does view(-1, 32)
-            ae_emb = self._ae.Policy_Embedding(trace)[-1]  # (5,)
-            parts.append(np.concatenate([ae_emb, dyn]))
+            # Unvisited states are -1 in the trace; the AE uses the last class for them.
+            trace[trace[:, 1] < 0, 1] = self._unvisited
+            trace = trace.reshape(1, -1)  # (1, nS*2)
+            ae_emb = self._ae.Policy_Embedding(trace)[-1]
+            parts.append(np.concatenate([ae_emb, ctx]))
 
         return np.concatenate(parts)
 
     def get_initial_embedding(self) -> np.ndarray:
-        if self._initial_dynamics is not None:
-            # All states unvisited + the unperturbed altitude
-            return self.encode([{} for _ in range(self._num_victims)], self._initial_dynamics)
+        if self._initial_context is not None:
+            # All states unvisited + the starting context
+            return self.encode([{} for _ in range(self._num_victims)], self._initial_context)
         return np.zeros(self.embedding_dim)
 
 

@@ -19,36 +19,47 @@ import torch
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from ae.ae import AutoEncoder, default_ae_name, device
-from envs.env3D_4x4 import Grid3D
-from victim.victim_Q import VictimQLearning
-
-UNVISITED = 4  # class index used for "state not visited yet" (trace value -1)
+from registry import ENV_MAP, VICTIM_ALGO_MAP
 
 
-def trace_to_actions(trace: np.ndarray) -> np.ndarray:
+def trace_to_actions(trace: np.ndarray, unvisited: int) -> np.ndarray:
+    """Per-state last action; states not visited yet (-1) get the extra class `unvisited`."""
     a = trace[:, 1].copy()
-    a[a < 0] = UNVISITED
+    a[a < 0] = unvisited
     return a
 
 
-def collect(n_attack_episodes: int, steps: int, victim_eps: int, seed: int, shape=(4, 4)) -> np.ndarray:
-    """Return an (N, nS) int array of per-state last actions (4 = unvisited)."""
+def collect(env, victim_class, n_attack_episodes: int, steps: int, victim_eps: int, seed: int) -> np.ndarray:
+    """Return an (N, nS) int array of per-state last actions (nA = unvisited).
+
+    Works for any VictimEnvironment: perturbations are drawn from env.perturbation_space.
+    Half the attack episodes random-walk; the other half steer toward a random point
+    inside env.dynamics_bounds() (or hold one random direction when there are no bounds),
+    so the traces cover victims adapting to very different dynamics.
+    """
     rng = np.random.default_rng(seed)
     np.random.seed(seed)
-    env = Grid3D(grid_dimensions=tuple(shape))
+    space = env.perturbation_space
+    low, high = np.asarray(space.low, dtype=float), np.asarray(space.high, dtype=float)
+    bounds = env.dynamics_bounds() if hasattr(env, 'dynamics_bounds') else None
+    same_dim = env.dynamics_dim == int(np.prod(space.shape))
     out = []
     for ep in range(n_attack_episodes):
         env.reset_dynamics()
-        victim = VictimQLearning(env.nS, env.nA, memory_size=50)
-        goal_alt = rng.uniform(0, 10, size=env.nS) if ep % 2 == 0 else None
+        victim = victim_class(env.nS, env.nA, memory_size=50)
+        steer = ep % 2 == 0
+        goal = rng.uniform(bounds[0], bounds[1], size=space.shape) if (steer and bounds and same_dim) else None
+        direction = rng.choice([-1.0, 0.0, 1.0], size=space.shape)
         for _ in range(steps):
-            if goal_alt is not None:
-                act = np.clip(goal_alt - env.altitude.flatten(), -1, 1)
+            if goal is not None:
+                act = np.clip(goal - np.asarray(env.get_dynamics()).reshape(space.shape), low, high)
+            elif steer:
+                act = np.clip(direction * high, low, high)
             else:
-                act = rng.uniform(-1, 1, size=env.nS)
+                act = rng.uniform(low, high, size=space.shape)
             env.apply_perturbation(act)
             victim.train(env, victim_eps)
-            out.append(trace_to_actions(victim.get_behavior_trace()))
+            out.append(trace_to_actions(victim.get_behavior_trace(), env.nA))
     return np.asarray(out, dtype=np.int64)
 
 
@@ -71,7 +82,9 @@ def recon_accuracy(ae: AutoEncoder, actions: np.ndarray) -> float:
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--out', default=None, help='default: ae/models/real_traces[_NxN]')
-    ap.add_argument('--grid_size', type=int, default=4, help='square grid N x N')
+    ap.add_argument('--env', default='grid3d', choices=sorted(ENV_MAP), help='victim environment')
+    ap.add_argument('--victim_algo', default='qlearning', choices=sorted(VICTIM_ALGO_MAP))
+    ap.add_argument('--grid_size', type=int, default=4, help='grid3d only: square grid N x N')
     ap.add_argument('--shape', type=int, nargs=2, default=None, metavar=('ROWS', 'COLS'),
                     help='rectangular grid; overrides --grid_size')
     ap.add_argument('--embedding', type=int, default=None, help='default: 5 for 4x4, else nS // 3')
@@ -87,24 +100,29 @@ def main():
     args = ap.parse_args()
 
     torch.manual_seed(args.seed)
-    rows, cols = args.shape or (args.grid_size, args.grid_size)
-    is_4x4 = (rows, cols) == (4, 4)
+    if args.env == 'grid3d':
+        env = ENV_MAP['grid3d'](grid_dimensions=tuple(args.shape or (args.grid_size, args.grid_size)))
+    else:
+        env = ENV_MAP[args.env]()
+    nS, nA = int(env.nS), int(env.nA)
+    small = nS <= 16
     if args.out is None:
-        args.out = os.path.join('ae', 'models', default_ae_name(rows, cols))
-    emb = args.embedding or (5 if is_4x4 else rows * cols // 3)
-    hidden = args.hidden or (36 if is_4x4 else 2 * rows * cols)
-    data = collect(args.attack_episodes, args.steps, args.victim_eps, args.seed, (rows, cols))
+        args.out = os.path.join('ae', 'models', default_ae_name(env))
+    emb = args.embedding or (5 if small else nS // 3)
+    hidden = args.hidden or (36 if small else 2 * nS)
+    data = collect(env, VICTIM_ALGO_MAP[args.victim_algo], args.attack_episodes, args.steps,
+                   args.victim_eps, args.seed)
     perm = np.random.default_rng(args.seed).permutation(len(data))
     n_val = len(data) // 10
     val, train = data[perm[:n_val]], data[perm[n_val:]]
     print(f"collected {len(data)} traces  train={len(train)} val={len(val)}  "
-          f"unvisited frac={np.mean(data == UNVISITED):.3f}")
+          f"unvisited frac={np.mean(data == nA):.3f}")
 
-    nS = data.shape[1]
-    ae = AutoEncoder(enc_in_size=nS * 2, enc_out_size=emb, dec_in_size=emb + 1, dec_out_size=5,
+    ae = AutoEncoder(enc_in_size=nS * 2, enc_out_size=emb, dec_in_size=emb + 1, dec_out_size=nA + 1,
                      lr=args.lr, hidden=hidden)
-    majority = max(np.mean(val == k) for k in range(5))
-    print(f"grid {rows}x{cols}  embedding={emb}  hidden={hidden}  majority-class baseline={majority:.3f}")
+    majority = max(np.mean(val == k) for k in range(nA + 1))
+    print(f"{type(env).__name__} nS={nS} nA={nA}  embedding={emb}  hidden={hidden}  "
+          f"majority-class baseline={majority:.3f}")
     if args.init:
         ae.load(args.init)
         print(f"init from {args.init}: val recon acc = {recon_accuracy(ae, val):.3f}")

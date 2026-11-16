@@ -88,10 +88,14 @@ class VictimSystem:
         ]
 
         # Target policy for accuracy computation
-        self._target = create_target_policy(
-            self._ref_env.nS, self._ref_env.nA, path_type=target_path_type,
-            shape=getattr(self._ref_env, 'shape', None),
-        )
+        self._target = None
+        if hasattr(self._ref_env, 'make_target_policy'):
+            self._target = self._ref_env.make_target_policy(target_path_type)
+        if self._target is None:
+            self._target = create_target_policy(
+                self._ref_env.nS, self._ref_env.nA, path_type=target_path_type,
+                shape=getattr(self._ref_env, 'shape', None),
+            )
 
     def _create_victims(self) -> None:
         """Create K independent (env, algo) pairs with different seeds."""

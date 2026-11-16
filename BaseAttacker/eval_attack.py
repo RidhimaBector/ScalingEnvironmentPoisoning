@@ -10,6 +10,7 @@ Usage (from BaseAttacker/):
     python eval_attack.py --run_dir <dir> --encoder_mode ae --ae_model_path ae/models/real_traces_AutoEncoder
 """
 import argparse
+import json
 import os
 
 os.environ.setdefault('SACRED_FILE_ONLY', '1')  # importing main must not open a Mongo run
@@ -91,16 +92,30 @@ def main():
     ap.add_argument('--lstm_no_dynamics', action='store_true')
     ap.add_argument('--td3', action='store_true')
     ap.add_argument('--normalize_obs', action='store_true')
+    ap.add_argument('--obs_dynamics', default=None, choices=['actions', 'env', 'none'],
+                    help='default: from the run, else "env" (runs before 2026-11-17)')
     a = ap.parse_args()
+
+    # Settings saved by main.py next to the checkpoints; command-line flags win.
+    cfg_path = os.path.join(a.run_dir, 'run_config.json')
+    saved = json.load(open(cfg_path)) if os.path.exists(cfg_path) else {}
+    a.obs_dynamics = a.obs_dynamics or saved.get('obs_dynamics') or 'env'
+    a.ae_model_path = a.ae_model_path or saved.get('ae_model_path')
+    a.grid_size = a.grid_size or saved.get('grid_size')
+    a.env_shape = a.env_shape or saved.get('env_shape')
+    a.td3 = a.td3 or bool(saved.get('td3'))
+    a.normalize_obs = a.normalize_obs or bool(saved.get('normalize_obs'))
 
     class Args: pass
     args = Args()
-    args.__dict__.update(num_victims=1, victim_algo='qlearning', env='grid3d', grid_size=a.grid_size,
+    args.__dict__.update(num_victims=1, victim_algo=saved.get('victim_algo') or 'qlearning',
+                         env=saved.get('env') or 'grid3d', env_kwargs=saved.get('env_kwargs'),
+                         grid_size=a.grid_size,
                          env_shape=a.env_shape, victim_alpha=0.1, seed=0, encoder_mode=a.encoder_mode,
                          ae_model_path=a.ae_model_path, victim_n_episodes=a.victim_n_episodes,
                          attack_algo='ddpg', reward_mode='trace', expl_noise=0.0,
                          lstm_append_dynamics=not a.lstm_no_dynamics,
-                         td3=a.td3, normalize_obs=a.normalize_obs)
+                         td3=a.td3, normalize_obs=a.normalize_obs, obs_dynamics=a.obs_dynamics)
 
     pop = build_population(args, PrivacyMode.FULL_BLACKBOX)
     obs_enc, translator = build_encoders(pop, args)
@@ -110,6 +125,27 @@ def main():
     algo.eval()
 
     venv = pop.env
+    if not hasattr(venv, 'INIT_T'):
+        # Any non-grid environment: score only, through the environment interface.
+        tgt = pop.target
+        mask, tgt_a = tgt.sum(1) > 0, np.argmax(tgt, axis=1)
+        nat = np.zeros(a.episodes); acc = np.zeros((a.episodes, a.max_timesteps)); hit = np.zeros_like(acc)
+        for ep in range(a.episodes):
+            np.random.seed(2000 + ep)
+            pop.reset()
+            pop.algorithm.train(venv, a.victim_n_episodes * a.max_timesteps)
+            nat[ep] = float(venv.oracle_route_match(tgt_a, pop.algorithm.get_greedy_actions()) or 0.0)
+            obs, _ = env.reset()
+            for t in range(a.max_timesteps):
+                obs, _, _, _, _ = env.step(translator.translate(algo.select_on_policy_action(np.array(obs))))
+                g = np.asarray(pop.algorithm.get_greedy_actions())
+                acc[ep, t] = np.mean(g[mask] == tgt_a[mask])
+                hit[ep, t] = float(venv.oracle_route_match(tgt_a, g) or 0.0)
+        print(f"environment           : {type(venv).__name__}  victim: {args.victim_algo}")
+        print(f"natural victims on target route: {int(nat.sum())}/{a.episodes}")
+        print(f"exact target path at final attack step: {int(hit[:, -1].sum())}/{a.episodes} eval episodes")
+        print(f"greedy-acc  mean over last 5 steps: {acc[:, -5:].mean():.3f}")
+        return
     shape = venv.shape
     goal = int(np.ravel_multi_index((shape[0] - 1, 0), shape))
     tgt_actions = np.argmax(pop.target, axis=1)

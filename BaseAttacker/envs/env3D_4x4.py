@@ -391,6 +391,19 @@ class Grid3D(VictimEnvironmentABC):
         self._T = value
         self._T_cdf = np.cumsum(value, axis=2)
 
+    def dynamics_bounds(self):
+        return (0.0, 10.0)
+
+    def make_target_policy(self, path_type: str = "Mp"):
+        from envs.target_def import create_target_policy
+        return create_target_policy(self.nS, self.nA, path_type=path_type, shape=self.shape)
+
+    def oracle_route_match(self, target_actions, greedy_actions):
+        from utils.utils_attack import greedy_path
+        want = greedy_path(self.INIT_T, target_actions, 0, self._goal_state)
+        got = greedy_path(self.T, greedy_actions, 0, self._goal_state)
+        return float(got == want)
+
     @property
     def dynamics_dim(self) -> int:
         """Number of states (one altitude value per cell)."""

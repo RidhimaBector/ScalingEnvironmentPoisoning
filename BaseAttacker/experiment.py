@@ -142,6 +142,11 @@ def default_config():
     # Attack reward: "trace" (last action per state) or "traj" (action frequencies
     # over the victim's observed trajectories; blackbox-safe and less noisy)
     reward_mode = "traj"
+    # What the attacker sees besides victim behaviour: "actions" = running sum of its own
+    # perturbations (default, no read access to the environment), "env" = the
+    # environment's dynamics vector (how all runs before 2026-11-17 were done), "none".
+    obs_dynamics = "actions"
+    env_kwargs = None      # extra constructor arguments for the environment class
     ae_model_path = None   # None = ae/models/<default>; else path to AE weights
     lstm_append_dynamics = True  # lstm mode: append current altitude (16D) to the 128D embedding
     td3 = False            # twin critics + target smoothing + delayed actor updates
