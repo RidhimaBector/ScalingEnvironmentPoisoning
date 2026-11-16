@@ -26,11 +26,15 @@ CELL=$((T / NSEEDS)); SEED=$((T % NSEEDS))
 E=$((CELL / 9)); V=$(((CELL / 3) % 3)); A=$((CELL % 3))
 TABULAR=(qlearning sarsa reinforce)
 NEURAL=(dqn vpg a2c)
+PUSH="explore_push_prob=0.2 push_cem=True cem_floor=-1"
 
 if [ $E -eq 0 ]; then
   SIZES=(4 5 6); EPISODES=(6000 12000 12000)
   NAME=s27_grid${SIZES[$V]}_${TABULAR[$A]}
   ARGS="env=grid3d grid_size=${SIZES[$V]} victim_algo=${TABULAR[$A]} max_episodes=${EPISODES[$V]}"
+  # Larger grids: push in 40% of episodes with a larger batch and slower step (tuned in
+  # sweep_grid_sizes.sh; the 20% setting never reached the exact route on 6x6).
+  [ ${SIZES[$V]} -gt 4 ] && PUSH="explore_push_prob=0.4 push_cem=True cem_floor=-1 cem_batch=32 cem_elite=8 cem_lr=0.3"
 elif [ $E -eq 1 ]; then
   SIZES=(8 12 16)
   NAME=s27_ring${SIZES[$V]}_${TABULAR[$A]}
@@ -40,5 +44,4 @@ else
   NAME=s27_lander${KICKS[$V]}_${NEURAL[$A]}
   ARGS="lander env_args=initial_random:${KICKS[$V]} victim_algo=${NEURAL[$A]}"
 fi
-train_and_score ${NAME}_s${SEED} $ARGS obs_dynamics=actions \
-    explore_push_prob=0.2 push_cem=True cem_floor=-1 seed=$SEED
+train_and_score ${NAME}_s${SEED} $ARGS obs_dynamics=actions $PUSH seed=$SEED
