@@ -49,6 +49,12 @@ if [ $E -eq 0 ]; then
   SIZES=(4 5 6); EPS=(6000 12000 12000)
   ALGO=${TAB_ALGOS[$A]}; NAME=s27_grid${SIZES[$V]}_${ALGO}
   ARGS="env=grid3d grid_size=${SIZES[$V]} victim_algo=$ALGO encoder_mode=ae reward_mode=trace max_episodes=${EPS[$V]}"
+  # Larger grids: push in 40% of episodes with a larger batch and slower step. In the
+  # tuning sweep this put the exact route on 2 of 4 seeds on both 5x5 and 6x6; the
+  # 20% setting got 0 of 4 on 6x6.
+  if [ ${SIZES[$V]} -gt 4 ]; then
+    PUSH="explore_push_prob=0.4 push_cem=True cem_floor=-1 cem_batch=32 cem_elite=8 cem_lr=0.3"
+  fi
 elif [ $E -eq 1 ]; then
   SIZES=(8 12 16)
   ALGO=${TAB_ALGOS[$A]}; NAME=s27_ring${SIZES[$V]}_${ALGO}
