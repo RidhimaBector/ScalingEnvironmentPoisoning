@@ -1,45 +1,24 @@
+# Hyperparameters internal to the learners. Experiment settings (which environment,
+# which victim, how long, ...) are in defaults.py.
+
+# Online trajectory encoder (encoder_mode="lstm")
 LSTM_ENCODER:
-  EMBEDDING_DIM: 128    # LSTM hidden size = output embedding dimension
-  SEQ_LEN: 50           # trajectory window length per encoder chunk (was 1000 — overkill for 36-state grid)
-  MEMORY_SIZE: 500      # capacity of each victim's circular trajectory buffer (scaled with SEQ_LEN)
-  N_EPOCHS: 2           # training epochs per train_encoder() call
-  LR: 0.001             # SGD learning rate
+  EMBEDDING_DIM: 128    # LSTM hidden size = embedding dimension
+  SEQ_LEN: 50           # trajectory window that is embedded
+  MEMORY_SIZE: 500      # transitions kept per victim
+  N_EPOCHS: 2           # training epochs per attack episode
+  LR: 0.001
 
-AE:
-  EMBEDDING_SIZE: 5
-  SEQ_LEN: 5
-  LEN_TRAJECTORY: 5
-  MEMORY_SIZE: 50
-  DEFAULT_KWARGS:
-    input_size: 2
-    hidden_size: 128
-    output_size: 16  # EMBEDDING_SIZE
-    learning_rate: 0.001
-    num_epochs: 10
-  ENV_KWARGS:
-    enc_in_size: 2
-    enc_out_size: 16  # EMBEDDING_SIZE
-    enc_num_layer: 1
-    dec_fc_in_size: 17  # enc_out_size + 1
-    dec_lstm_in_size: 18  # enc_out_size + 2
-    dec_lstm_num_layer: 1
-    n_epochs: 2
-    lr: 0.001
-
+# Tabular victims (Q-learning, SARSA, REINFORCE)
 VICTIM:
-  TMAX: 100
   DEFAULT_KWARGS:
-    discount_factor: 1.0  # From victim_Q.py default arg
-    alpha: 0.1  # From victim_Q.py default arg
-    epsilon: 0.1  # From victim_Q.py default arg
-    # Commenting out unused params
-    # max_epsilon: 1.0
-    # min_epsilon: 0.01
-    # decay_rate: 0.01
+    discount_factor: 1.0
+    alpha: 0.1
+    epsilon: 0.1
 
 ATTACK:
+  # DDPG attacker; values set in defaults.py take precedence
   DEFAULT_KWARGS:
-    seed: 0
     hidden1: 400
     hidden2: 300
     init_w: 0.003
@@ -53,7 +32,7 @@ ATTACK:
     discount: 0.9
     epsilon_divisor: 1000
     updates_per_step: 1
-    is_training: true
+  # PPO attacker (experimental)
   PPO_KWARGS:
     hidden1: 256
     hidden2: 256
@@ -68,20 +47,3 @@ ATTACK:
     entropy_coef: 0.01
     value_loss_coef: 0.5
     rollout_size: 256
-
-experiment:
-  privacy_mode: "partial_blackbox"  # Can be: "full_whitebox", "partial_blackbox", or "full_blackbox"
-
-# Collective attack settings (multi-victim)
-# Based on "Poisoning the Well: Can We Simultaneously Attack a Group of Learning Agents?" (ALA 2023)
-COLLECTIVE:
-  NUM_VICTIMS: 5  # Number of independent victim agents (K)
-  ENCODER_TYPE: "vae_barycenter"  # Can be: "vae_barycenter", "mean_embedding", "concat_embedding", "mean_behavior"
-  BASE_SEED: 0  # Base random seed (victim k gets seed BASE_SEED + k)
-  VAE:
-    LATENT_SIZE: 8  # Dimension of VAE latent space
-    HIDDEN_SIZE: 128  # Hidden layer size for VAE encoder/decoder
-    LEARNING_RATE: 0.001  # Learning rate for VAE training
-    BETA: 1.0  # KL divergence weight (beta-VAE)
-    PRETRAIN_EPOCHS: 20  # Number of epochs for VAE pre-training
-    PRETRAIN_SAMPLES: 5000  # Number of synthetic samples for pre-training

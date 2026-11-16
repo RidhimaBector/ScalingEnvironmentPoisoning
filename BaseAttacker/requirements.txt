@@ -1,10 +1,19 @@
-torch>=1.10.0
+# Core
+torch>=1.10
 numpy
+scipy
 gymnasium
 yacs
-pot
-sacred>=0.8.4
-pymongo>=4.6.0
-tensorboardX
-pandas
+pot            # optimal-transport distances (white-box metrics on the grid)
+sacred>=0.8.4  # experiment tracking
+setuptools<81  # sacred 0.8.x still imports pkg_resources
+
+# Figures (plot_grid_attack.py)
 matplotlib
+
+# Tests
+pytest
+
+# Optional
+# pymongo>=4.6   # only if you log to MongoDB (SACRED_MONGO_URL)
+# box2d-py       # only for the LunarLander environment

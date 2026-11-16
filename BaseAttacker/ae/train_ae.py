@@ -1,13 +1,16 @@
-"""Train the behaviour-trace AutoEncoder on REAL victim traces.
+"""Train the behaviour-trace autoencoder for an environment.
 
-The shipped weights (models/340240_f-o_AutoEncoder_SftMx) were trained on
-uniformly random action tables. This script collects behaviour traces from
-Q-learning victims while the altitude is perturbed (random walks plus pushes
-toward random altitude maps), then trains the same AutoEncoder architecture to
-reconstruct the per-state last action from the 5-D embedding.
+The attacker's observation of a tabular victim is a compressed "behaviour trace": for
+every state, the last action the victim was seen taking. This script collects traces
+from victims learning under randomly perturbed dynamics and trains the autoencoder
+that compresses them. You need one per environment and size.
 
-Usage (from BaseAttacker/):
-    python -m ae.train_ae --out ae/models/real_traces --epochs 60
+    python -m ae.train_ae --grid_size 5                 # grid, 5 x 5
+    python -m ae.train_ae --env ring --env_kwargs '{"n_states": 12}'
+    python -m ae.train_ae --env <your-env>
+
+The result is saved under ae/models/ with the name the pipeline looks up by default,
+so no further setting is needed to use it.
 """
 import argparse
 import json

@@ -1,4 +1,9 @@
+"""Behaviour-trace autoencoder and the observation encoder built on it.
 
+A behaviour trace is, for every state, the last action the victim was seen taking
+(or "not visited yet"). The autoencoder compresses it to a few numbers; train one
+for a new environment with `python -m ae.train_ae`.
+"""
 import os
 from typing import Dict, List, Optional
 
@@ -77,46 +82,6 @@ class AutoEncoder():
         self.Encoder = Policy_Representation(enc_in_size, enc_out_size, hidden, hidden).to(device)
         self.Decoder = Policy_Imitation(dec_in_size, dec_out_size, hidden, hidden).to(device)
         self.Model = Encoder_Decoder(self.Encoder, self.Decoder, self.lr).to(device)
-
-    """ Training the Encoder-Decoder network """
-    def Train(self, epoch, n_epoch, n_batch, batch_size):
-
-        self.Model.train()
-        for i_epoch in range(n_epoch):
-
-            total_loss = 0.0 #Assuming always 1 epoch of training at a time
-            for i_batch in range(n_batch):
-
-                n_target_states = 16 #6
-                states = np.tile(np.expand_dims(np.array([0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]), axis=0),(batch_size,1))
-                states = np.expand_dims(states, axis=2)
-                actions = np.random.choice([0,1,2,3,4], size=(batch_size,n_target_states,1), replace=True)
-                batch = np.concatenate((states, actions),2)
-
-                states = torch.FloatTensor(states).to(device) #torch.FloatTensor([states]).view(-1,1).to(device)
-                actions = torch.FloatTensor(actions).to(device) #torch.FloatTensor([actions]).view(-1,1).to(device)
-                batch = torch.FloatTensor(batch).to(device)
-                target = actions.long().reshape(batch_size*n_target_states,1).squeeze(1) #actions.long().view(1,6).squeeze(0)
-
-                """ train """
-                # clear the gradients of all optimized variables
-                self.Model.optimizer.zero_grad()
-                # forward pass: compute predicted outputs by passing inputs to the model
-                output = self.Model(batch, n_target_states, states)
-                # calculate the loss
-                loss = self.Model.criterion(output, target)
-                # backward pass: compute gradient of the loss with respect to model parameters
-                loss.backward()
-                # perform a single optimization step (parameter update)
-                self.Model.optimizer.step()
-                # update running training loss
-                #loss_list.append([epoch, i_batch, loss.item()]) #*state.size(0)
-                total_loss += loss.item()
-                print("Epoch: " + str(epoch) + ", Batch: " + str(i_batch) + ", AE Loss = " + str(loss.item()))
-
-        return total_loss/n_batch
-#             print('Epoch: {} \tTraining Loss: {:.6f}'.format(i_epoch+1, train_loss))
-
 
     """ Embedding using Encoder network """
     def Policy_Embedding(self, victim_transitions: np.ndarray) -> np.ndarray:
@@ -264,45 +229,3 @@ class AEObservationEncoder(Encoder):
             # All states unvisited + the starting context
             return self.encode([{} for _ in range(self._num_victims)], self._initial_context)
         return np.zeros(self.embedding_dim)
-
-
-if __name__ == "__main__":
-
-    """ Intialize AutoEncoder """
-    seed=0
-    torch.manual_seed(seed)
-    np.random.seed(seed)
-
-    ae_enc_in_size = 32 # 12 as 6 target states #SEQ_LEN*2 = 5*2
-    ae_enc_out_size = 5 # EMBEDDING_SIZE = 5
-    ae_dec_in_size = 6 #1+EMBEDDING_SIZE
-    ae_dec_out_size = 5 #action_dim 0,1,2,3,4 - 4 for target states that victim has not visited yet
-
-    ae_args = {
-        "enc_in_size": ae_enc_in_size,
-        "enc_out_size": ae_enc_out_size,
-        "dec_in_size": ae_dec_in_size,
-        "dec_out_size": ae_dec_out_size,
-        "lr": 0.001, #0.001,
-    }
-
-    ae = AutoEncoder(**ae_args)
-    print("AE Initialized")
-
-    epoch = 1
-    n_epoch = 1
-    n_batch = 500
-    batch_size = 256
-    ae_loss_list = []
-    while epoch > 0:
-        ae_loss_list.append([epoch, ae.Train(epoch, n_epoch, n_batch, batch_size)])
-        ae.save(f"./{epoch}")
-        if(epoch % 20 == 0):
-            np.savetxt("AE_loss_buffer.csv", np.array(ae_loss_list), delimiter=",")
-
-        epoch = epoch + 1
-
-    """states = np.expand_dims(np.array([0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]), axis=1)
-    actions = np.random.choice([0,1,2,3,4], size=(16,1), replace=True)
-    victim_transitions = np.concatenate((states, actions),1)
-    ae.Policy_Embedding(victim_transitions)"""

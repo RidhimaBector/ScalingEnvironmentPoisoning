@@ -1,37 +1,26 @@
 #!/bin/bash
-# SLURM array on fir, round 3: one-change-at-a-time ablation around the best round-1
-# config (retrained AE + trace reward, plain DDPG). Round 2 changed everything at once
-# and got worse, so this isolates which change hurts or helps. CPU only.
+# One-change-at-a-time ablation on the 4x4 grid (3000 episodes, 3 seeds each).
+# The base is plain DDPG with the trace reward and no push exploration.
 #
-#   cd ~/scratch/thesis_sep/ScalingEnvironmentPoisoning/BaseAttacker && sbatch run_fir_v3.sh
+#     sbatch --account=<acct> --array=0-17 scripts/slurm/sweep_ablation_4x4.sh
 #
-#SBATCH --account=def-s2ganapa
-#SBATCH --job-name=envpoison
-#SBATCH --array=0-17
+#SBATCH --job-name=ablation4
 #SBATCH --cpus-per-task=1
 #SBATCH --mem=4G
 #SBATCH --time=08:00:00
-#SBATCH --output=logs/fir_%A_%a.out
+#SBATCH --output=logs/%x_%A_%a.out
+source scripts/slurm/common.sh
 
-module load python/3.12
-source ~/scratch/thesis_sep/venv/bin/activate
-export SACRED_FILE_ONLY=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1
-
-BASE="encoder_mode=ae ae_model_path=ae/models/real_traces_AutoEncoder"
-# name, first seed, overrides
+BASE="env=grid3d victim_algo=qlearning encoder_mode=ae obs_dynamics=env max_episodes=3000"
+NOPUSH="explore_push_prob=0 push_cem=False"
 CONFIGS=(
-  "v3_base   3 $BASE reward_mode=trace"
-  "v3_td3    0 $BASE reward_mode=trace td3=True"
-  "v3_norm   0 $BASE reward_mode=trace normalize_obs=True"
-  "v3_push   0 $BASE reward_mode=trace explore_push_prob=0.1"
-  "v3_mix    0 $BASE reward_mode=mix"
-  "v3_noise  0 $BASE reward_mode=trace expl_noise=0.2"
+  "base   reward_mode=trace $NOPUSH"
+  "td3    reward_mode=trace $NOPUSH td3=True"
+  "norm   reward_mode=trace $NOPUSH normalize_obs=True"
+  "push   reward_mode=trace explore_push_prob=0.1 push_cem=False"
+  "mix    reward_mode=mix   $NOPUSH"
+  "noise  reward_mode=trace $NOPUSH expl_noise=0.2"
 )
 CFG=(${CONFIGS[$((SLURM_ARRAY_TASK_ID / 3))]})
-NAME=${CFG[0]}
-SEED=$((CFG[1] + SLURM_ARRAY_TASK_ID % 3))
-MAX_EPISODES=${MAX_EPISODES:-3000}
-
-echo "task $SLURM_ARRAY_TASK_ID: $NAME seed=$SEED"
-python -u main.py with "${CFG[@]:2}" seed=$SEED max_episodes=$MAX_EPISODES \
-    model_dir=results/fir_${NAME}_s${SEED}
+SEED=$((SLURM_ARRAY_TASK_ID % 3))
+train_and_score ablation4_${CFG[0]}_s${SEED} $BASE "${CFG[@]:1}" seed=$SEED

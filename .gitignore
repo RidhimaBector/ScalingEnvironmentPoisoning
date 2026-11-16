@@ -1,46 +1,28 @@
 # Python
 __pycache__/
 *.py[cod]
-*$py.class
 .ruff_cache/
+.pytest_cache/
 
-# Virtual environment
+# Virtual environments
 venv/
 .venv/
-env/
 
 # Experiment outputs (generated at runtime)
 sacred_runs/
 sacred_runs_victims/
 results/
 logs/
-metrics/
-storage/
-R_0818/
 
-# Data files
+# Local data dumps
 *.csv
 *.pkl
 *.npy
-*.json
 
-# Images (figures/ directory is tracked; loose image files elsewhere are not)
-images/
-
-# macOS
+# Editors and OS
 .DS_Store
-
-# IDE
 .idea/
 .vscode/
-
-# Data files
-*.csv
-*.pkl
-*.npy
-*.json
-
 .claude
-/docs/
-/docs/**
 .cursor/
+/docs/

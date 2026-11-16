@@ -1,92 +1,278 @@
-# ScalingEnvironmentPoisoning
+# Scaling Environment Poisoning
 
-Environment poisoning attacks against RL agents. Implements the attacker from:
+Black-box **environment-poisoning attacks** on reinforcement learners.
 
-2. Create virtual environment 
-    1. Open Anaconda Prompt
-    2. Run command “conda create -n envPois python=3.10” to create environment with name “envPois”.
-    3. Run command “conda activate envPois” to activate the environment
+An attacker cannot touch the victim. It can only nudge the victim's *environment* and
+watch how the victim behaves. By learning which nudges change the victim's behaviour
+in which way, it steers the victim into a behaviour of the attacker's choosing.
 
-3. Install required packages in the virtual environment
-    1. conda install spyder
-    2. conda install -c pytorch pytorch
-    3. conda install -c conda-forge numpy
-    4. conda install -c conda-forge gym
-    5. conda install -c conda-forge pot
-    6. conda install -c conda-forge tensorboardx
-    7. conda install -c conda-forge yacs
+This repository builds on *Spiking Pitch Black: Poisoning an Unknown Environment to
+Attack Unknown Reinforcement Learners* (AAMAS 2022).
 
-> "Spiking Pitch Black: Poisoning an Unknown Environment to Attack Unknown Reinforcement Learners" (AAMAS 2022)
+It is written for two uses:
 
-## Setup
+1. **Reproducing** the experiments (grid world, ring, LunarLander).
+2. **Extending** them: plug in your own environment, victim learner, attacker or
+   behaviour encoder. The attack pipeline knows nothing about any particular game.
 
+---
 
-Requires Python 3.10+ and MongoDB.
+## How it works
 
-### 1. Python environment
+```
+                 one attack episode (fresh victim, unpoisoned environment)
+        ┌──────────────────────────────────────────────────────────────────┐
+        │                                                                  │
+        │   attacker observes ──► attacker sends a ──► environment's       │
+        │   (behaviour embedding   perturbation        dynamics change     │
+        │    + its own actions)                              │             │
+        │          ▲                                         ▼             │
+        │   attacker is rewarded ◄── victim's behaviour ◄── victim         │
+        │   (how close behaviour      is observed            relearns      │
+        │    is to the target)                                             │
+        │                         repeated for 15 attack steps             │
+        └──────────────────────────────────────────────────────────────────┘
+                 after each episode the attacker learns from its replay buffer
+```
+
+- The **victim** is an ordinary RL agent (Q-learning, SARSA, REINFORCE, DQN, VPG, A2C).
+  It is never modified; it learns correctly in the world it is given.
+- The **attacker** (DDPG) outputs a perturbation vector. It is not told what the
+  numbers mean. It sees an *embedding of the victim's behaviour* and the running sum
+  of its own past actions; never the victim's parameters or the environment's rules.
+- **Push exploration** makes the search tractable: in some episodes every perturbation
+  dimension is driven one way for the whole episode, and the directions that earned
+  the most reward are sampled more often afterwards.
+- **Evaluation** uses ground truth the attacker never saw: fresh victims, compared
+  with and without the attack.
+
+## Install
+
+Python 3.10 or newer.
 
 ```bash
 python -m venv venv
-source venv/bin/activate       # Windows: venv\Scripts\activate
-cd BaseAttacker
-pip install -r requirements.txt
+source venv/bin/activate
+pip install -r BaseAttacker/requirements.txt
 ```
 
-### 2. MongoDB
+LunarLander additionally needs Box2D (`pip install swig box2d-py`). Everything else
+runs without it.
 
-```bash
-# macOS
-brew tap mongodb/brew && brew install mongodb-community
-brew services start mongodb-community
-
-# Linux (Ubuntu/Debian)
-sudo apt install mongodb
-sudo systemctl start mongodb
-
-# Docker (any platform)
-docker run -d --name mongodb -p 27017:27017 mongo:latest
-```
-
-> **No MongoDB?** Set `SACRED_FILE_ONLY=1` to save results to `sacred_runs/` instead.
-
-## Run
+Check the installation (about 10 seconds):
 
 ```bash
 cd BaseAttacker
-
-# Train with defaults (whitebox encoder, 3 victims, Q-learning, DDPG)
-python main.py
-
-# Common overrides
-python main.py --max_episodes 30000 --model_dir results/my_run
-python main.py --victim_algo sarsa
-python main.py --num_victims 5
-python main.py --attack_algo ppo
-python main.py --encoder legacy --privacy_mode full_blackbox
+python -m pytest tests -q
+python main.py with quick_test
 ```
 
-## Key flags
+## Quick start
 
-| Flag | Default | Options |
-|------|---------|---------|
-| `--encoder` | `whitebox` | `whitebox`, `legacy` |
-| `--victim_algo` | `qlearning` | `qlearning`, `sarsa`, `reinforce` |
-| `--attack_algo` | `ddpg` | `ddpg`, `ppo` |
-| `--num_victims` | `3` | any int |
-| `--max_episodes` | `30000` | any int |
-| `--victim_n_episodes` | `80` | any int |
-| `--privacy_mode` | `partial_blackbox` | `full_whitebox`, `partial_blackbox`, `full_blackbox` |
-
-## GPU
-
-If you get GPU memory errors, set `device = "cpu"` in `main.py`, `ae/ae.py`, and `attack/DDPG.py`.
-
-## Experiment tracking
-
-Experiments are tracked with [Sacred](https://sacred.readthedocs.io) and logged to MongoDB (`localhost:27017/env_poisoning`). View results with [Omniboard](https://github.com/vivekratnavel/omniboard):
+All commands run from `BaseAttacker/`.
 
 ```bash
-npm install -g omniboard
-omniboard -m localhost:27017:env_poisoning
-# open http://localhost:9000
+# Train an attacker on the 4x4 grid against a Q-learning victim (about 35 min, 1 CPU)
+python main.py with seed=0 model_dir=results/grid4_s0
+
+# Score it on 20 fresh victims, against a no-attack baseline
+python score_attack.py --run_dir results/grid4_s0
+
+# Draw what it did (grid environments)
+python plot_grid_attack.py --run_dir results/grid4_s0
+```
+
+`score_attack.py` prints one line:
+
+```
+SCORE env=grid3d victim=qlearning | target_match 0.46 -> 0.99 | route 0/10 -> 9/10 | ...
+```
+
+(an actual result, scored with `--episodes 10`)
+
+read as "without the attack → with the attack": `target_match` is the share of target
+states where the victim's preferred action is the attacker's; `route` counts victims
+whose preferred route is exactly the target route.
+
+Other setups are one argument away:
+
+```bash
+python main.py with victim_algo=sarsa
+python main.py with grid_size=6 max_episodes=12000
+python main.py with env=ring env_args=n_states:12 max_episodes=3000
+python main.py with lander                      # LunarLander + DQN victim
+python main.py with lander victim_algo=a2c
+```
+
+Every setting is listed with its default and meaning in
+[`BaseAttacker/defaults.py`](BaseAttacker/defaults.py).
+
+### Experiment tracking
+
+Runs are recorded with [Sacred](https://github.com/IDSIA/sacred): the attacker's run
+under `sacred_runs/`, the victims' under `sacred_runs_victims/`. To use MongoDB
+instead, set `SACRED_MONGO_URL=localhost:27017` (and optionally `SACRED_DB_NAME`).
+Tracking is write-only; nothing in training reads it back.
+
+## Reproducing the experiments
+
+Each sweep is a SLURM array script that trains and then scores every run. Pass your
+own allocation; nothing is hard-coded.
+
+```bash
+cd BaseAttacker && mkdir -p logs
+export VENV=../venv                      # and PYTHON_MODULE=python/3.12 if your cluster needs it
+
+sbatch --account=<acct> --array=0-17 scripts/slurm/sweep_grid4.sh          # 4x4 grid, 18 seeds
+sbatch --account=<acct> --array=0-17 scripts/slurm/sweep_ablation_4x4.sh   # one-change ablation
+sbatch --account=<acct> --array=0-35 scripts/slurm/sweep_grid_sizes.sh     # 5x5, 6x6, 8x8
+sbatch --account=<acct> --array=0-80 scripts/slurm/sweep_3x3x3.sh          # 3 envs x 3 variants x 3 victims
+
+python scripts/collect_scores.py results/s27_* --by cell                   # table of results
+```
+
+Without a cluster, each script's `train_and_score` line shows the exact `main.py`
+settings of a run; start them one at a time.
+
+| Sweep | Runs | Time per run (1 CPU) |
+|---|---|---|
+| `sweep_grid4.sh` | 18 | about 35 min |
+| `sweep_ablation_4x4.sh` | 18 | about 30 min |
+| `sweep_grid_sizes.sh` | 36 | 2 to 5 h |
+| `sweep_3x3x3.sh` | 81 | 10 min (ring) to 21 h (LunarLander) |
+
+Things to know when comparing with reported numbers:
+
+- **Seeds matter.** Training is unstable: on the 4x4 grid roughly half of the seeds
+  end with an attacker that puts most fresh victims on the exact target route, and the
+  rest fail outright. Report all seeds.
+- **Model selection without ground truth.** The attacker's own best 50-episode training
+  reward (`best_avg_reward` in the log) separates working seeds from failed ones, so
+  "train several seeds, keep the highest-reward one" is a legitimate black-box procedure.
+- **The exact-route criterion gets stricter with size.** One wrong state breaks it, so
+  also read `target_match`.
+- Runs are seeded, but results are not bit-identical across machines or library versions.
+
+## Extending
+
+The pipeline is built from four interfaces in [`BaseAttacker/core/`](BaseAttacker/core).
+Implement one, add a line to [`BaseAttacker/registry.py`](BaseAttacker/registry.py),
+and everything else (training, scoring, sweeps) works unchanged.
+
+### Your own environment
+
+Subclass `core.victim_environment.VictimEnvironment` (a gymnasium `Env`).
+[`envs/ring.py`](BaseAttacker/envs/ring.py) is a complete example in 90 lines.
+
+| You implement | Meaning |
+|---|---|
+| `reset()`, `step(action)`, `seed(seed)` | the game the victim plays (gymnasium API) |
+| `observation_space`, `action_space` | discrete actions; states discrete or a vector |
+| `perturbation_space` | what the attacker may send each step (a `Box`) |
+| `apply_perturbation(vector)` | how a perturbation changes the dynamics (cumulative) |
+| `get_dynamics()`, `dynamics_dim`, `reset_dynamics()` | current dynamics as a vector; undo all poisoning |
+| `make_target_policy()` **or** `target_trajectories()` | the behaviour the attacker wants |
+| `oracle_route_match(...)`, `dynamics_bounds()` | optional: ground truth for scoring; bounds |
+
+The target is a per-state table (`make_target_policy`, discrete states) or a recorded
+trajectory (`target_trajectories`, any states).
+
+```python
+# registry.py
+ENV_MAP = _LazyClasses({
+    ...
+    "mygame": "envs.mygame:MyGame",
+})
+```
+
+```bash
+python -m pytest tests/test_interfaces.py -k mygame   # does it honour the contract?
+python -m ae.train_ae --env mygame                    # discrete states: train its behaviour autoencoder
+python main.py with env=mygame                        # attack it
+```
+
+For vector-valued states skip the autoencoder and use the trajectory encoder:
+`python main.py with env=mygame victim_algo=dqn encoder_mode=lstm reward_mode=embedding`.
+
+### Your own victim learner
+
+Subclass `core.victim_algorithm.VictimAlgorithm`:
+
+| You implement | Meaning |
+|---|---|
+| `train(env, num_episodes)` | learn for some episodes |
+| `act(state)`, `reset()` | choose an action; forget everything |
+| `get_trajectories()` | `(prev_state, prev_action, state, action)` tuples since the last call: **this is all a black-box attacker sees** |
+| `get_behavior_trace()`, `get_policy_matrix()` | tabular learners: last action per state; the policy table (evaluation only) |
+| `greedy_actions_for(states)` | non-tabular learners: preferred actions (evaluation only) |
+| `from_env(env, **kwargs)` (classmethod) | optional: build yourself from an environment |
+
+[`victim/victim_qlearning.py`](BaseAttacker/victim/victim_qlearning.py) (tabular) and
+[`victim/victim_pg.py`](BaseAttacker/victim/victim_pg.py) (neural) are short examples.
+Register it in `VICTIM_ALGO_MAP` and run `python main.py with victim_algo=<name>`.
+
+### Your own attacker or encoder
+
+- **Attacker:** subclass `core.attack_algorithm.AttackAlgorithm` (`act`,
+  `store_transition`, `ready_to_train`, `update`, `save`, `load`) and add it to
+  `ATTACK_ALGO_MAP`. [`attack/ddpg.py`](BaseAttacker/attack/ddpg.py) is the reference.
+- **Encoder:** subclass `core.encoder.Encoder` (`encode`, `embedding_dim`,
+  `get_initial_embedding`, `compute_reward`) and add a branch in
+  `builders.build_encoders`. An encoder turns what the victims exposed into the
+  attacker's observation and reward.
+
+### Using the pieces from your own code
+
+```python
+from builders import (resolve_config, build_population, build_encoders,
+                      build_attack_env, build_attack_algo)
+
+cfg = resolve_config({"env": "ring", "victim_algo": "sarsa"})
+population = build_population(cfg)
+obs_encoder, translator = build_encoders(population, cfg)
+attack_env = build_attack_env(population, cfg, obs_encoder)   # a gymnasium Env
+attacker = build_attack_algo(attack_env, cfg)
+
+obs, _ = attack_env.reset()
+obs, reward, _, _, info = attack_env.step(translator.translate(attacker.act(obs)))
+```
+
+## Repository layout
+
+```
+BaseAttacker/
+  main.py               train an attacker
+  score_attack.py       score a trained attacker on fresh victims (any environment)
+  plot_grid_attack.py   figure of an attack on a grid
+  defaults.py           every setting and its default
+  builders.py           build the components from settings
+  registry.py           names -> environment / victim / attacker classes
+  experiment.py         Sacred tracking
+  core/                 the four interfaces
+  envs/                 grid3d, ring, lunar_lander; attack_environment (the attacker's MDP)
+  victim/               Q-learning, SARSA, REINFORCE, DQN, VPG, A2C
+  attack/               DDPG attacker, push exploration, replay buffer, PPO (experimental)
+  ae/                   behaviour encoders: trace autoencoder, trajectory LSTM, white-box
+  agent/                victim population, perturbation dispatch, Sacred trackers
+  utils/metrics.py      accuracy and distance measures
+  config/               hyperparameters internal to the learners
+  scripts/              SLURM sweeps and result collection
+  tests/                interface contract tests and end-to-end smoke tests
+```
+
+## Limitations
+
+- Victims must have **discrete actions**.
+- The trace autoencoder and the trace reward need **discrete states**; for vector
+  states use the trajectory encoder and the embedding reward.
+- An autoencoder is trained **per environment and size**. Those for the shipped
+  environments are in `ae/models/`.
+- The PPO attacker and the white-box encoder run but were not part of the reported
+  experiments.
+
+## Citation
+
+```
+Spiking Pitch Black: Poisoning an Unknown Environment to Attack Unknown
+Reinforcement Learners. AAMAS 2022.
 ```

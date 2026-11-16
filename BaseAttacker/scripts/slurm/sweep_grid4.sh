@@ -1,37 +1,21 @@
 #!/bin/bash
-# SLURM array on fir, round 6: round 5 showed the adaptive push search keeps improving
-# through 3000 episodes, so run the two adaptive-push configs for 6000 episodes
-# (same wall time as before thanks to the faster victim simulation). 2 configs x 6
-# seeds, each evaluated on 20 fresh victims after training. CPU only.
+# Main result on the 4x4 grid: Q-learning victim, DDPG attacker with adaptive push,
+# 6000 attack episodes. One seed per array task.
 #
-#   cd ~/scratch/thesis_sep/ScalingEnvironmentPoisoning/BaseAttacker && sbatch run_fir_v6.sh
+#     sbatch --account=<acct> --array=0-17 scripts/slurm/sweep_grid4.sh
 #
-#SBATCH --account=def-s2ganapa
-#SBATCH --job-name=envpoison
-#SBATCH --array=0-11
+# OBS=env reproduces the first 18 seeds (the attacker also read the altitude map);
+# the default OBS=actions is the stricter setting where it sees only its own actions.
+#
+#SBATCH --job-name=grid4
 #SBATCH --cpus-per-task=1
 #SBATCH --mem=4G
 #SBATCH --time=08:00:00
-#SBATCH --output=logs/fir_%A_%a.out
+#SBATCH --output=logs/%x_%A_%a.out
+source scripts/slurm/common.sh
 
-module load python/3.12
-source ~/scratch/thesis_sep/venv/bin/activate
-export SACRED_FILE_ONLY=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1
-
-AE="encoder_mode=ae ae_model_path=ae/models/real_traces_AutoEncoder reward_mode=trace"
-CONFIGS=(
-  "v6_cem     $AE explore_push_prob=0.2 push_cem=True"
-  "v6_cembc1  $AE explore_push_prob=0.2 push_cem=True bc_weight=1"
-)
-CFG=(${CONFIGS[$((SLURM_ARRAY_TASK_ID / 6))]})
-NAME=${CFG[0]}
-SEED=$((SLURM_ARRAY_TASK_ID % 6))
-MAX_EPISODES=${MAX_EPISODES:-6000}
-
-echo "task $SLURM_ARRAY_TASK_ID: $NAME seed=$SEED"
-python -u main.py with "${CFG[@]:1}" seed=$SEED max_episodes=$MAX_EPISODES \
-    model_dir=results/fir_${NAME}_s${SEED}
-
-echo "### eval ${NAME}_s$SEED"
-python eval_attack.py --run_dir results/fir_${NAME}_s${SEED} --encoder_mode ae \
-    --ae_model_path ae/models/real_traces_AutoEncoder --episodes 20
+SEED=$SLURM_ARRAY_TASK_ID
+OBS=${OBS:-actions}
+train_and_score grid4_${OBS}_s${SEED} \
+    env=grid3d victim_algo=qlearning encoder_mode=ae reward_mode=trace obs_dynamics=$OBS \
+    explore_push_prob=0.2 push_cem=True cem_floor=0.05 max_episodes=6000 seed=$SEED

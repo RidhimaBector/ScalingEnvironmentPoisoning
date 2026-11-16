@@ -37,7 +37,8 @@ def policy_accuracy(target: np.ndarray, policy_matrix: np.ndarray):
     accuracy_softmax_complete = np.sum( accuracy_softmax_complete_elementwise )/total
 
     accuracy_softmax_elementwise = accuracy_elementwise * accuracy_softmax_complete_elementwise
-    accuracy_softmax = np.where( (sum_accuracy_elementwise!=0), np.sum(accuracy_softmax_elementwise)/sum_accuracy_elementwise, 0.0).item()
+    accuracy_softmax = (float(np.sum(accuracy_softmax_elementwise) / sum_accuracy_elementwise)
+                        if sum_accuracy_elementwise != 0 else 0.0)
 
     done = 1 if accuracy == 1.0 else 0
 
