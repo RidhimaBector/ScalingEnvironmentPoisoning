@@ -66,8 +66,8 @@ else
 fi
 
 echo "task $T: $NAME seed=$SEED"
-# Training stops itself after 21 h at the latest so that scoring always runs.
-timeout 21h python -u main.py with $ARGS obs_dynamics=actions $PUSH seed=$SEED \
+# Training stops itself after TRAIN_TIMEOUT (default 21 h) so that scoring always runs.
+timeout ${TRAIN_TIMEOUT:-21h} python -u main.py with $ARGS obs_dynamics=actions $PUSH seed=$SEED \
     model_dir=results/fir_${NAME}_s${SEED}
 echo "### score ${NAME}_s$SEED"
 python score_attack.py --run_dir results/fir_${NAME}_s${SEED} --episodes 20
