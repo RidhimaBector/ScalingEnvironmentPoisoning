@@ -79,6 +79,16 @@ and Hub path, never an ad hoc name.
 - Jobs longer than the time left before a maintenance reservation stay pending with
   reason `ReqNodeNotAvail, Reserved for maintenance`; shorten `--time`.
 
+## Cluster (killarney, Alliance Canada)
+
+- Second cluster; the sweep scripts are cluster-neutral (`BaseAttacker/scripts/slurm/README.md`).
+- Account `aip-s2ganapa`. Code and venv under `/project/aip-s2ganapa/kunwar/`; outputs
+  under `$SCRATCH` via `RESULTS_ROOT=$SCRATCH/envpois/results`.
+- Each SSH session needs a Duo approval on the user's phone (tell them before
+  connecting) and lasts about an hour. SLURM commands and `module` need a login shell:
+  wrap them in `bash -lc "..."`.
+- First-time setup there: `bash scripts/setup_alliance.sh <venv path>` from `BaseAttacker/`.
+
 ## Hugging Face
 
 Organisation `envpois`, three repositories (private until the paper is out):
@@ -92,6 +102,8 @@ Organisation `envpois`, three repositories (private until the paper is out):
 Cluster runs publish themselves at the end of `train_and_score` (`publish.py`); a
 failed upload marks the run `PUBLISH_PENDING` and never fails the job. Publishing needs
 a token with write access to `envpois` (`hf auth login` or `HF_TOKEN`).
+The laptop has such a token; fir does not (as of 2026-11-16). Never read, print or copy
+a token yourself: logging in is the user's step.
 
 ## Paper
 

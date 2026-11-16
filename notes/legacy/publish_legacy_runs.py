@@ -111,10 +111,14 @@ def main():
     ap.add_argument("--results", default="results")
     ap.add_argument("--logs", default="logs")
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--stage", metavar="DIR", default=None,
+                    help="instead of uploading run by run, lay the files out under DIR/attackers "
+                         "and DIR/results in Hub layout, to upload each with one `hf upload`")
     a = ap.parse_args()
 
     from naming import run_name
-    from publish import publish
+    from publish import publish, record_for
+    import shutil
 
     scores = legacy_scores(a.logs)
     named = skipped = 0
@@ -137,6 +141,18 @@ def main():
         if a.dry_run:
             continue
         json.dump(merged, open(cfg_path, "w"), indent=1)
+        if a.stage:
+            record = record_for(run_dir)
+            hub_path = f"{experiment}/{merged['run_name']}"
+            dest = os.path.join(a.stage, "attackers", hub_path)
+            os.makedirs(dest, exist_ok=True)
+            for f in record["checkpoint_files"] + ["run_config.json", "score.json"]:
+                if os.path.exists(os.path.join(run_dir, f)):
+                    shutil.copy2(os.path.join(run_dir, f), os.path.join(dest, f))
+            rec_path = os.path.join(a.stage, "results", "runs", hub_path + ".json")
+            os.makedirs(os.path.dirname(rec_path), exist_ok=True)
+            json.dump(record, open(rec_path, "w"), indent=1)
+            continue
         if os.path.exists(os.path.join(run_dir, "PUBLISHED")):
             continue
         publish(run_dir)

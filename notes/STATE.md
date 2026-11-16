@@ -10,8 +10,8 @@ victims) and on the **4x4 grid** when the best of a few seeds is kept. It works 
 some seeds on **5x5 and 6x6**, and not yet on **8x8**. On **LunarLander** the pipeline
 runs end to end but the experiment as budgeted does not test the attack, because the
 victims never learn to fly. **REINFORCE victims** are too slow to finish. The code is
-cleaned for release; publishing to Hugging Face is implemented but blocked on a token
-with write access to the `envpois` organisation.
+cleaned for release, and all existing runs, results and autoencoders are published
+(privately) to the `envpois` organisation on Hugging Face.
 
 ## 2. Definitions used everywhere
 
@@ -139,10 +139,12 @@ grep -h "^task\|^SCORE" logs/fir_4423670_*.out logs/fir_4429537_*.out logs/fir_4
    completion.
 4. **REINFORCE cells**: cap victim episode length or drop them from the grid.
 5. **5x5**: no setting is clearly best (2/4 at most); more seeds needed.
-6. **Publish** the existing runs once the Hugging Face token works (section 8).
+6. **Refresh the Hugging Face snapshot** when the remaining sweep cells are scored (section 8).
 7. **LLM attacker** idea: `notes/llm_attacker_idea.md` (not built).
 
-## 7. Cluster
+## 7. Clusters
+
+fir is where everything so far ran. killarney is the second cluster; see the end of this section.
 
 - Pre-cleanup checkout (do not pull): `~/scratch/thesis_sep/ScalingEnvironmentPoisoning`,
   at commit `d39baf7`-era code (tag `pre-cleanup-2026-11-16`). Holds `BaseAttacker/results/`
@@ -162,28 +164,41 @@ grep -h "^task\|^SCORE" logs/fir_4423670_*.out logs/fir_4429537_*.out logs/fir_4
 - Typical speed: 4x4, 6000 episodes: ~35 min. 6x6, 12000: ~5 h. 8x8, 12000: ~8 h.
   Ring, 3000: ~10 min. Lander VPG/A2C, 1000 episodes at K=20: ~45 min; DQN ~25 h.
 
-## 8. Hugging Face (blocked on access)
+**killarney** (Alliance; set up requested 2026-11-16, not yet verified there):
+account `aip-s2ganapa`; code and venv belong under `/project/aip-s2ganapa/kunwar/`,
+outputs under `$SCRATCH` (NFS, purge-eligible), so submit with
+`RESULTS_ROOT=$SCRATCH/envpois/results`. SSH needs a Duo tap from the user roughly
+hourly; `sbatch`, `squeue` and `module` only exist in a login shell (`bash -lc "..."`).
+First-time setup: `bash scripts/setup_alliance.sh <venv path>`. Per-cluster values are
+tabulated in `BaseAttacker/scripts/slurm/README.md`.
 
-- Target: organisation `envpois`; repos `attackers`, `behaviour-encoders` (models),
-  `results` (dataset). Private until the paper is public.
-- Status 2026-11-16: the user `kunwar45` is a member, but the stored OAuth token gets
-  `403 You don't have the rights to create a model under the namespace "envpois"`.
-  Nothing has been uploaded. fir has no Hugging Face login at all.
-- To unblock: a token with write access to `envpois` on the laptop (`hf auth login`,
-  granting the organisation) and on fir (`hf auth login` there, or `HF_TOKEN` in the
-  job environment).
-- Then:
-  ```bash
-  hf repo create envpois/attackers --repo-type model --private
-  hf repo create envpois/behaviour-encoders --repo-type model --private
-  hf repo create envpois/results --repo-type dataset --private
-  # existing runs, renamed to the convention (run on fir; --dry-run first):
-  PYTHONPATH=~/scratch/thesis_sep/release/BaseAttacker python \
-    ~/scratch/thesis_sep/release/notes/legacy/publish_legacy_runs.py
-  # autoencoders and static data: upload BaseAttacker/ae/models/* to behaviour-encoders,
-  # notes/run_summaries/*, notes/writeup_*.html and envs/targets/* to results
-  ```
-- New cluster runs publish themselves (`scripts/slurm/common.sh` -> `publish.py`).
+## 8. Hugging Face
+
+Organisation `envpois`, three private repositories, uploaded 2026-11-16 from the laptop:
+
+| Repository | Content |
+|---|---|
+| `envpois/attackers` (model) | 255 run folders in 10 experiments; 249 have a checkpoint (actor + critic), all have `run_config.json`, 49 have `score.json` |
+| `envpois/results` (dataset) | `runs.jsonl` (255 rows, 223 with an evaluation), one JSON record and one log per run, the raw summary file, the lander target, a copy of this file and the write-up |
+| `envpois/behaviour-encoders` (model) | the 8 trace autoencoders under `<env>-<variant>__trace-autoencoder.pt` |
+
+How the snapshot was built (repeat it to refresh after more runs finish on fir):
+rsync `results/*/{best_model_actor,best_model_critic,best_model_critic2,best_model_encoder.pt,run_config.json,score.json}`
+and `logs/fir_*.out` from the old fir checkout to a local folder, run
+`notes/legacy/publish_legacy_runs.py --stage <dir>` from that folder with the current
+`BaseAttacker` on `PYTHONPATH`, then `hf upload` the staged `attackers/` and `results/`
+folders. The 12 round-1 runs took their evaluation from eval job 4254633, whose log has
+no per-run headers; they were matched by position (seed 0-2, each: original-ae-trace,
+retrained-ae-trace, retrained-ae-traj, lstm-trace).
+
+Not in the snapshot: sweep-3x3x3 cells that had not been scored yet (grid 5x5/6x6,
+REINFORCE, lander DQN), and the feasibility-probe output beyond what is in the summary
+file. The repository cards (README) were written by hand at upload time.
+
+**fir has no Hugging Face token** (the user logged in on the laptop only), so jobs
+there mark their runs `PUBLISH_PENDING`. Either log in on the cluster once
+(`hf auth login` inside the venv) or publish from the laptop as above. New-layout runs
+are picked up by `python publish.py --pending <results folder>`.
 
 ## 9. Paper and write-ups
 
@@ -201,7 +216,7 @@ grep -h "^task\|^SCORE" logs/fir_4423670_*.out logs/fir_4429537_*.out logs/fir_4
 
 | What | Where | Note |
 |---|---|---|
-| All trained runs and logs | fir scratch (section 7) | to be published to Hugging Face |
+| Full run folders (optimizer states, numbered checkpoints, Sacred records) | fir scratch (section 7) | the scored checkpoint, settings, score and log of each run are on Hugging Face |
 | Old local checkpoints | laptop `BaseAttacker/results/` (329 MB, ignored) | pre-November runs; `nov15_ae_trace_s0` is the first working attacker |
 | Pre-2026-11 design notes | laptop `docs/` (ignored by a long-standing rule) | `WALKTHROUGH.org`, `HIERARCHICAL_SACRED_ARCHITECTURE.org`, MongoDB setup |
 | Local Sacred MongoDB | `localhost:27017`, db `env_poisoning` | contains a few mis-launched test runs from 2026-11-15 |

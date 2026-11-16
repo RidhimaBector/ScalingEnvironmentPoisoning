@@ -80,6 +80,19 @@ def record_for(run_dir: str) -> dict:
     }
 
 
+def _commit(api, **kwargs):
+    """create_commit with retries: array jobs finishing together commit concurrently,
+    and the Hub rejects a commit whose parent has just moved."""
+    import time
+    for attempt in range(5):
+        try:
+            return api.create_commit(**kwargs)
+        except Exception:
+            if attempt == 4:
+                raise
+            time.sleep(5 * (attempt + 1) + (os.getpid() % 7))
+
+
 def publish(run_dir: str, log_path: str = None) -> bool:
     """Upload one run. Returns True on success; never raises."""
     run_dir = os.path.normpath(run_dir)
@@ -95,8 +108,8 @@ def publish(run_dir: str, log_path: str = None) -> bool:
 
         files = record["checkpoint_files"] + [f for f in ("run_config.json", "score.json")
                                               if os.path.exists(os.path.join(run_dir, f))]
-        api.create_commit(
-            repo_id=ATTACKERS_REPO, repo_type="model",
+        _commit(
+            api, repo_id=ATTACKERS_REPO, repo_type="model",
             operations=[CommitOperationAdd(f"{hub_path}/{f}", os.path.join(run_dir, f)) for f in files],
             commit_message=f"Add {hub_path}")
 
@@ -104,7 +117,8 @@ def publish(run_dir: str, log_path: str = None) -> bool:
                                          json.dumps(record, indent=1).encode())]
         if log_path and os.path.exists(log_path):
             operations.append(CommitOperationAdd(f"logs/{hub_path}.log", log_path))
-        api.create_commit(repo_id=RESULTS_REPO, repo_type="dataset", operations=operations,
+        _commit(
+            api, repo_id=RESULTS_REPO, repo_type="dataset", operations=operations,
                           commit_message=f"Add {hub_path}")
 
         with open(os.path.join(run_dir, "PUBLISHED"), "w") as fh:

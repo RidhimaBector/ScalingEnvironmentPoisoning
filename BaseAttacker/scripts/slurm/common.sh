@@ -10,11 +10,14 @@
 #     PYTHON_MODULE   module to load first on clusters that need it, e.g. python/3.12
 #     TRAIN_TIMEOUT   training stops itself after this long so scoring still runs (default 21h)
 #     HF_PUBLISH=0    do not upload to the Hugging Face Hub (see publish.py)
+#     RESULTS_ROOT    where runs are written (default: results/ under BaseAttacker)
 #
 # Every run trains, scores itself on 20 fresh victims, and is published to the Hub.
 # Runs are named by naming.py:
-#     results/<experiment>/<env>-<variant>__<victim>__<config>__seed<N>
-# Collect a sweep into a table with: python scripts/collect_scores.py results/<experiment>/*
+#     $RESULTS_ROOT/<experiment>/<env>-<variant>__<victim>__<config>__seed<N>
+# Collect a sweep into a table with: python scripts/collect_scores.py $RESULTS_ROOT/<experiment>/*
+#
+# Per-cluster values (account, module, venv location) are in scripts/slurm/README.md.
 
 [ -n "$PYTHON_MODULE" ] && module load "$PYTHON_MODULE"
 source "${VENV:-../venv}/bin/activate"

@@ -36,6 +36,10 @@ from experiment import ex, finish_victim_sacred, start_victim_sacred
 from naming import run_name, run_path
 from publish import _git_commit
 
+# Where runs are written. On clusters whose code lives on a small or read-mostly
+# filesystem, point this at scratch storage: RESULTS_ROOT=$SCRATCH/envpois/results
+RESULTS_ROOT = os.environ.get("RESULTS_ROOT", "results")
+
 CHECKPOINT_SUFFIXES = (
     "_actor",
     "_actor_optimizer",
@@ -197,7 +201,7 @@ def train(
 def sacred_main(_run, _config):
     cfg = resolve_config(dict(_config))
     if cfg["model_dir"] is None:
-        cfg["model_dir"] = os.path.join("results", run_path(cfg))
+        cfg["model_dir"] = os.path.join(RESULTS_ROOT, run_path(cfg))
     cfg["run_name"] = run_name(cfg)
     cfg["code_commit"] = _git_commit()
     os.makedirs(cfg["model_dir"], exist_ok=True)
@@ -229,7 +233,7 @@ def sacred_main(_run, _config):
 def print_run_dir(_config):
     """Print the folder a run with these settings writes to (used by the sweep scripts)."""
     cfg = resolve_config(dict(_config))
-    print(cfg["model_dir"] or os.path.join("results", run_path(cfg)))
+    print(cfg["model_dir"] or os.path.join(RESULTS_ROOT, run_path(cfg)))
 
 
 if __name__ == "__main__":

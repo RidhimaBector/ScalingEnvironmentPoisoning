@@ -145,6 +145,9 @@ sbatch --account=<acct> --array=0-80 scripts/slurm/sweep_3x3x3.sh          # 3 e
 python scripts/collect_scores.py results/sweep-3x3x3/* --by cell           # table of results
 ```
 
+Per-cluster values and first-time setup on Alliance Canada clusters are in
+[`scripts/slurm/README.md`](BaseAttacker/scripts/slurm/README.md).
+
 Without a cluster, each script's `train_and_score` line shows the exact `main.py`
 settings of a run; start them one at a time.
 
