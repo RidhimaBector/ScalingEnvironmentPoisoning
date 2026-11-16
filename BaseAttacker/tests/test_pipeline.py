@@ -46,6 +46,8 @@ def run(tmp_path, **settings):
          effort_weight=0.1, lstm_seq_len=20, lstm_memory_size=200),
 ], ids=lambda s: "-".join(str(v) for v in s.values()))
 def test_train_then_score(tmp_path, settings):
+    if settings.get("privacy_mode") == "full_whitebox":
+        pytest.importorskip("ot", reason="white-box distance metrics need the optional POT package")
     cfg, attack_env = run(tmp_path, **settings)
     assert os.path.exists(tmp_path / "6_actor"), "the final checkpoint must always be saved"
 

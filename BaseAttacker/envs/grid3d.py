@@ -179,7 +179,11 @@ class Grid3D(VictimEnvironment):
     def compute_distance_metrics(self, algo, target: np.ndarray) -> Dict[str, float]:
         """White-box only: Wasserstein and KL distance rates between the victim's policy
         and the target, negated so that higher means closer."""
-        import ot  # optional dependency (POT), only needed here
+        try:
+            import ot  # optional dependency (POT), only needed here
+        except ImportError as exc:
+            raise ImportError("privacy_mode=full_whitebox on the grid needs the POT package: "
+                              "pip install POT") from exc
         coords = np.array(
             [[i, j] for i in range(self.shape[0]) for j in range(self.shape[1])]
         )
