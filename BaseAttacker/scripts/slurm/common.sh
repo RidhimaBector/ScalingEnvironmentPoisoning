@@ -11,6 +11,8 @@
 #     TRAIN_TIMEOUT   training stops itself after this long so scoring still runs (default 21h)
 #     HF_PUBLISH=0    do not upload to the Hugging Face Hub (see publish.py)
 #     RESULTS_ROOT    where runs are written (default: results/ under BaseAttacker)
+#     EXTRA_ARGS      extra main.py settings appended to every run, e.g. to smoke-test a
+#                     sweep: EXTRA_ARGS="max_episodes=100 experiment=smoke"
 #
 # Every run trains, scores itself on 20 fresh victims, and is published to the Hub.
 # Runs are named by naming.py:
@@ -26,6 +28,8 @@ export OMP_NUM_THREADS=1 MKL_NUM_THREADS=1
 # train_and_score <main.py settings...>   (must include experiment=<name> and seed=<n>)
 train_and_score() {
   local run_dir
+  # EXTRA_ARGS are appended last, so they override the sweep's own settings.
+  set -- "$@" $EXTRA_ARGS
   run_dir=$(python main.py print_run_dir with "$@" 2>/dev/null | tail -n 1)
   echo "run: $run_dir  settings: $*"
   timeout "${TRAIN_TIMEOUT:-21h}" python -u main.py with "$@"

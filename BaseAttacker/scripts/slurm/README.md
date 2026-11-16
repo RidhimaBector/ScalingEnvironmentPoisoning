@@ -17,9 +17,16 @@ PYTHON_MODULE=<module> VENV=<venv path> RESULTS_ROOT=<where runs go> \
 | `RESULTS_ROOT` | where runs are written | `results` |
 | `TRAIN_TIMEOUT` | training stops itself after this, so scoring still runs | `21h` |
 | `HF_PUBLISH=0` | do not upload finished runs to the Hugging Face Hub | uploads |
+| `EXTRA_ARGS` | settings appended to every run (they override the sweep's own) | none |
 
 `sbatch` passes the submitting shell's environment to the job, so exporting these
 variables (or prefixing the command with them, as above) is enough.
+
+Smoke-test a sweep before running it in full, with two short tasks:
+
+```bash
+EXTRA_ARGS="max_episodes=100 experiment=smoke" sbatch --account=<account> --time=00:20:00 --array=0-1 scripts/slurm/<sweep>.sh
+```
 
 First-time setup on an Alliance Canada cluster: `bash scripts/setup_alliance.sh <venv path>`.
 To publish from jobs, log in once on the cluster: `hf auth login`.
