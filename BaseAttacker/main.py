@@ -191,6 +191,7 @@ def build_attack_algo(state_dim, action_dim, max_action, args):
             "bsize": getattr(args, 'batch_size', 256),
             "expl_noise": getattr(args, 'expl_noise', 0.0),
             "td3": getattr(args, 'td3', False),
+            "bc_weight": getattr(args, 'bc_weight', 0.0),
         })
         return DDPG(**attack_kwargs)
 
@@ -223,6 +224,17 @@ def train(attack_env, attack_algo, obs_encoder, action_translator,
 
     os.makedirs(model_dir, exist_ok=True)
 
+    # Adaptive push (cross-entropy method): per-cell probabilities of pushing
+    # down / hold / up, moved towards the push episodes with the highest reward.
+    push_cem = getattr(args, 'push_cem', False)
+    cem_probs = np.full(attack_env.action_space.shape + (3,), 1.0 / 3.0)
+    cem_batch = []                      # (episode_reward, direction index per cell)
+    CEM_BATCH, CEM_ELITE, CEM_LR, CEM_FLOOR = 16, 4, 0.5, 0.05
+    # Elite episodes for the imitation term: top elite_k by episode reward.
+    bc_weight = getattr(args, 'bc_weight', 0.0)
+    elite_k = getattr(args, 'elite_k', 20)
+    elites = []                         # (episode_reward, obs list, action list)
+
     for episode in range(max_episodes):
         # Reset all victims; obs comes from the env (encoder injected)
         obs, _ = attack_env.reset()
@@ -241,7 +253,12 @@ def train(attack_env, attack_algo, obs_encoder, action_translator,
         push_prob = getattr(args, 'explore_push_prob', 0.0)
         warm = episode < num_warmup_episodes
         push = push_prob > 0 and np.random.rand() < (0.5 if warm else push_prob)
-        push_dir = np.random.choice([-1.0, 0.0, 1.0], size=attack_env.action_space.shape)
+        if push_cem:
+            push_idx = np.array([np.random.choice(3, p=pr) for pr in cem_probs])
+        else:
+            push_idx = np.random.choice(3, size=attack_env.action_space.shape)
+        push_dir = push_idx.astype(float) - 1.0
+        ep_obs, ep_act = [], []
 
         for timestep in range(max_timesteps):
             if push:
@@ -256,6 +273,8 @@ def train(attack_env, attack_algo, obs_encoder, action_translator,
             next_obs, reward, terminated, truncated, info = attack_env.step(action)
 
             attack_algo.store_transition(obs, raw_action, next_obs, reward, terminated)
+            ep_obs.append(np.array(obs, dtype=np.float32).reshape(-1))
+            ep_act.append(np.array(raw_action, dtype=np.float32).reshape(-1))
             episode_reward += reward
             min_acc_episode = min(min_acc_episode, info.get('accuracy', 0.0))
             greedy_sum += info.get('greedy_accuracy', 0.0)
@@ -268,6 +287,24 @@ def train(attack_env, attack_algo, obs_encoder, action_translator,
             obs = next_obs
             if terminated:
                 break
+
+        if push and push_cem:
+            cem_batch.append((episode_reward, push_idx))
+            if len(cem_batch) >= CEM_BATCH:
+                top = sorted(cem_batch, key=lambda x: -x[0])[:CEM_ELITE]
+                freq = np.mean([np.eye(3)[idx] for _, idx in top], axis=0)
+                cem_probs = (1 - CEM_LR) * cem_probs + CEM_LR * freq
+                cem_probs = np.maximum(cem_probs, CEM_FLOOR)
+                cem_probs /= cem_probs.sum(axis=1, keepdims=True)
+                cem_batch = []
+
+        if bc_weight > 0 and (len(elites) < elite_k or episode_reward > elites[-1][0]):
+            elites.append((episode_reward, ep_obs, ep_act))
+            elites.sort(key=lambda x: -x[0])
+            elites = elites[:elite_k]
+            attack_algo.set_elite(
+                np.concatenate([np.stack(o) for _, o, _ in elites]),
+                np.concatenate([np.stack(a) for _, _, a in elites]))
 
         # Train encoder once per episode (LSTM only; no-op for other encoders)
         obs_encoder.train_encoder()
@@ -323,7 +360,7 @@ def train(attack_env, attack_algo, obs_encoder, action_translator,
             f"  acc={cur_accuracy:.4f}  min={min_acc_episode:.4f}"
             f"  best_avg_reward={best_accuracy:.2f}  reward={episode_reward:.2f}"
             f"  greedy={info.get('greedy_accuracy', 0.0):.2f}  path={info.get('path_match', 0.0):.0f}"
-            f"{ckpt_marker}"
+            f"{' [push]' if push else ''}{ckpt_marker}"
         )
 
 
@@ -387,6 +424,9 @@ def sacred_main(_run, _config):
     args.td3 = _config.get('td3', False)
     args.normalize_obs = _config.get('normalize_obs', False)
     args.explore_push_prob = _config.get('explore_push_prob', 0.0)
+    args.push_cem = _config.get('push_cem', False)
+    args.bc_weight = _config.get('bc_weight', 0.0)
+    args.elite_k = _config.get('elite_k', 20)
 
     population = build_population(args, privacy_mode, victim_tracker)
     obs_encoder, action_translator = build_encoders(population, args)

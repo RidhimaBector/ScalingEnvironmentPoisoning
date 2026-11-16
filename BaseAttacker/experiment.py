@@ -131,6 +131,9 @@ def default_config():
     lstm_append_dynamics = True  # lstm mode: append current altitude (16D) to the 128D embedding
     td3 = False            # twin critics + target smoothing + delayed actor updates
     normalize_obs = False  # altitude in the observation scaled to [-1, 1]; first obs = real altitude
+    push_cem = False      # adapt push directions towards high-reward push episodes
+    bc_weight = 0.0       # weight of imitating the top elite_k episodes in the actor loss
+    elite_k = 20
     explore_push_prob = 0.0  # fraction of episodes that push each cell in one fixed random direction
     policy_noise = 0.2
     noise_clip = 0.5

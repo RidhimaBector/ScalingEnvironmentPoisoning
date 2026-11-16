@@ -118,7 +118,7 @@ class DDPG(AttackAlgorithm):
     Implements both Algorithm (legacy) and AttackAlgorithm (new ABC).
     """
     def __init__(self, seed, nb_states, nb_actions, max_action, hidden1, hidden2, init_w, prate, rate, ou_theta, ou_mu, ou_sigma, bsize, tau, discount, epsilon_divisor, eps_greedy_start_episodes, is_training, updates_per_step=1, expl_noise=0.0,
-                 td3=False, policy_noise=0.2, noise_clip=0.5, policy_freq=2, **kwargs):
+                 td3=False, policy_noise=0.2, noise_clip=0.5, policy_freq=2, bc_weight=0.0, **kwargs):
 
         if seed > 0:
             self.seed(seed)
@@ -148,6 +148,11 @@ class DDPG(AttackAlgorithm):
         self.noise_clip = noise_clip
         self.policy_freq = policy_freq if td3 else 1
         self._n_updates = 0
+        # Elite imitation: the actor is also pulled towards the actions of the
+        # highest-return episodes seen so far (set via set_elite). 0 disables it.
+        self.bc_weight = bc_weight
+        self._elite_s = None
+        self._elite_a = None
         if td3:
             self.critic2 = Critic(self.nb_states, self.nb_actions, **net_cfg)
             self.critic2_target = Critic(self.nb_states, self.nb_actions, **net_cfg)
@@ -215,6 +220,11 @@ class DDPG(AttackAlgorithm):
     def store_transition(self, obs, action, next_obs, reward, done):
         self._buffer.add(obs, action, next_obs, reward, done)
 
+    def set_elite(self, states, actions):
+        """Transitions of the best episodes so far, for the imitation term."""
+        self._elite_s = np.asarray(states, dtype=np.float32)
+        self._elite_a = np.asarray(actions, dtype=np.float32)
+
     def ready_to_train(self):
         return len(self._buffer) >= self.batch_size
 
@@ -265,10 +275,16 @@ class DDPG(AttackAlgorithm):
                     self.actor(to_tensor(state_batch))
                 )
                 policy_loss = policy_loss.mean()
+                q_mean = policy_loss.item()
+                if self.bc_weight > 0 and self._elite_s is not None:
+                    idx = np.random.randint(0, len(self._elite_s), size=self.batch_size)
+                    bc = ((self.actor(to_tensor(self._elite_s[idx]))
+                           - to_tensor(self._elite_a[idx])) ** 2).mean()
+                    policy_loss = policy_loss + self.bc_weight * bc
                 policy_loss.backward()
                 torch.nn.utils.clip_grad_norm_(self.actor.parameters(), max_norm=1.0)
                 self.actor_optim.step()
-                loss_actor += (-policy_loss.item()) * self.policy_freq  # log +Q_mean
+                loss_actor += (-q_mean) * self.policy_freq  # log +Q_mean
 
                 soft_update(self.actor_target, self.actor, self.tau)
                 soft_update(self.critic_target, self.critic, self.tau)
