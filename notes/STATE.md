@@ -36,7 +36,7 @@ with write access to the `envpois` organisation.
 ## 3. What was done, in order
 
 All runs on fir, 1 CPU each. "k/20" = poisoned victims of 20. 4x4 grid and Q-learning
-victim unless stated. Raw lines for every run: `notes/results/raw_fir_log_lines.txt`.
+victim unless stated. Raw lines for every run: `notes/run_summaries/raw_fir_log_lines.txt`.
 
 | Round | Change tested | Result |
 |---|---|---|
@@ -181,7 +181,7 @@ grep -h "^task\|^SCORE" logs/fir_4423670_*.out logs/fir_4429537_*.out logs/fir_4
   PYTHONPATH=~/scratch/thesis_sep/release/BaseAttacker python \
     ~/scratch/thesis_sep/release/notes/legacy/publish_legacy_runs.py
   # autoencoders and static data: upload BaseAttacker/ae/models/* to behaviour-encoders,
-  # notes/results/*, notes/writeup_*.html and envs/targets/* to results
+  # notes/run_summaries/*, notes/writeup_*.html and envs/targets/* to results
   ```
 - New cluster runs publish themselves (`scripts/slurm/common.sh` -> `publish.py`).
 

@@ -1,0 +1,699 @@
+# Raw per-run summary lines from fir logs, collected 2026-11-16. One block per SLURM job.
+# Each line: task header | last training log line | evaluation lines (rounds 4+ evaluate inside the job).
+
+## job 4250974: round 1, encoder and reward (run_fir.sh, 3000 ep)
+task 0: aeold_trace seed=0 | last: [3000/3000]  acc=0.5556  min=0.4444  best_avg_reward=9.70  reward=8.44  greedy=0.33  path=0 [ckpt] | eval: 
+task 1: aeold_trace seed=1 | last: [3000/3000]  acc=0.6667  min=0.4444  best_avg_reward=10.67  reward=10.33  greedy=0.89  path=0 [ckpt] | eval: 
+task 2: aeold_trace seed=2 | last: [3000/3000]  acc=0.4444  min=0.4444  best_avg_reward=11.62  reward=9.44  greedy=0.44  path=0 [ckpt] | eval: 
+task 3: aenew_trace seed=0 | last: [3000/3000]  acc=0.4444  min=0.3333  best_avg_reward=11.44  reward=8.00  greedy=0.56  path=0 [ckpt] | eval: 
+task 4: aenew_trace seed=1 | last: [3000/3000]  acc=0.8889  min=0.4444  best_avg_reward=13.02  reward=12.78  greedy=1.00  path=1 [ckpt] | eval: 
+task 5: aenew_trace seed=2 | last: [3000/3000]  acc=1.0000  min=0.4444  best_avg_reward=12.53  reward=12.11  greedy=1.00  path=1 [ckpt] | eval: 
+task 6: aenew_traj seed=0 | last: [3000/3000]  acc=0.4452  min=0.2417  best_avg_reward=6.25  reward=5.48  greedy=0.89  path=0 [ckpt] | eval: 
+task 7: aenew_traj seed=1 | last: [3000/3000]  acc=0.4141  min=0.2801  best_avg_reward=5.97  reward=6.05  greedy=0.89  path=0 [ckpt] | eval: 
+task 8: aenew_traj seed=2 | last: [3000/3000]  acc=0.4667  min=0.2371  best_avg_reward=6.49  reward=6.17  greedy=0.78  path=0 [ckpt] | eval: 
+task 9: lstmdyn_trace seed=0 | last: [3000/3000]  acc=0.5556  min=0.2222  best_avg_reward=12.20  reward=9.11  greedy=0.67  path=0 [ckpt] | eval: 
+task 10: lstmdyn_trace seed=1 | last: [3000/3000]  acc=0.3333  min=0.1111  best_avg_reward=10.31  reward=5.78  greedy=0.33  path=0 [ckpt] | eval: 
+task 11: lstmdyn_trace seed=2 | last: [3000/3000]  acc=0.5556  min=0.3333  best_avg_reward=11.59  reward=8.22  greedy=0.33  path=0 [ckpt] | eval: 
+
+## job 4255023: round 2, stabilised bundle (run_fir_v2.sh, 5000 ep)
+task 0: v2_ae_trace seed=0 | last: [5000/5000]  acc=0.4444  min=0.2222  best_avg_reward=10.58  reward=6.78  greedy=0.33  path=0 [ckpt] | eval: 
+task 1: v2_ae_trace seed=1 | last: [5000/5000]  acc=0.5556  min=0.3333  best_avg_reward=9.91  reward=8.11  greedy=0.67  path=0 [ckpt] | eval: 
+task 2: v2_ae_trace seed=2 | last: [5000/5000]  acc=0.8889  min=0.5556  best_avg_reward=12.60  reward=10.89  greedy=0.67  path=0 [ckpt] | eval: 
+task 3: v2_ae_mix seed=0 | last: [5000/5000]  acc=0.6684  min=0.4048  best_avg_reward=9.54  reward=9.41  greedy=0.89  path=0 [ckpt] | eval: 
+task 4: v2_ae_mix seed=1 | last: [5000/5000]  acc=0.5488  min=0.3502  best_avg_reward=9.43  reward=8.26  greedy=0.78  path=0 [ckpt] | eval: 
+task 5: v2_ae_mix seed=2 | last: [5000/5000]  acc=0.2261  min=0.2261  best_avg_reward=6.33  reward=6.07  greedy=0.44  path=0 [ckpt] | eval: 
+task 6: v2_ae_traj seed=0 | last: [5000/5000]  acc=0.3610  min=0.2249  best_avg_reward=6.60  reward=5.66  greedy=0.78  path=0 [ckpt] | eval: 
+task 7: v2_ae_traj seed=1 | last: [5000/5000]  acc=0.3958  min=0.2576  best_avg_reward=5.01  reward=4.92  greedy=0.44  path=0 [ckpt] | eval: 
+task 8: v2_ae_traj seed=2 | last: [5000/5000]  acc=0.3435  min=0.2057  best_avg_reward=5.55  reward=4.91  greedy=0.56  path=0 [ckpt] | eval: 
+task 9: v2_lstm_mix seed=0 | last: [5000/5000]  acc=0.4230  min=0.3440  best_avg_reward=6.95  reward=6.94  greedy=0.67  path=0 [ckpt] | eval: 
+task 10: v2_lstm_mix seed=1 | last: [5000/5000]  acc=0.3488  min=0.3373  best_avg_reward=8.23  reward=7.35  greedy=0.67  path=0 [ckpt] | eval: 
+task 11: v2_lstm_mix seed=2 | last: [5000/5000]  acc=0.4864  min=0.2281  best_avg_reward=7.50  reward=6.23  greedy=0.67  path=0 [ckpt] | eval: 
+
+## job 4263022: round 3, ablation (run_fir_v3.sh)
+task 0: v3_base seed=3 | last: [3000/3000]  acc=0.6667  min=0.3333  best_avg_reward=11.68  reward=11.11  greedy=0.78  path=0 [ckpt] | eval: 
+task 1: v3_base seed=4 | last: [3000/3000]  acc=0.7778  min=0.6667  best_avg_reward=11.54  reward=12.56  greedy=0.78  path=0 [ckpt] | eval: 
+task 2: v3_base seed=5 | last: [3000/3000]  acc=0.7778  min=0.5556  best_avg_reward=11.30  reward=12.00  greedy=0.78  path=0 [ckpt] | eval: 
+task 3: v3_td3 seed=0 | last: [3000/3000]  acc=0.8889  min=0.2222  best_avg_reward=9.37  reward=9.00  greedy=0.67  path=0 [ckpt] | eval: 
+task 4: v3_td3 seed=1 | last: [3000/3000]  acc=0.8889  min=0.5556  best_avg_reward=11.56  reward=11.78  greedy=0.89  path=0 [ckpt] | eval: 
+task 5: v3_td3 seed=2 | last: [3000/3000]  acc=0.4444  min=0.2222  best_avg_reward=9.14  reward=6.78  greedy=0.44  path=0 [ckpt] | eval: 
+task 6: v3_norm seed=0 | last: [3000/3000]  acc=0.3333  min=0.2222  best_avg_reward=8.03  reward=6.44  greedy=0.22  path=0 [ckpt] | eval: 
+task 7: v3_norm seed=1 | last: [3000/3000]  acc=0.6667  min=0.4444  best_avg_reward=12.85  reward=9.67  greedy=0.56  path=0 [ckpt] | eval: 
+task 8: v3_norm seed=2 | last: [3000/3000]  acc=0.2222  min=0.2222  best_avg_reward=8.81  reward=6.56  greedy=0.22  path=0 [ckpt] | eval: 
+task 9: v3_push seed=0 | last: [3000/3000]  acc=1.0000  min=0.4444  best_avg_reward=10.43  reward=12.00  greedy=0.89  path=0 [ckpt] | eval: 
+task 10: v3_push seed=1 | last: [3000/3000]  acc=1.0000  min=0.5556  best_avg_reward=12.25  reward=12.44  greedy=1.00  path=0 [ckpt] | eval: 
+task 11: v3_push seed=2 | last: [3000/3000]  acc=0.3333  min=0.2222  best_avg_reward=13.21  reward=6.00  greedy=0.33  path=0 [ckpt] | eval: 
+task 12: v3_mix seed=0 | last: [3000/3000]  acc=0.6137  min=0.4464  best_avg_reward=9.57  reward=9.60  greedy=0.78  path=0 [ckpt] | eval: 
+task 13: v3_mix seed=1 | last: [3000/3000]  acc=0.7598  min=0.4026  best_avg_reward=9.70  reward=9.98  greedy=1.00  path=1 [ckpt] | eval: 
+task 14: v3_mix seed=2 | last: [3000/3000]  acc=0.4630  min=0.1703  best_avg_reward=6.94  reward=4.71  greedy=0.33  path=0 [ckpt] | eval: 
+task 15: v3_noise seed=0 | last: [3000/3000]  acc=0.3333  min=0.3333  best_avg_reward=11.56  reward=8.11  greedy=0.56  path=0 [ckpt] | eval: 
+task 16: v3_noise seed=1 | last: [3000/3000]  acc=0.7778  min=0.3333  best_avg_reward=11.09  reward=9.22  greedy=0.67  path=0 [ckpt] | eval: 
+task 17: v3_noise seed=2 | last: [3000/3000]  acc=0.1111  min=0.1111  best_avg_reward=10.82  reward=4.33  greedy=0.00  path=0 [ckpt] | eval: 
+
+## job 4267428: round 4, uniform push 12 seeds (run_fir_v4.sh)
+task 0: v4_push seed=3 | last: [3000/3000]  acc=0.7778  min=0.3333  best_avg_reward=10.56  reward=9.44  greedy=0.56  path=0 [ckpt] | eval: exact target path at final attack step: 0/20 eval episodes greedy-acc  mean over last 5 steps: 0.597 
+task 1: v4_push seed=4 | last: [3000/3000]  acc=0.7778  min=0.5556  best_avg_reward=13.22  reward=13.78  greedy=1.00  path=1 [ckpt] | eval: exact target path at final attack step: 15/20 eval episodes greedy-acc  mean over last 5 steps: 0.972 
+task 2: v4_push seed=5 | last: [3000/3000]  acc=0.5556  min=0.5556  best_avg_reward=10.77  reward=10.22  greedy=0.56  path=0 [ckpt] | eval: exact target path at final attack step: 0/20 eval episodes greedy-acc  mean over last 5 steps: 0.641 
+task 3: v4_push seed=6 | last: [3000/3000]  acc=0.7778  min=0.3333  best_avg_reward=12.30  reward=11.56  greedy=0.78  path=0 [ckpt] | eval: exact target path at final attack step: 0/20 eval episodes greedy-acc  mean over last 5 steps: 0.871 
+task 4: v4_push seed=7 | last: [3000/3000]  acc=0.6667  min=0.4444  best_avg_reward=10.46  reward=10.67  greedy=0.67  path=0 [ckpt] | eval: exact target path at final attack step: 0/20 eval episodes greedy-acc  mean over last 5 steps: 0.606 
+task 5: v4_push seed=8 | last: [3000/3000]  acc=1.0000  min=0.4444  best_avg_reward=11.67  reward=11.89  greedy=0.89  path=0 [ckpt] | eval: exact target path at final attack step: 0/20 eval episodes greedy-acc  mean over last 5 steps: 0.826 
+task 6: v4_push seed=9 | last: [3000/3000]  acc=0.7778  min=0.4444  best_avg_reward=11.24  reward=11.00  greedy=0.78  path=0 [ckpt] | eval: exact target path at final attack step: 0/20 eval episodes greedy-acc  mean over last 5 steps: 0.777 
+task 7: v4_push seed=10 | last: [3000/3000]  acc=0.7778  min=0.4444  best_avg_reward=12.08  reward=11.89  greedy=0.78  path=0 [ckpt] | eval: exact target path at final attack step: 0/20 eval episodes greedy-acc  mean over last 5 steps: 0.923 
+task 8: v4_push seed=11 | last: [3000/3000]  acc=0.7778  min=0.3333  best_avg_reward=13.40  reward=8.67  greedy=0.33  path=0 [ckpt] | eval: exact target path at final attack step: 20/20 eval episodes greedy-acc  mean over last 5 steps: 0.999 
+task 9: v4_push seed=12 | last: [3000/3000]  acc=0.6667  min=0.1111  best_avg_reward=10.98  reward=6.89  greedy=0.78  path=0 [ckpt] | eval: exact target path at final attack step: 0/20 eval episodes greedy-acc  mean over last 5 steps: 0.756 
+task 10: v4_push seed=13 | last: [3000/3000]  acc=0.4444  min=0.3333  best_avg_reward=11.59  reward=7.22  greedy=0.44  path=0 [ckpt] | eval: exact target path at final attack step: 0/20 eval episodes greedy-acc  mean over last 5 steps: 0.776 
+task 11: v4_push seed=14 | last: [3000/3000]  acc=0.7778  min=0.4444  best_avg_reward=12.71  reward=11.67  greedy=0.89  path=0 [ckpt] | eval: exact target path at final attack step: 13/20 eval episodes greedy-acc  mean over last 5 steps: 0.953 
+
+## job 4277519: round 5, adaptive push and imitation (run_fir_v5.sh)
+task 0: v5_cem seed=0 | last: [3000/3000]  acc=0.6667  min=0.4444  best_avg_reward=13.21  reward=10.33  greedy=0.78  path=0 [ckpt] | eval: exact target path at final attack step: 16/20 eval episodes greedy-acc  mean over last 5 steps: 0.980 
+task 1: v5_cem seed=1 | last: [3000/3000]  acc=0.3333  min=0.2222  best_avg_reward=11.97  reward=7.89  greedy=0.33  path=0 [ckpt] | eval: exact target path at final attack step: 0/20 eval episodes greedy-acc  mean over last 5 steps: 0.488 
+task 2: v5_cem seed=2 | last: [3000/3000]  acc=1.0000  min=0.5556  best_avg_reward=11.59  reward=10.89  greedy=0.89  path=0 [ckpt] | eval: exact target path at final attack step: 0/20 eval episodes greedy-acc  mean over last 5 steps: 0.807 
+task 3: v5_cem seed=3 | last: [3000/3000]  acc=0.3333  min=0.3333  best_avg_reward=11.19  reward=9.33  greedy=0.67  path=0 [ckpt] | eval: exact target path at final attack step: 0/20 eval episodes greedy-acc  mean over last 5 steps: 0.411 
+task 4: v5_cem seed=4 | last: [2998/3000]  acc=0.4444  min=0.2222  best_avg_reward=11.30  reward=7.67  greedy=0.33  path=0 | eval: exact target path at final attack step: 0/20 eval episodes greedy-acc  mean over last 5 steps: 0.790 
+task 5: v5_cem seed=5 | last: [3000/3000]  acc=0.3333  min=0.1111  best_avg_reward=11.73  reward=8.11  greedy=0.22  path=0 [ckpt] | eval: exact target path at final attack step: 0/20 eval episodes greedy-acc  mean over last 5 steps: 0.786 
+task 6: v5_bc seed=0 | last: [3000/3000]  acc=0.3333  min=0.1111  best_avg_reward=10.77  reward=6.44  greedy=0.33  path=0 [ckpt] | eval: exact target path at final attack step: 0/20 eval episodes greedy-acc  mean over last 5 steps: 0.813 
+task 7: v5_bc seed=1 | last: [3000/3000]  acc=0.4444  min=0.2222  best_avg_reward=9.76  reward=6.56  greedy=0.44  path=0 [ckpt] | eval: exact target path at final attack step: 0/20 eval episodes greedy-acc  mean over last 5 steps: 0.536 
+task 8: v5_bc seed=2 | last: [3000/3000]  acc=0.5556  min=0.3333  best_avg_reward=9.77  reward=8.44  greedy=0.44  path=0 [ckpt] | eval: exact target path at final attack step: 0/20 eval episodes greedy-acc  mean over last 5 steps: 0.536 
+task 9: v5_bc seed=3 | last: [3000/3000]  acc=0.1111  min=0.1111  best_avg_reward=9.94  reward=6.67  greedy=0.56  path=0 [ckpt] | eval: exact target path at final attack step: 0/20 eval episodes greedy-acc  mean over last 5 steps: 0.476 
+task 10: v5_bc seed=4 | last: [3000/3000]  acc=0.2222  min=0.1111  best_avg_reward=9.78  reward=6.00  greedy=0.11  path=0 [ckpt] | eval: exact target path at final attack step: 0/20 eval episodes greedy-acc  mean over last 5 steps: 0.472 
+task 11: v5_bc seed=5 | last: [3000/3000]  acc=0.6667  min=0.2222  best_avg_reward=10.84  reward=9.11  greedy=0.44  path=0 [ckpt] | eval: exact target path at final attack step: 0/20 eval episodes greedy-acc  mean over last 5 steps: 0.751 
+task 12: v5_cembc seed=0 | last: [3000/3000]  acc=0.7778  min=0.3333  best_avg_reward=11.90  reward=10.11  greedy=0.89  path=0 [ckpt] | eval: exact target path at final attack step: 4/20 eval episodes greedy-acc  mean over last 5 steps: 0.813 
+task 13: v5_cembc seed=1 | last: [2998/3000]  acc=0.6667  min=0.3333  best_avg_reward=10.12  reward=9.33  greedy=0.44  path=0 | eval: exact target path at final attack step: 0/20 eval episodes greedy-acc  mean over last 5 steps: 0.659 
+task 14: v5_cembc seed=2 | last: [2999/3000]  acc=0.5556  min=0.2222  best_avg_reward=10.11  reward=7.00  greedy=0.33  path=0 | eval: exact target path at final attack step: 0/20 eval episodes greedy-acc  mean over last 5 steps: 0.782 
+task 15: v5_cembc seed=3 | last: [3000/3000]  acc=0.6667  min=0.0000  best_avg_reward=13.41  reward=7.78  greedy=0.33  path=0 [ckpt] | eval: exact target path at final attack step: 7/20 eval episodes greedy-acc  mean over last 5 steps: 0.930 
+task 16: v5_cembc seed=4 | last: [3000/3000]  acc=0.5556  min=0.4444  best_avg_reward=8.80  reward=8.44  greedy=0.33  path=0 [ckpt] | eval: exact target path at final attack step: 0/20 eval episodes greedy-acc  mean over last 5 steps: 0.454 
+task 17: v5_cembc seed=5 | last: [3000/3000]  acc=0.7778  min=0.4444  best_avg_reward=10.19  reward=10.33  greedy=0.67  path=0 [ckpt] | eval: exact target path at final attack step: 0/20 eval episodes greedy-acc  mean over last 5 steps: 0.571 
+task 18: v5_cembc1 seed=0 | last: [3000/3000]  acc=0.8889  min=0.5556  best_avg_reward=13.30  reward=12.67  greedy=0.89  path=0 [ckpt] | eval: exact target path at final attack step: 12/20 eval episodes greedy-acc  mean over last 5 steps: 0.968 
+task 19: v5_cembc1 seed=1 | last: [2999/3000]  acc=0.5556  min=0.3333  best_avg_reward=13.00  reward=8.00  greedy=0.44  path=0 | eval: exact target path at final attack step: 2/20 eval episodes greedy-acc  mean over last 5 steps: 0.896 
+task 20: v5_cembc1 seed=2 | last: [3000/3000]  acc=0.7778  min=0.3333  best_avg_reward=10.71  reward=9.00  greedy=0.67  path=0 [ckpt] | eval: exact target path at final attack step: 0/20 eval episodes greedy-acc  mean over last 5 steps: 0.708 
+task 21: v5_cembc1 seed=3 | last: [3000/3000]  acc=0.5556  min=0.3333  best_avg_reward=10.94  reward=8.11  greedy=0.56  path=0 [ckpt] | eval: exact target path at final attack step: 0/20 eval episodes greedy-acc  mean over last 5 steps: 0.567 
+task 22: v5_cembc1 seed=4 | last: [3000/3000]  acc=0.6667  min=0.5556  best_avg_reward=10.83  reward=11.00  greedy=0.67  path=0 [ckpt] | eval: exact target path at final attack step: 0/20 eval episodes greedy-acc  mean over last 5 steps: 0.758 
+task 23: v5_cembc1 seed=5 | last: [3000/3000]  acc=1.0000  min=0.5556  best_avg_reward=12.98  reward=13.33  greedy=0.89  path=0 [ckpt] | eval: exact target path at final attack step: 14/20 eval episodes greedy-acc  mean over last 5 steps: 0.968 
+
+## job 4283912: round 6, adaptive push 6000 ep (run_fir_v6.sh)
+task 0: v6_cem seed=0 | last: [6000/6000]  acc=0.6667  min=0.4444  best_avg_reward=13.15  reward=10.89  greedy=0.78  path=0 [ckpt] | eval: exact target path at final attack step: 20/20 eval episodes greedy-acc  mean over last 5 steps: 0.998 
+task 1: v6_cem seed=1 | last: [6000/6000]  acc=1.0000  min=0.3333  best_avg_reward=13.61  reward=13.11  greedy=1.00  path=1 [ckpt] | eval: exact target path at final attack step: 16/20 eval episodes greedy-acc  mean over last 5 steps: 0.991 
+task 2: v6_cem seed=2 | last: [6000/6000]  acc=0.8889  min=0.4444  best_avg_reward=13.38  reward=12.89  greedy=1.00  path=1 [ckpt] | eval: exact target path at final attack step: 20/20 eval episodes greedy-acc  mean over last 5 steps: 1.000 
+task 3: v6_cem seed=3 | last: [6000/6000]  acc=0.6667  min=0.3333  best_avg_reward=12.05  reward=8.22  greedy=0.56  path=0 [ckpt] | eval: exact target path at final attack step: 0/20 eval episodes greedy-acc  mean over last 5 steps: 0.888 
+task 4: v6_cem seed=4 | last: [6000/6000]  acc=1.0000  min=0.5556  best_avg_reward=13.23  reward=12.33  greedy=1.00  path=1 [ckpt] | eval: exact target path at final attack step: 18/20 eval episodes greedy-acc  mean over last 5 steps: 0.984 
+task 5: v6_cem seed=5 | last: [6000/6000]  acc=1.0000  min=0.4444  best_avg_reward=13.03  reward=13.56  greedy=1.00  path=1 [ckpt] | eval: exact target path at final attack step: 17/20 eval episodes greedy-acc  mean over last 5 steps: 0.967 
+task 6: v6_cembc1 seed=0 | last: [5999/6000]  acc=0.5556  min=0.5556  best_avg_reward=11.55  reward=10.22  greedy=0.56  path=0 | eval: exact target path at final attack step: 0/20 eval episodes greedy-acc  mean over last 5 steps: 0.691 
+task 7: v6_cembc1 seed=1 | last: [6000/6000]  acc=0.8889  min=0.4444  best_avg_reward=13.51  reward=12.22  greedy=1.00  path=1 [ckpt] | eval: exact target path at final attack step: 15/20 eval episodes greedy-acc  mean over last 5 steps: 0.984 
+task 8: v6_cembc1 seed=2 | last: [6000/6000]  acc=1.0000  min=0.3333  best_avg_reward=12.92  reward=11.67  greedy=1.00  path=1 [ckpt] | eval: exact target path at final attack step: 16/20 eval episodes greedy-acc  mean over last 5 steps: 0.986 
+task 9: v6_cembc1 seed=3 | last: [6000/6000]  acc=0.7778  min=0.4444  best_avg_reward=12.22  reward=10.33  greedy=0.78  path=0 [ckpt] | eval: exact target path at final attack step: 17/20 eval episodes greedy-acc  mean over last 5 steps: 0.986 
+task 10: v6_cembc1 seed=4 | last: [6000/6000]  acc=0.7778  min=0.3333  best_avg_reward=12.17  reward=10.00  greedy=0.78  path=0 [ckpt] | eval: exact target path at final attack step: 0/20 eval episodes greedy-acc  mean over last 5 steps: 0.850 
+task 11: v6_cembc1 seed=5 | last: [6000/6000]  acc=0.6667  min=0.5556  best_avg_reward=11.98  reward=12.78  greedy=0.89  path=0 [ckpt] | eval: exact target path at final attack step: 0/20 eval episodes greedy-acc  mean over last 5 steps: 0.779 
+
+## job 4359495: round 7, adaptive push 12 more seeds (run_fir_v7.sh)
+task 0: v6_cem seed=6 | last: [6000/6000]  acc=0.7778  min=0.5556  best_avg_reward=13.09  reward=12.67  greedy=0.89  path=0 [ckpt] | eval: exact target path at final attack step: 15/20 eval episodes greedy-acc  mean over last 5 steps: 0.946 
+task 1: v6_cem seed=7 | last: [5999/6000]  acc=0.8889  min=0.5556  best_avg_reward=11.31  reward=11.67  greedy=0.78  path=0 | eval: exact target path at final attack step: 0/20 eval episodes greedy-acc  mean over last 5 steps: 0.778 
+task 2: v6_cem seed=8 | last: [6000/6000]  acc=0.6667  min=0.4444  best_avg_reward=9.95  reward=9.78  greedy=0.56  path=0 [ckpt] | eval: exact target path at final attack step: 0/20 eval episodes greedy-acc  mean over last 5 steps: 0.737 
+task 3: v6_cem seed=9 | last: [6000/6000]  acc=1.0000  min=0.5556  best_avg_reward=13.23  reward=13.11  greedy=1.00  path=1 [ckpt] | eval: exact target path at final attack step: 17/20 eval episodes greedy-acc  mean over last 5 steps: 0.986 
+task 4: v6_cem seed=10 | last: [6000/6000]  acc=1.0000  min=0.5556  best_avg_reward=13.57  reward=13.00  greedy=1.00  path=1 [ckpt] | eval: exact target path at final attack step: 18/20 eval episodes greedy-acc  mean over last 5 steps: 0.997 
+task 5: v6_cem seed=11 | last: [5999/6000]  acc=0.5556  min=0.4444  best_avg_reward=11.88  reward=10.44  greedy=0.67  path=0 | eval: exact target path at final attack step: 0/20 eval episodes greedy-acc  mean over last 5 steps: 0.820 
+task 6: v6_cem seed=12 | last: [5999/6000]  acc=0.6667  min=0.3333  best_avg_reward=11.80  reward=8.56  greedy=0.44  path=0 | eval: exact target path at final attack step: 0/20 eval episodes greedy-acc  mean over last 5 steps: 0.804 
+task 7: v6_cem seed=13 | last: [6000/6000]  acc=0.5556  min=0.5556  best_avg_reward=12.03  reward=11.00  greedy=0.78  path=0 [ckpt] | eval: exact target path at final attack step: 0/20 eval episodes greedy-acc  mean over last 5 steps: 0.879 
+task 8: v6_cem seed=14 | last: [5999/6000]  acc=0.3333  min=0.3333  best_avg_reward=12.60  reward=8.67  greedy=0.44  path=0 | eval: exact target path at final attack step: 10/20 eval episodes greedy-acc  mean over last 5 steps: 0.956 
+task 9: v6_cem seed=15 | last: [6000/6000]  acc=0.5556  min=0.4444  best_avg_reward=11.59  reward=10.44  greedy=0.44  path=0 [ckpt] | eval: exact target path at final attack step: 0/20 eval episodes greedy-acc  mean over last 5 steps: 0.852 
+task 10: v6_cem seed=16 | last: [6000/6000]  acc=0.7778  min=0.5556  best_avg_reward=12.88  reward=11.89  greedy=0.67  path=0 [ckpt] | eval: exact target path at final attack step: 16/20 eval episodes greedy-acc  mean over last 5 steps: 0.954 
+task 11: v6_cem seed=17 | last: [5999/6000]  acc=0.7778  min=0.4444  best_avg_reward=11.59  reward=10.67  greedy=0.78  path=0 | eval: exact target path at final attack step: 0/20 eval episodes greedy-acc  mean over last 5 steps: 0.823 
+
+## job 4360559: round 8, 5x5 and 6x6 first attempt (run_fir_grids.sh)
+task 0: grid5_cem seed=0 | last: [8000/8000]  acc=0.8333  min=0.4167  best_avg_reward=12.38  reward=12.33  greedy=0.92  path=0 [ckpt] | eval: exact target path at final attack step: 0/20 eval episodes greedy-acc  mean over last 5 steps: 0.910 
+task 1: grid5_cem seed=1 | last: [8000/8000]  acc=0.9167  min=0.3333  best_avg_reward=13.03  reward=13.33  greedy=0.92  path=0 [ckpt] | eval: exact target path at final attack step: 9/20 eval episodes greedy-acc  mean over last 5 steps: 0.963 
+task 2: grid5_cem seed=2 | last: [8000/8000]  acc=0.9167  min=0.6667  best_avg_reward=12.06  reward=12.42  greedy=0.92  path=0 [ckpt] | eval: exact target path at final attack step: 0/20 eval episodes greedy-acc  mean over last 5 steps: 0.899 
+task 3: grid5_cem seed=3 | last: [8000/8000]  acc=0.7500  min=0.3333  best_avg_reward=13.34  reward=7.67  greedy=0.58  path=0 [ckpt] | eval: exact target path at final attack step: 20/20 eval episodes greedy-acc  mean over last 5 steps: 0.996 
+task 4: grid5_cem seed=4 | last: [7997/8000]  acc=0.4167  min=0.2500  best_avg_reward=9.11  reward=7.17  greedy=0.50  path=0 | eval: exact target path at final attack step: 0/20 eval episodes greedy-acc  mean over last 5 steps: 0.613 
+task 5: grid5_cem seed=5 | last: [8000/8000]  acc=0.9167  min=0.6667  best_avg_reward=13.13  reward=13.08  greedy=0.92  path=0 [ckpt] | eval: exact target path at final attack step: 0/20 eval episodes greedy-acc  mean over last 5 steps: 0.951 
+task 6: grid6_cem seed=0 | last: [8000/8000]  acc=0.4667  min=0.3333  best_avg_reward=11.79  reward=7.53  greedy=0.47  path=0 [ckpt] | eval: exact target path at final attack step: 0/20 eval episodes greedy-acc  mean over last 5 steps: 0.934 
+task 7: grid6_cem seed=1 | last: [8000/8000]  acc=0.4000  min=0.2667  best_avg_reward=11.83  reward=8.00  greedy=0.33  path=0 [ckpt] | eval: exact target path at final attack step: 0/20 eval episodes greedy-acc  mean over last 5 steps: 0.851 
+task 8: grid6_cem seed=2 | last: [8000/8000]  acc=0.6667  min=0.3333  best_avg_reward=12.35  reward=8.93  greedy=0.53  path=0 [ckpt] | eval: exact target path at final attack step: 0/20 eval episodes greedy-acc  mean over last 5 steps: 0.873 
+task 9: grid6_cem seed=3 | last: [8000/8000]  acc=0.8000  min=0.4000  best_avg_reward=11.69  reward=9.87  greedy=0.80  path=0 [ckpt] | eval: exact target path at final attack step: 0/20 eval episodes greedy-acc  mean over last 5 steps: 0.863 
+task 10: grid6_cem seed=4 | last: [8000/8000]  acc=0.5333  min=0.3333  best_avg_reward=12.12  reward=8.73  greedy=0.53  path=0 [ckpt] | eval: exact target path at final attack step: 0/20 eval episodes greedy-acc  mean over last 5 steps: 0.827 
+task 11: grid6_cem seed=5 | last: [8000/8000]  acc=0.5333  min=0.2667  best_avg_reward=10.31  reward=7.67  greedy=0.27  path=0 [ckpt] | eval: exact target path at final attack step: 0/20 eval episodes greedy-acc  mean over last 5 steps: 0.795 
+
+## job 4379370: round 9, grid-size tuning 5x5 6x6 8x8 (run_fir_tune.sh)
+task 0: tune5_floor seed=0 | last: [12000/12000]  acc=0.8333  min=0.5833  best_avg_reward=11.94  reward=12.00  greedy=0.83  path=0 [ckpt] | eval: exact target path at final attack step: 0/20 eval episodes greedy-acc  mean over last 5 steps: 0.886 
+task 1: tune5_floor seed=1 | last: [12000/12000]  acc=1.0000  min=0.3333  best_avg_reward=13.51  reward=12.42  greedy=1.00  path=1 [ckpt] | eval: exact target path at final attack step: 9/20 eval episodes greedy-acc  mean over last 5 steps: 0.956 
+task 2: tune5_floor seed=2 | last: [12000/12000]  acc=1.0000  min=0.5833  best_avg_reward=13.18  reward=13.42  greedy=1.00  path=1 [ckpt] | eval: exact target path at final attack step: 20/20 eval episodes greedy-acc  mean over last 5 steps: 1.000 
+task 3: tune5_floor seed=3 | last: [11999/12000]  acc=0.7500  min=0.5833  best_avg_reward=12.24  reward=11.67  greedy=0.83  path=0 | eval: exact target path at final attack step: 7/20 eval episodes greedy-acc  mean over last 5 steps: 0.934 
+task 4: tune5_push40 seed=0 | last: [12000/12000]  acc=0.8333  min=0.3333  best_avg_reward=13.37  reward=11.67  greedy=0.83  path=0 [ckpt] | eval: exact target path at final attack step: 0/20 eval episodes greedy-acc  mean over last 5 steps: 0.797 
+task 5: tune5_push40 seed=1 | last: [12000/12000]  acc=0.5833  min=0.3333  best_avg_reward=12.66  reward=10.67  greedy=0.75  path=0 [ckpt] | eval: exact target path at final attack step: 0/20 eval episodes greedy-acc  mean over last 5 steps: 0.895 
+task 6: tune5_push40 seed=2 | last: [12000/12000]  acc=0.5000  min=0.3333  best_avg_reward=12.74  reward=9.08  greedy=0.50  path=0 [ckpt] | eval: exact target path at final attack step: 0/20 eval episodes greedy-acc  mean over last 5 steps: 0.949 
+task 7: tune5_push40 seed=3 | last: [12000/12000]  acc=0.9167  min=0.3333  best_avg_reward=13.30  reward=12.08  greedy=0.92  path=0 [ckpt] | eval: exact target path at final attack step: 20/20 eval episodes greedy-acc  mean over last 5 steps: 1.000 
+task 8: tune5_slow seed=0 | last: [12000/12000]  acc=1.0000  min=0.1667  best_avg_reward=12.27  reward=10.25  greedy=1.00  path=1 [ckpt] | eval: exact target path at final attack step: 0/20 eval episodes greedy-acc  mean over last 5 steps: 0.911 
+task 9: tune5_slow seed=1 | last: [12000/12000]  acc=0.8333  min=0.5000  best_avg_reward=12.04  reward=11.00  greedy=0.75  path=0 [ckpt] | eval: exact target path at final attack step: 0/20 eval episodes greedy-acc  mean over last 5 steps: 0.832 
+task 10: tune5_slow seed=2 | last: [12000/12000]  acc=1.0000  min=0.5833  best_avg_reward=13.60  reward=13.83  greedy=1.00  path=1 [ckpt] | eval: exact target path at final attack step: 19/20 eval episodes greedy-acc  mean over last 5 steps: 0.998 
+task 11: tune5_slow seed=3 | last: [11998/12000]  acc=0.6667  min=0.3333  best_avg_reward=13.05  reward=11.92  greedy=0.92  path=0 | eval: exact target path at final attack step: 17/20 eval episodes greedy-acc  mean over last 5 steps: 0.996 
+task 12: tune6_floor seed=0 | last: [12000/12000]  acc=0.1333  min=0.1333  best_avg_reward=10.70  reward=6.80  greedy=0.33  path=0 [ckpt] | eval: exact target path at final attack step: 0/20 eval episodes greedy-acc  mean over last 5 steps: 0.659 
+task 13: tune6_floor seed=1 | last: [12000/12000]  acc=0.7333  min=0.6000  best_avg_reward=11.02  reward=11.27  greedy=0.73  path=0 [ckpt] | eval: exact target path at final attack step: 0/20 eval episodes greedy-acc  mean over last 5 steps: 0.846 
+task 14: tune6_floor seed=2 | last: [12000/12000]  acc=0.9333  min=0.6667  best_avg_reward=13.31  reward=13.27  greedy=1.00  path=1 [ckpt] | eval: exact target path at final attack step: 0/20 eval episodes greedy-acc  mean over last 5 steps: 0.998 
+task 15: tune6_floor seed=3 | last: [12000/12000]  acc=0.8000  min=0.4667  best_avg_reward=12.69  reward=12.20  greedy=0.73  path=0 [ckpt] | eval: exact target path at final attack step: 0/20 eval episodes greedy-acc  mean over last 5 steps: 0.923 
+task 16: tune6_push40 seed=0 | last: [11998/12000]  acc=0.6667  min=0.2667  best_avg_reward=13.35  reward=7.67  greedy=0.40  path=0 | eval: exact target path at final attack step: 20/20 eval episodes greedy-acc  mean over last 5 steps: 0.998 
+task 17: tune6_push40 seed=1 | last: [12000/12000]  acc=0.8667  min=0.7333  best_avg_reward=13.79  reward=13.47  greedy=0.93  path=0 [ckpt] | eval: exact target path at final attack step: 19/20 eval episodes greedy-acc  mean over last 5 steps: 0.996 
+task 18: tune6_push40 seed=2 | last: [12000/12000]  acc=0.6667  min=0.5333  best_avg_reward=12.83  reward=10.93  greedy=0.87  path=0 [ckpt] | eval: exact target path at final attack step: 0/20 eval episodes greedy-acc  mean over last 5 steps: 0.936 
+task 19: tune6_push40 seed=3 | last: [12000/12000]  acc=0.6000  min=0.4667  best_avg_reward=12.07  reward=10.27  greedy=0.67  path=0 [ckpt] | eval: exact target path at final attack step: 0/20 eval episodes greedy-acc  mean over last 5 steps: 0.955 
+task 20: tune6_slow seed=0 | last: [12000/12000]  acc=1.0000  min=0.7333  best_avg_reward=12.74  reward=12.60  greedy=0.93  path=0 [ckpt] | eval: exact target path at final attack step: 0/20 eval episodes greedy-acc  mean over last 5 steps: 0.867 
+task 21: tune6_slow seed=1 | last: [11999/12000]  acc=1.0000  min=0.6667  best_avg_reward=13.38  reward=12.73  greedy=1.00  path=1 | eval: exact target path at final attack step: 18/20 eval episodes greedy-acc  mean over last 5 steps: 0.997 
+task 22: tune6_slow seed=2 | last: [11998/12000]  acc=0.6667  min=0.6667  best_avg_reward=12.35  reward=11.73  greedy=0.80  path=0 | eval: exact target path at final attack step: 0/20 eval episodes greedy-acc  mean over last 5 steps: 0.922 
+task 23: tune6_slow seed=3 | last: [12000/12000]  acc=0.6000  min=0.5333  best_avg_reward=13.32  reward=9.93  greedy=0.47  path=0 [ckpt] | eval: exact target path at final attack step: 20/20 eval episodes greedy-acc  mean over last 5 steps: 1.000 
+task 24: tune8_floor seed=0 | last: [12000/12000]  acc=0.6190  min=0.2857  best_avg_reward=11.69  reward=9.38  greedy=0.52  path=0 [ckpt] | eval: exact target path at final attack step: 0/20 eval episodes greedy-acc  mean over last 5 steps: 0.833 
+task 25: tune8_floor seed=1 | last: [12000/12000]  acc=0.7143  min=0.1905  best_avg_reward=11.87  reward=9.95  greedy=0.62  path=0 [ckpt] | eval: exact target path at final attack step: 0/20 eval episodes greedy-acc  mean over last 5 steps: 0.733 
+task 26: tune8_floor seed=2 | last: [12000/12000]  acc=0.7143  min=0.2381  best_avg_reward=11.47  reward=10.48  greedy=0.62  path=0 [ckpt] | eval: exact target path at final attack step: 0/20 eval episodes greedy-acc  mean over last 5 steps: 0.803 
+task 27: tune8_floor seed=3 | last: [12000/12000]  acc=0.8571  min=0.6190  best_avg_reward=12.11  reward=11.38  greedy=0.90  path=0 [ckpt] | eval: exact target path at final attack step: 0/20 eval episodes greedy-acc  mean over last 5 steps: 0.899 
+task 28: tune8_push40 seed=0 | last: [12000/12000]  acc=0.8571  min=0.5714  best_avg_reward=11.36  reward=10.71  greedy=0.71  path=0 [ckpt] | eval: exact target path at final attack step: 0/20 eval episodes greedy-acc  mean over last 5 steps: 0.881 
+task 29: tune8_push40 seed=1 | last: [12000/12000]  acc=0.8571  min=0.4286  best_avg_reward=11.41  reward=10.24  greedy=0.71  path=0 [ckpt] | eval: exact target path at final attack step: 0/20 eval episodes greedy-acc  mean over last 5 steps: 0.899 
+task 30: tune8_push40 seed=2 | last: [11998/12000]  acc=0.6667  min=0.3810  best_avg_reward=9.79  reward=10.10  greedy=0.52  path=0 | eval: exact target path at final attack step: 0/20 eval episodes greedy-acc  mean over last 5 steps: 0.545 
+task 31: tune8_push40 seed=3 | last: [12000/12000]  acc=0.3333  min=0.3333  best_avg_reward=11.35  reward=8.38  greedy=0.38  path=0 [ckpt] | eval: exact target path at final attack step: 0/20 eval episodes greedy-acc  mean over last 5 steps: 0.799 
+task 32: tune8_slow seed=0 | last: [12000/12000]  acc=0.5238  min=0.4286  best_avg_reward=9.77  reward=8.71  greedy=0.29  path=0 [ckpt] | eval: exact target path at final attack step: 0/20 eval episodes greedy-acc  mean over last 5 steps: 0.688 
+task 33: tune8_slow seed=1 | last: [11998/12000]  acc=0.4762  min=0.3810  best_avg_reward=11.49  reward=8.05  greedy=0.52  path=0 | eval: exact target path at final attack step: 0/20 eval episodes greedy-acc  mean over last 5 steps: 0.797 
+task 34: tune8_slow seed=2 | last: [12000/12000]  acc=0.6190  min=0.4286  best_avg_reward=10.28  reward=9.43  greedy=0.48  path=0 [ckpt] | eval: exact target path at final attack step: 0/20 eval episodes greedy-acc  mean over last 5 steps: 0.622 
+task 35: tune8_slow seed=3 | last: [12000/12000]  acc=0.5714  min=0.5714  best_avg_reward=12.04  reward=9.76  greedy=0.57  path=0 [ckpt] | eval: exact target path at final attack step: 0/20 eval episodes greedy-acc  mean over last 5 steps: 0.915 
+
+## job 4390956: round 10, own-actions observation, grid4 + ring (run_fir_agnostic.sh)
+task 0: agn_grid3d_qlearning seed=0 | last: [5999/6000]  acc=1.0000  min=0.3333  best_avg_reward=13.98  reward=12.44  greedy=1.00  path=1 | eval: exact target path at final attack step: 13/20 eval episodes greedy-acc  mean over last 5 steps: 0.953 
+task 1: agn_grid3d_qlearning seed=1 | last: [6000/6000]  acc=1.0000  min=0.1111  best_avg_reward=12.88  reward=11.56  greedy=0.89  path=0 [ckpt] | eval: exact target path at final attack step: 17/20 eval episodes greedy-acc  mean over last 5 steps: 0.996 
+task 2: agn_grid3d_qlearning seed=2 | last: [6000/6000]  acc=0.7778  min=0.4444  best_avg_reward=13.78  reward=11.22  greedy=0.78  path=0 [ckpt] | eval: exact target path at final attack step: 11/20 eval episodes greedy-acc  mean over last 5 steps: 0.949 
+task 3: agn_grid3d_qlearning seed=3 | last: [6000/6000]  acc=0.6667  min=0.3333  best_avg_reward=12.50  reward=9.33  greedy=0.56  path=0 [ckpt] | eval: exact target path at final attack step: 14/20 eval episodes greedy-acc  mean over last 5 steps: 0.961 
+task 4: agn_grid3d_qlearning seed=4 | last: [6000/6000]  acc=0.7778  min=0.5556  best_avg_reward=10.91  reward=10.56  greedy=0.78  path=0 [ckpt] | eval: exact target path at final attack step: 0/20 eval episodes greedy-acc  mean over last 5 steps: 0.713 
+task 5: agn_grid3d_qlearning seed=5 | last: [6000/6000]  acc=0.8889  min=0.7778  best_avg_reward=13.55  reward=13.89  greedy=1.00  path=1 [ckpt] | eval: exact target path at final attack step: 12/20 eval episodes greedy-acc  mean over last 5 steps: 0.964 
+task 6: agn_grid3d_qlearning seed=6 | last: [6000/6000]  acc=0.8889  min=0.4444  best_avg_reward=10.51  reward=10.22  greedy=0.78  path=0 [ckpt] | eval: exact target path at final attack step: 0/20 eval episodes greedy-acc  mean over last 5 steps: 0.671 
+task 7: agn_grid3d_qlearning seed=7 | last: [5997/6000]  acc=0.7778  min=0.2222  best_avg_reward=12.05  reward=9.00  greedy=0.67  path=0 | eval: exact target path at final attack step: 0/20 eval episodes greedy-acc  mean over last 5 steps: 0.888 
+task 8: agn_grid3d_qlearning seed=8 | last: [6000/6000]  acc=0.4444  min=0.3333  best_avg_reward=11.35  reward=9.00  greedy=0.33  path=0 [ckpt] | eval: exact target path at final attack step: 0/20 eval episodes greedy-acc  mean over last 5 steps: 0.836 
+task 9: agn_grid3d_qlearning seed=9 | last: [6000/6000]  acc=0.7778  min=0.3333  best_avg_reward=11.55  reward=9.67  greedy=0.56  path=0 [ckpt] | eval: exact target path at final attack step: 0/20 eval episodes greedy-acc  mean over last 5 steps: 0.847 
+task 10: agn_grid3d_qlearning seed=10 | last: [5999/6000]  acc=1.0000  min=0.5556  best_avg_reward=13.97  reward=13.89  greedy=1.00  path=1 | eval: exact target path at final attack step: 10/20 eval episodes greedy-acc  mean over last 5 steps: 0.942 
+task 11: agn_grid3d_qlearning seed=11 | last: [6000/6000]  acc=0.7778  min=0.4444  best_avg_reward=10.13  reward=9.56  greedy=0.67  path=0 [ckpt] | eval: exact target path at final attack step: 0/20 eval episodes greedy-acc  mean over last 5 steps: 0.724 
+task 12: agn_grid3d_sarsa seed=0 | last: [6000/6000]  acc=0.7778  min=0.1111  best_avg_reward=13.14  reward=10.22  greedy=0.78  path=0 [ckpt] | eval: exact target path at final attack step: 18/20 eval episodes greedy-acc  mean over last 5 steps: 0.984 
+task 13: agn_grid3d_sarsa seed=1 | last: [6000/6000]  acc=0.4444  min=0.3333  best_avg_reward=10.49  reward=8.11  greedy=0.67  path=0 [ckpt] | eval: exact target path at final attack step: 0/20 eval episodes greedy-acc  mean over last 5 steps: 0.733 
+task 14: agn_grid3d_sarsa seed=2 | last: [6000/6000]  acc=1.0000  min=0.6667  best_avg_reward=13.33  reward=13.11  greedy=1.00  path=1 [ckpt] | eval: exact target path at final attack step: 17/20 eval episodes greedy-acc  mean over last 5 steps: 0.978 
+task 15: agn_grid3d_sarsa seed=3 | last: [6000/6000]  acc=0.8889  min=0.3333  best_avg_reward=13.83  reward=13.67  greedy=1.00  path=1 [ckpt] | eval: exact target path at final attack step: 15/20 eval episodes greedy-acc  mean over last 5 steps: 0.977 
+task 16: agn_ring_qlearning seed=0 | last: [3000/3000]  acc=1.0000  min=0.7500  best_avg_reward=14.23  reward=13.75  greedy=1.00  path=1 [ckpt] | eval: exact target path at final attack step: 20/20 eval episodes greedy-acc  mean over last 5 steps: 1.000 
+task 17: agn_ring_qlearning seed=1 | last: [3000/3000]  acc=1.0000  min=0.2500  best_avg_reward=14.19  reward=13.50  greedy=1.00  path=1 [ckpt] | eval: exact target path at final attack step: 20/20 eval episodes greedy-acc  mean over last 5 steps: 1.000 
+task 18: agn_ring_qlearning seed=2 | last: [3000/3000]  acc=1.0000  min=0.5000  best_avg_reward=14.20  reward=14.25  greedy=1.00  path=1 [ckpt] | eval: exact target path at final attack step: 20/20 eval episodes greedy-acc  mean over last 5 steps: 1.000 
+task 19: agn_ring_qlearning seed=3 | last: [3000/3000]  acc=1.0000  min=0.5000  best_avg_reward=14.07  reward=14.25  greedy=1.00  path=1 [ckpt] | eval: exact target path at final attack step: 20/20 eval episodes greedy-acc  mean over last 5 steps: 1.000 
+task 20: agn_ring_sarsa seed=0 | last: [3000/3000]  acc=1.0000  min=0.2500  best_avg_reward=14.11  reward=13.00  greedy=1.00  path=1 [ckpt] | eval: exact target path at final attack step: 20/20 eval episodes greedy-acc  mean over last 5 steps: 0.998 
+task 21: agn_ring_sarsa seed=1 | last: [3000/3000]  acc=1.0000  min=0.7500  best_avg_reward=14.26  reward=13.75  greedy=1.00  path=1 [ckpt] | eval: exact target path at final attack step: 20/20 eval episodes greedy-acc  mean over last 5 steps: 1.000 
+task 22: agn_ring_sarsa seed=2 | last: [3000/3000]  acc=1.0000  min=0.7500  best_avg_reward=14.35  reward=14.25  greedy=1.00  path=1 [ckpt] | eval: exact target path at final attack step: 20/20 eval episodes greedy-acc  mean over last 5 steps: 1.000 
+task 23: agn_ring_sarsa seed=3 | last: [3000/3000]  acc=1.0000  min=0.2500  best_avg_reward=14.23  reward=13.00  greedy=1.00  path=1 [ckpt] | eval: exact target path at final attack step: 20/20 eval episodes greedy-acc  mean over last 5 steps: 1.000 
+
+## job 4423670: round 11, 3x3x3 grid and ring cells (run_fir_3x3x3.sh)
+task 0: s27_grid4_qlearning seed=0 | last: [6000/6000]  acc=0.8889  min=0.5556  best_avg_reward=14.02  reward=13.78  greedy=0.89  path=0 [ckpt] | eval: SCORE env=grid3d victim=qlearning | target_match 0.44 -> 0.98 | route 0/20 -> 16/20 | similarity 0.00 -> 0.00 | victim_return 0.0 -> 0.0 
+task 1: s27_grid4_qlearning seed=1 | last: [6000/6000]  acc=0.8889  min=0.6667  best_avg_reward=13.97  reward=13.56  greedy=1.00  path=1 [ckpt] | eval: SCORE env=grid3d victim=qlearning | target_match 0.44 -> 0.94 | route 0/20 -> 11/20 | similarity 0.00 -> 0.00 | victim_return 0.0 -> 0.0 
+task 2: s27_grid4_qlearning seed=2 | last: [6000/6000]  acc=0.7778  min=0.6667  best_avg_reward=13.66  reward=12.78  greedy=0.89  path=0 [ckpt] | eval: SCORE env=grid3d victim=qlearning | target_match 0.44 -> 0.99 | route 0/20 -> 19/20 | similarity 0.00 -> 0.00 | victim_return 0.0 -> 0.0 
+task 3: s27_grid4_sarsa seed=0 | last: [5999/6000]  acc=0.7778  min=0.3333  best_avg_reward=11.67  reward=10.22  greedy=0.78  path=0 | eval: SCORE env=grid3d victim=sarsa | target_match 0.43 -> 0.71 | route 0/20 -> 0/20 | similarity 0.00 -> 0.00 | victim_return 0.0 -> 0.0 
+task 4: s27_grid4_sarsa seed=1 | last: [6000/6000]  acc=1.0000  min=0.7778  best_avg_reward=14.14  reward=14.33  greedy=0.89  path=0 [ckpt] | eval: SCORE env=grid3d victim=sarsa | target_match 0.43 -> 0.95 | route 0/20 -> 11/20 | similarity 0.00 -> 0.00 | victim_return 0.0 -> 0.0 
+task 5: s27_grid4_sarsa seed=2 | last: [6000/6000]  acc=1.0000  min=0.4444  best_avg_reward=13.89  reward=13.78  greedy=1.00  path=1 [ckpt] | eval: SCORE env=grid3d victim=sarsa | target_match 0.43 -> 0.98 | route 0/20 -> 16/20 | similarity 0.00 -> 0.00 | victim_return 0.0 -> 0.0 
+task 6: s27_grid4_reinforce seed=0 | last: [ 457/6000]  acc=0.3333  min=0.3333  best_avg_reward=6.89  reward=6.56  greedy=0.22  path=0 | eval: 
+task 7: s27_grid4_reinforce seed=1 | last: [ 415/6000]  acc=0.1111  min=0.1111  best_avg_reward=6.81  reward=2.22  greedy=0.11  path=0 | eval: 
+task 8: s27_grid4_reinforce seed=2 | last: [ 425/6000]  acc=0.2222  min=0.2222  best_avg_reward=6.78  reward=3.33  greedy=0.11  path=0 | eval: 
+task 9: s27_grid5_qlearning seed=0 | last: [11999/12000]  acc=0.6667  min=0.3333  best_avg_reward=12.27  reward=8.92  greedy=0.50  path=0 | eval: SCORE env=grid3d victim=qlearning | target_match 0.48 -> 0.88 | route 0/20 -> 0/20 | similarity 0.00 -> 0.00 | victim_return 0.0 -> 0.0 
+task 10: s27_grid5_qlearning seed=1 | last: [11999/12000]  acc=0.5000  min=0.2500  best_avg_reward=11.82  reward=7.58  greedy=0.67  path=0 | eval: SCORE env=grid3d victim=qlearning | target_match 0.48 -> 0.83 | route 0/20 -> 0/20 | similarity 0.00 -> 0.00 | victim_return 0.0 -> 0.0 
+task 11: s27_grid5_qlearning seed=2 | last: [11998/12000]  acc=0.7500  min=0.4167  best_avg_reward=12.27  reward=9.33  greedy=0.58  path=0 | eval: SCORE env=grid3d victim=qlearning | target_match 0.48 -> 0.84 | route 0/20 -> 0/20 | similarity 0.00 -> 0.00 | victim_return 0.0 -> 0.0 
+task 12: s27_grid5_sarsa seed=0 | last: [ 9306/12000]  acc=0.9167  min=0.6667  best_avg_reward=13.10  reward=12.58  greedy=0.92  path=0 | eval: 
+task 13: s27_grid5_sarsa seed=1 | last: [ 8816/12000]  acc=0.8333  min=0.3333  best_avg_reward=11.57  reward=9.42  greedy=0.50  path=0 | eval: 
+task 14: s27_grid5_sarsa seed=2 | last: [ 8393/12000]  acc=0.5833  min=0.5833  best_avg_reward=10.17  reward=9.33  greedy=0.42  path=0 | eval: 
+task 15: s27_grid5_reinforce seed=0 | last: [  314/12000]  acc=0.1667  min=0.1667  best_avg_reward=6.07  reward=2.67  greedy=0.17  path=0 | eval: 
+task 16: s27_grid5_reinforce seed=1 | last: [  332/12000]  acc=0.2500  min=0.0833  best_avg_reward=5.91  reward=3.83  greedy=0.08  path=0 | eval: 
+task 17: s27_grid5_reinforce seed=2 | last: [  295/12000]  acc=0.5000  min=0.4167  best_avg_reward=5.89  reward=7.75  greedy=0.50  path=0 | eval: 
+task 18: s27_grid6_qlearning seed=0 | last: [10776/12000]  acc=0.2000  min=0.2000  best_avg_reward=9.39  reward=6.33  greedy=0.40  path=0 | eval: 
+task 19: s27_grid6_qlearning seed=1 | last: [10902/12000]  acc=0.3333  min=0.2667  best_avg_reward=10.06  reward=6.33  greedy=0.33  path=0 | eval: 
+task 20: s27_grid6_qlearning seed=2 | last: [10606/12000]  acc=0.3333  min=0.2000  best_avg_reward=8.69  reward=7.60  greedy=0.40  path=0 | eval: 
+task 21: s27_grid6_sarsa seed=0 | last: [ 7567/12000]  acc=0.5333  min=0.4000  best_avg_reward=10.52  reward=8.73  greedy=0.40  path=0 | eval: 
+task 22: s27_grid6_sarsa seed=1 | last: [ 7783/12000]  acc=0.5333  min=0.4667  best_avg_reward=10.57  reward=8.00  greedy=0.40  path=0 | eval: 
+task 23: s27_grid6_sarsa seed=2 | last: [ 6667/12000]  acc=0.5333  min=0.3333  best_avg_reward=10.57  reward=7.53  greedy=0.40  path=0 | eval: 
+task 24: s27_grid6_reinforce seed=0 | last: [  277/12000]  acc=0.2667  min=0.2000  best_avg_reward=5.84  reward=4.20  greedy=0.27  path=0 | eval: 
+task 25: s27_grid6_reinforce seed=1 | last: [  283/12000]  acc=0.4000  min=0.4000  best_avg_reward=5.29  reward=6.73  greedy=0.27  path=0 | eval: 
+task 26: s27_grid6_reinforce seed=2 | last: [  275/12000]  acc=0.5333  min=0.5333  best_avg_reward=5.90  reward=8.00  greedy=0.33  path=0 | eval: 
+task 27: s27_ring8_qlearning seed=0 | last: [3000/3000]  acc=1.0000  min=1.0000  best_avg_reward=14.30  reward=15.00  greedy=1.00  path=1 [ckpt] | eval: SCORE env=ring victim=qlearning | target_match 0.59 -> 1.00 | route 0/20 -> 20/20 | similarity 0.00 -> 0.00 | victim_return 0.0 -> 0.0 
+task 28: s27_ring8_qlearning seed=1 | last: [2998/3000]  acc=1.0000  min=0.5000  best_avg_reward=14.35  reward=14.00  greedy=1.00  path=1 | eval: SCORE env=ring victim=qlearning | target_match 0.59 -> 1.00 | route 0/20 -> 20/20 | similarity 0.00 -> 0.00 | victim_return 0.0 -> 0.0 
+task 29: s27_ring8_qlearning seed=2 | last: [3000/3000]  acc=1.0000  min=0.5000  best_avg_reward=14.21  reward=14.25  greedy=1.00  path=1 [ckpt] | eval: SCORE env=ring victim=qlearning | target_match 0.59 -> 1.00 | route 0/20 -> 20/20 | similarity 0.00 -> 0.00 | victim_return 0.0 -> 0.0 
+task 30: s27_ring8_sarsa seed=0 | last: [3000/3000]  acc=1.0000  min=0.5000  best_avg_reward=14.31  reward=14.00  greedy=1.00  path=1 [ckpt] | eval: SCORE env=ring victim=sarsa | target_match 0.61 -> 1.00 | route 0/20 -> 20/20 | similarity 0.00 -> 0.00 | victim_return 0.0 -> 0.0 
+task 31: s27_ring8_sarsa seed=1 | last: [3000/3000]  acc=1.0000  min=0.5000  best_avg_reward=14.31  reward=13.75  greedy=1.00  path=1 [ckpt] | eval: SCORE env=ring victim=sarsa | target_match 0.61 -> 1.00 | route 0/20 -> 20/20 | similarity 0.00 -> 0.00 | victim_return 0.0 -> 0.0 
+task 32: s27_ring8_sarsa seed=2 | last: [3000/3000]  acc=1.0000  min=0.7500  best_avg_reward=14.10  reward=14.25  greedy=1.00  path=1 [ckpt] | eval: SCORE env=ring victim=sarsa | target_match 0.61 -> 1.00 | route 0/20 -> 20/20 | similarity 0.00 -> 0.00 | victim_return 0.0 -> 0.0 
+task 33: s27_ring8_reinforce seed=0 | last: [3000/3000]  acc=1.0000  min=1.0000  best_avg_reward=11.34  reward=15.00  greedy=1.00  path=1 [ckpt] | eval: SCORE env=ring victim=reinforce | target_match 0.61 -> 0.59 | route 6/20 -> 6/20 | similarity 0.00 -> 0.00 | victim_return 0.0 -> 0.0 
+task 34: s27_ring8_reinforce seed=1 | last: [3000/3000]  acc=1.0000  min=1.0000  best_avg_reward=11.00  reward=15.00  greedy=1.00  path=1 [ckpt] | eval: SCORE env=ring victim=reinforce | target_match 0.61 -> 0.60 | route 6/20 -> 7/20 | similarity 0.00 -> 0.00 | victim_return 0.0 -> 0.0 
+task 35: s27_ring8_reinforce seed=2 | last: [2999/3000]  acc=0.2500  min=0.0000  best_avg_reward=11.04  reward=3.50  greedy=0.50  path=0 | eval: SCORE env=ring victim=reinforce | target_match 0.61 -> 0.61 | route 6/20 -> 5/20 | similarity 0.00 -> 0.00 | victim_return 0.0 -> 0.0 
+task 36: s27_ring12_qlearning seed=0 | last: [3000/3000]  acc=1.0000  min=0.5000  best_avg_reward=14.39  reward=12.67  greedy=1.00  path=1 [ckpt] | eval: SCORE env=ring victim=qlearning | target_match 0.68 -> 1.00 | route 0/20 -> 20/20 | similarity 0.00 -> 0.00 | victim_return 0.0 -> 0.0 
+task 37: s27_ring12_qlearning seed=1 | last: [3000/3000]  acc=1.0000  min=0.3333  best_avg_reward=14.54  reward=13.83  greedy=1.00  path=1 [ckpt] | eval: SCORE env=ring victim=qlearning | target_match 0.68 -> 1.00 | route 0/20 -> 20/20 | similarity 0.00 -> 0.00 | victim_return 0.0 -> 0.0 
+task 38: s27_ring12_qlearning seed=2 | last: [3000/3000]  acc=1.0000  min=0.3333  best_avg_reward=14.32  reward=13.67  greedy=1.00  path=1 [ckpt] | eval: SCORE env=ring victim=qlearning | target_match 0.68 -> 1.00 | route 0/20 -> 20/20 | similarity 0.00 -> 0.00 | victim_return 0.0 -> 0.0 
+task 39: s27_ring12_sarsa seed=0 | last: [3000/3000]  acc=1.0000  min=0.5000  best_avg_reward=14.49  reward=13.67  greedy=1.00  path=1 [ckpt] | eval: SCORE env=ring victim=sarsa | target_match 0.67 -> 1.00 | route 0/20 -> 20/20 | similarity 0.00 -> 0.00 | victim_return 0.0 -> 0.0 
+task 40: s27_ring12_sarsa seed=1 | last: [3000/3000]  acc=1.0000  min=0.6667  best_avg_reward=14.21  reward=13.50  greedy=1.00  path=1 [ckpt] | eval: SCORE env=ring victim=sarsa | target_match 0.67 -> 0.99 | route 0/20 -> 19/20 | similarity 0.00 -> 0.00 | victim_return 0.0 -> 0.0 
+task 41: s27_ring12_sarsa seed=2 | last: [2998/3000]  acc=1.0000  min=0.8333  best_avg_reward=14.14  reward=14.50  greedy=1.00  path=1 | eval: SCORE env=ring victim=sarsa | target_match 0.67 -> 0.97 | route 0/20 -> 17/20 | similarity 0.00 -> 0.00 | victim_return 0.0 -> 0.0 
+task 42: s27_ring12_reinforce seed=0 | last: [1593/3000]  acc=0.8333  min=0.8333  best_avg_reward=10.87  reward=12.50  greedy=0.67  path=0 | eval: 
+task 43: s27_ring12_reinforce seed=1 | last: [1592/3000]  acc=0.6667  min=0.6667  best_avg_reward=10.74  reward=10.00  greedy=0.00  path=0 | eval: 
+task 44: s27_ring12_reinforce seed=2 | last: [1651/3000]  acc=0.8333  min=0.8333  best_avg_reward=10.97  reward=13.33  greedy=0.83  path=0 | eval: 
+task 45: s27_ring16_qlearning seed=0 | last: [3000/3000]  acc=1.0000  min=0.8750  best_avg_reward=14.54  reward=14.75  greedy=1.00  path=1 [ckpt] | eval: SCORE env=ring victim=qlearning | target_match 0.74 -> 1.00 | route 0/20 -> 20/20 | similarity 0.00 -> 0.00 | victim_return 0.0 -> 0.0 
+task 46: s27_ring16_qlearning seed=1 | last: [3000/3000]  acc=1.0000  min=0.5000  best_avg_reward=13.88  reward=13.50  greedy=1.00  path=1 [ckpt] | eval: SCORE env=ring victim=qlearning | target_match 0.74 -> 1.00 | route 0/20 -> 20/20 | similarity 0.00 -> 0.00 | victim_return 0.0 -> 0.0 
+task 47: s27_ring16_qlearning seed=2 | last: [2999/3000]  acc=1.0000  min=0.7500  best_avg_reward=14.28  reward=14.62  greedy=1.00  path=1 | eval: SCORE env=ring victim=qlearning | target_match 0.74 -> 0.94 | route 0/20 -> 10/20 | similarity 0.00 -> 0.00 | victim_return 0.0 -> 0.0 
+task 48: s27_ring16_sarsa seed=0 | last: [3000/3000]  acc=1.0000  min=0.7500  best_avg_reward=14.47  reward=14.75  greedy=1.00  path=1 [ckpt] | eval: SCORE env=ring victim=sarsa | target_match 0.75 -> 1.00 | route 0/20 -> 20/20 | similarity 0.00 -> 0.00 | victim_return 0.0 -> 0.0 
+task 49: s27_ring16_sarsa seed=1 | last: [3000/3000]  acc=1.0000  min=0.3750  best_avg_reward=14.47  reward=13.88  greedy=1.00  path=1 [ckpt] | eval: SCORE env=ring victim=sarsa | target_match 0.75 -> 1.00 | route 0/20 -> 20/20 | similarity 0.00 -> 0.00 | victim_return 0.0 -> 0.0 
+task 50: s27_ring16_sarsa seed=2 | last:  | eval: 
+task 51: s27_ring16_reinforce seed=0 | last: [ 159/3000]  acc=0.8750  min=0.8750  best_avg_reward=8.31  reward=13.12  greedy=0.62  path=0 | eval: SCORE env=ring victim=reinforce | target_match 0.39 -> 0.42 | route 0/20 -> 0/20 | similarity 0.00 -> 0.00 | victim_return 0.0 -> 0.0 
+task 52: s27_ring16_reinforce seed=1 | last: [1019/3000]  acc=0.7500  min=0.7500  best_avg_reward=9.70  reward=11.25  greedy=0.50  path=0 | eval: SCORE env=ring victim=reinforce | target_match 0.39 -> 0.44 | route 0/20 -> 0/20 | similarity 0.00 -> 0.00 | victim_return 0.0 -> 0.0 
+task 53: s27_ring16_reinforce seed=2 | last: [1286/3000]  acc=0.0000  min=0.0000  best_avg_reward=10.30  reward=0.00  greedy=0.38  path=0 | eval: 
+
+## job 4429537: round 11, reruns of tasks 50-51
+task 50: s27_ring16_sarsa seed=2 | last: [3000/3000]  acc=1.0000  min=0.6250  best_avg_reward=13.88  reward=13.62  greedy=1.00  path=1 [ckpt] | eval: SCORE env=ring victim=sarsa | target_match 0.75 -> 1.00 | route 0/20 -> 20/20 | similarity 0.00 -> 0.00 | victim_return 0.0 -> 0.0 
+task 51: s27_ring16_reinforce seed=0 | last: [ 750/3000]  acc=0.8750  min=0.8750  best_avg_reward=10.02  reward=13.12  greedy=0.38  path=0 | eval: 
+
+## job 4423671: round 11, 3x3x3 lander cells
+task 54: s27_lander500_dqn seed=0 | last: [  40/1000]  acc=0.5724  min=0.4426  best_avg_reward=0.00  reward=5.93  greedy=0.49  path=0 [ckpt] | eval: 
+task 55: s27_lander500_dqn seed=1 | last: [  34/1000]  acc=0.6298  min=0.5533  best_avg_reward=0.00  reward=6.92  greedy=0.37  path=0 | eval: 
+task 56: s27_lander500_dqn seed=2 | last: [  51/1000]  acc=0.5522  min=0.4220  best_avg_reward=0.00  reward=5.49  greedy=0.47  path=0 | eval: 
+task 57: s27_lander500_vpg seed=0 | last: [1000/1000]  acc=0.3465  min=0.2677  best_avg_reward=6.20  reward=3.68  greedy=0.57  path=0 [ckpt] | eval: SCORE env=lunarlander victim=vpg | target_match 0.57 -> 0.54 | route 0/20 -> 0/20 | similarity 0.75 -> 0.75 | victim_return -126.8 -> -146.4 
+task 58: s27_lander500_vpg seed=1 | last: [1000/1000]  acc=0.3888  min=0.2063  best_avg_reward=5.50  reward=3.13  greedy=0.57  path=0 [ckpt] | eval: SCORE env=lunarlander victim=vpg | target_match 0.56 -> 0.56 | route 0/20 -> 0/20 | similarity 0.74 -> 0.69 | victim_return -130.2 -> -141.9 
+task 59: s27_lander500_vpg seed=2 | last: [1000/1000]  acc=0.2641  min=0.1770  best_avg_reward=6.10  reward=2.55  greedy=0.57  path=0 [ckpt] | eval: SCORE env=lunarlander victim=vpg | target_match 0.57 -> 0.46 | route 0/20 -> 0/20 | similarity 0.71 -> 0.73 | victim_return -135.7 -> -141.3 
+task 60: s27_lander500_a2c seed=0 | last: [1000/1000]  acc=0.3183  min=0.2498  best_avg_reward=5.71  reward=3.28  greedy=0.57  path=0 [ckpt] | eval: SCORE env=lunarlander victim=a2c | target_match 0.40 -> 0.40 | route 0/20 -> 0/20 | similarity 0.70 -> 0.72 | victim_return -188.7 -> -146.6 
+task 61: s27_lander500_a2c seed=1 | last: [1000/1000]  acc=0.2422  min=0.1424  best_avg_reward=4.66  reward=1.99  greedy=0.39  path=0 [ckpt] | eval: SCORE env=lunarlander victim=a2c | target_match 0.48 -> 0.41 | route 0/20 -> 0/20 | similarity 0.57 -> 0.58 | victim_return -200.5 -> -174.7 
+task 62: s27_lander500_a2c seed=2 | last: [1000/1000]  acc=0.3816  min=0.2814  best_avg_reward=6.13  reward=3.67  greedy=0.57  path=0 [ckpt] | eval: SCORE env=lunarlander victim=a2c | target_match 0.45 -> 0.43 | route 0/20 -> 0/20 | similarity 0.73 -> 0.74 | victim_return -199.2 -> -158.7 
+task 63: s27_lander1000_dqn seed=0 | last: [  76/1000]  acc=0.5898  min=0.3996  best_avg_reward=0.00  reward=5.61  greedy=0.38  path=0 | eval: 
+task 64: s27_lander1000_dqn seed=1 | last: [  56/1000]  acc=0.7676  min=0.3124  best_avg_reward=0.00  reward=6.42  greedy=0.55  path=0 | eval: 
+task 65: s27_lander1000_dqn seed=2 | last: [  76/1000]  acc=0.5970  min=0.3345  best_avg_reward=0.00  reward=5.14  greedy=0.48  path=0 | eval: 
+task 66: s27_lander1000_vpg seed=0 | last: [1000/1000]  acc=0.2968  min=0.1790  best_avg_reward=6.08  reward=3.81  greedy=0.57  path=0 [ckpt] | eval: SCORE env=lunarlander victim=vpg | target_match 0.56 -> 0.52 | route 0/20 -> 0/20 | similarity 0.73 -> 0.75 | victim_return -136.0 -> -131.0 
+task 67: s27_lander1000_vpg seed=1 | last: [1000/1000]  acc=0.2377  min=0.1845  best_avg_reward=5.41  reward=2.89  greedy=0.57  path=0 [ckpt] | eval: SCORE env=lunarlander victim=vpg | target_match 0.55 -> 0.52 | route 0/20 -> 0/20 | similarity 0.72 -> 0.65 | victim_return -108.1 -> -129.4 
+task 68: s27_lander1000_vpg seed=2 | last: [ 999/1000]  acc=0.2507  min=0.2164  best_avg_reward=5.82  reward=2.50  greedy=0.57  path=0 | eval: SCORE env=lunarlander victim=vpg | target_match 0.56 -> 0.50 | route 0/20 -> 0/20 | similarity 0.71 -> 0.69 | victim_return -119.1 -> -133.7 
+task 69: s27_lander1000_a2c seed=0 | last: [1000/1000]  acc=0.4032  min=0.2828  best_avg_reward=5.44  reward=3.46  greedy=0.02  path=0 [ckpt] | eval: SCORE env=lunarlander victim=a2c | target_match 0.44 -> 0.42 | route 0/20 -> 0/20 | similarity 0.69 -> 0.67 | victim_return -186.5 -> -153.2 
+task 70: s27_lander1000_a2c seed=1 | last: [1000/1000]  acc=0.2416  min=0.0465  best_avg_reward=4.54  reward=1.58  greedy=0.01  path=0 [ckpt] | eval: SCORE env=lunarlander victim=a2c | target_match 0.48 -> 0.31 | route 0/20 -> 0/20 | similarity 0.59 -> 0.57 | victim_return -172.2 -> -147.3 
+task 71: s27_lander1000_a2c seed=2 | last: [ 999/1000]  acc=0.3933  min=0.1239  best_avg_reward=5.87  reward=3.28  greedy=0.03  path=0 | eval: SCORE env=lunarlander victim=a2c | target_match 0.42 -> 0.41 | route 0/20 -> 0/20 | similarity 0.75 -> 0.73 | victim_return -164.2 -> -144.8 
+task 72: s27_lander1500_dqn seed=0 | last: [  65/1000]  acc=0.4720  min=0.4345  best_avg_reward=0.00  reward=5.62  greedy=0.58  path=0 | eval: 
+task 73: s27_lander1500_dqn seed=1 | last: [  80/1000]  acc=0.5163  min=0.4707  best_avg_reward=0.00  reward=5.73  greedy=0.57  path=0 [ckpt] | eval: 
+task 74: s27_lander1500_dqn seed=2 | last: [  71/1000]  acc=0.5462  min=0.4505  best_avg_reward=0.00  reward=6.07  greedy=0.68  path=0 | eval: 
+task 75: s27_lander1500_vpg seed=0 | last: [1000/1000]  acc=0.4198  min=0.1213  best_avg_reward=5.97  reward=3.53  greedy=0.50  path=0 [ckpt] | eval: SCORE env=lunarlander victim=vpg | target_match 0.53 -> 0.50 | route 0/20 -> 0/20 | similarity 0.71 -> 0.72 | victim_return -152.5 -> -129.4 
+task 76: s27_lander1500_vpg seed=1 | last: [ 999/1000]  acc=0.2026  min=0.1455  best_avg_reward=5.61  reward=2.06  greedy=0.39  path=0 | eval: SCORE env=lunarlander victim=vpg | target_match 0.56 -> 0.44 | route 0/20 -> 0/20 | similarity 0.67 -> 0.68 | victim_return -118.8 -> -128.9 
+task 77: s27_lander1500_vpg seed=2 | last: [1000/1000]  acc=0.2462  min=0.1135  best_avg_reward=5.58  reward=2.53  greedy=0.38  path=0 [ckpt] | eval: SCORE env=lunarlander victim=vpg | target_match 0.51 -> 0.45 | route 0/20 -> 0/20 | similarity 0.71 -> 0.68 | victim_return -119.1 -> -127.0 
+task 78: s27_lander1500_a2c seed=0 | last: [ 999/1000]  acc=0.2329  min=0.1142  best_avg_reward=5.41  reward=3.73  greedy=0.01  path=0 | eval: SCORE env=lunarlander victim=a2c | target_match 0.27 -> 0.35 | route 0/20 -> 0/20 | similarity 0.64 -> 0.65 | victim_return -185.6 -> -166.5 
+task 79: s27_lander1500_a2c seed=1 | last: [1000/1000]  acc=0.2117  min=0.1458  best_avg_reward=4.21  reward=2.39  greedy=0.01  path=0 [ckpt] | eval: SCORE env=lunarlander victim=a2c | target_match 0.36 -> 0.20 | route 0/20 -> 0/20 | similarity 0.53 -> 0.55 | victim_return -196.6 -> -172.1 
+task 80: s27_lander1500_a2c seed=2 | last: [1000/1000]  acc=0.4435  min=0.3784  best_avg_reward=5.69  reward=4.48  greedy=0.57  path=0 [ckpt] | eval: SCORE env=lunarlander victim=a2c | target_match 0.39 -> 0.31 | route 0/20 -> 0/20 | similarity 0.66 -> 0.71 | victim_return -198.6 -> -149.2 
+
+## evaluation jobs for rounds 1-3 (20 fresh victims per run)
+### eval job 4254633
+exact target path at final attack step: 0/20 eval episodes
+greedy-acc  mean over last 5 steps: 0.609
+exact target path at final attack step: 0/20 eval episodes
+greedy-acc  mean over last 5 steps: 0.888
+exact target path at final attack step: 0/20 eval episodes
+greedy-acc  mean over last 5 steps: 0.836
+exact target path at final attack step: 0/20 eval episodes
+greedy-acc  mean over last 5 steps: 0.737
+exact target path at final attack step: 0/20 eval episodes
+greedy-acc  mean over last 5 steps: 0.779
+exact target path at final attack step: 17/20 eval episodes
+greedy-acc  mean over last 5 steps: 0.981
+exact target path at final attack step: 0/20 eval episodes
+greedy-acc  mean over last 5 steps: 0.861
+exact target path at final attack step: 0/20 eval episodes
+greedy-acc  mean over last 5 steps: 0.496
+exact target path at final attack step: 0/20 eval episodes
+greedy-acc  mean over last 5 steps: 0.803
+exact target path at final attack step: 14/20 eval episodes
+greedy-acc  mean over last 5 steps: 0.966
+exact target path at final attack step: 0/20 eval episodes
+greedy-acc  mean over last 5 steps: 0.862
+exact target path at final attack step: 0/20 eval episodes
+greedy-acc  mean over last 5 steps: 0.446
+### eval job 4262812
+### v2_ae_trace_s0
+exact target path at final attack step: 0/20 eval episodes
+greedy-acc  mean over last 5 steps: 0.598
+### v2_ae_mix_s0
+exact target path at final attack step: 12/20 eval episodes
+greedy-acc  mean over last 5 steps: 0.954
+### v2_ae_traj_s0
+exact target path at final attack step: 0/20 eval episodes
+greedy-acc  mean over last 5 steps: 0.888
+### v2_lstm_mix_s0
+exact target path at final attack step: 0/20 eval episodes
+greedy-acc  mean over last 5 steps: 0.592
+### v2_ae_trace_s1
+exact target path at final attack step: 0/20 eval episodes
+greedy-acc  mean over last 5 steps: 0.741
+### v2_ae_mix_s1
+exact target path at final attack step: 0/20 eval episodes
+greedy-acc  mean over last 5 steps: 0.861
+### v2_ae_traj_s1
+exact target path at final attack step: 0/20 eval episodes
+greedy-acc  mean over last 5 steps: 0.587
+### v2_lstm_mix_s1
+exact target path at final attack step: 0/20 eval episodes
+greedy-acc  mean over last 5 steps: 0.369
+### v2_ae_trace_s2
+exact target path at final attack step: 11/20 eval episodes
+greedy-acc  mean over last 5 steps: 0.933
+### v2_ae_mix_s2
+exact target path at final attack step: 0/20 eval episodes
+greedy-acc  mean over last 5 steps: 0.504
+### v2_ae_traj_s2
+exact target path at final attack step: 0/20 eval episodes
+greedy-acc  mean over last 5 steps: 0.510
+### v2_lstm_mix_s2
+exact target path at final attack step: 0/20 eval episodes
+greedy-acc  mean over last 5 steps: 0.400
+### eval job 4266707
+### v3_push_s0
+exact target path at final attack step: 0/20 eval episodes
+greedy-acc  mean over last 5 steps: 0.651
+### v3_mix_s0
+exact target path at final attack step: 7/20 eval episodes
+greedy-acc  mean over last 5 steps: 0.908
+### v3_noise_s0
+exact target path at final attack step: 0/20 eval episodes
+greedy-acc  mean over last 5 steps: 0.954
+### v3_td3_s0
+exact target path at final attack step: 0/20 eval episodes
+greedy-acc  mean over last 5 steps: 0.664
+### v3_norm_s0
+exact target path at final attack step: 0/20 eval episodes
+greedy-acc  mean over last 5 steps: 0.448
+### v3_base_s3
+exact target path at final attack step: 0/20 eval episodes
+greedy-acc  mean over last 5 steps: 0.771
+### v3_push_s1
+exact target path at final attack step: 0/20 eval episodes
+greedy-acc  mean over last 5 steps: 0.944
+### v3_mix_s1
+exact target path at final attack step: 19/20 eval episodes
+greedy-acc  mean over last 5 steps: 0.959
+### v3_noise_s1
+exact target path at final attack step: 0/20 eval episodes
+greedy-acc  mean over last 5 steps: 0.766
+### v3_td3_s1
+exact target path at final attack step: 0/20 eval episodes
+greedy-acc  mean over last 5 steps: 0.887
+### v3_norm_s1
+exact target path at final attack step: 13/20 eval episodes
+greedy-acc  mean over last 5 steps: 0.954
+### v3_base_s4
+exact target path at final attack step: 0/20 eval episodes
+greedy-acc  mean over last 5 steps: 0.878
+### v3_push_s2
+exact target path at final attack step: 20/20 eval episodes
+greedy-acc  mean over last 5 steps: 1.000
+### v3_mix_s2
+exact target path at final attack step: 0/20 eval episodes
+greedy-acc  mean over last 5 steps: 0.576
+### v3_noise_s2
+exact target path at final attack step: 0/20 eval episodes
+greedy-acc  mean over last 5 steps: 0.664
+### v3_td3_s2
+exact target path at final attack step: 0/20 eval episodes
+greedy-acc  mean over last 5 steps: 0.530
+### v3_norm_s2
+exact target path at final attack step: 0/20 eval episodes
+greedy-acc  mean over last 5 steps: 0.580
+### v3_base_s5
+exact target path at final attack step: 0/20 eval episodes
+greedy-acc  mean over last 5 steps: 0.850
+
+## lander feasibility probe (job 4434606), every report
+PROBE algo=vpg pattern=none seed=0 episodes=250 | return   -82.5 | target_match 0.58 | final_x -0.51 | main_engine 0.47
+PROBE algo=vpg pattern=none seed=0 episodes=500 | return   -61.4 | target_match 0.57 | final_x +0.43 | main_engine 0.53
+PROBE algo=vpg pattern=none seed=0 episodes=750 | return   -29.9 | target_match 0.57 | final_x -0.09 | main_engine 0.51
+PROBE algo=vpg pattern=none seed=0 episodes=1000 | return   135.7 | target_match 0.57 | final_x -0.49 | main_engine 0.30
+PROBE algo=vpg pattern=none seed=0 episodes=1250 | return   115.1 | target_match 0.03 | final_x -0.10 | main_engine 0.16
+PROBE algo=vpg pattern=none seed=0 episodes=1500 | return    38.5 | target_match 0.05 | final_x -0.44 | main_engine 0.37
+PROBE algo=vpg pattern=none seed=0 episodes=1750 | return   159.1 | target_match 0.05 | final_x +0.14 | main_engine 0.16
+PROBE algo=vpg pattern=none seed=0 episodes=2000 | return   140.9 | target_match 0.02 | final_x -0.21 | main_engine 0.15
+PROBE algo=vpg pattern=none seed=0 episodes=2250 | return   126.5 | target_match 0.03 | final_x +0.27 | main_engine 0.21
+PROBE algo=vpg pattern=none seed=0 episodes=2500 | return   145.7 | target_match 0.01 | final_x -0.26 | main_engine 0.21
+PROBE algo=vpg pattern=none seed=0 episodes=2750 | return   -23.2 | target_match 0.01 | final_x -0.48 | main_engine 0.38
+PROBE algo=vpg pattern=none seed=0 episodes=3000 | return   -99.6 | target_match 0.01 | final_x -0.23 | main_engine 0.42
+PROBE algo=vpg pattern=none seed=1 episodes=250 | return   -62.0 | target_match 0.57 | final_x +0.24 | main_engine 0.44
+PROBE algo=vpg pattern=none seed=1 episodes=500 | return   -95.7 | target_match 0.57 | final_x +0.21 | main_engine 0.52
+PROBE algo=vpg pattern=none seed=1 episodes=750 | return   -37.8 | target_match 0.57 | final_x +0.05 | main_engine 0.53
+PROBE algo=vpg pattern=none seed=1 episodes=1000 | return    -9.2 | target_match 0.07 | final_x +0.26 | main_engine 0.48
+PROBE algo=vpg pattern=none seed=1 episodes=1250 | return    43.1 | target_match 0.05 | final_x -0.25 | main_engine 0.35
+PROBE algo=vpg pattern=all seed=0 episodes=250 | return  -132.2 | target_match 0.40 | final_x -0.06 | main_engine 0.42
+PROBE algo=vpg pattern=all seed=0 episodes=500 | return  -126.1 | target_match 0.39 | final_x -0.00 | main_engine 0.16
+PROBE algo=vpg pattern=all seed=0 episodes=750 | return  -129.0 | target_match 0.39 | final_x -0.10 | main_engine 0.03
+PROBE algo=vpg pattern=all seed=0 episodes=1000 | return  -126.2 | target_match 0.39 | final_x -0.14 | main_engine 0.04
+PROBE algo=vpg pattern=all seed=0 episodes=1250 | return  -116.9 | target_match 0.37 | final_x -0.01 | main_engine 0.05
+PROBE algo=vpg pattern=all seed=0 episodes=1500 | return  -113.8 | target_match 0.39 | final_x -0.02 | main_engine 0.03
+PROBE algo=vpg pattern=all seed=0 episodes=1750 | return  -112.9 | target_match 0.38 | final_x -0.01 | main_engine 0.09
+PROBE algo=vpg pattern=all seed=0 episodes=2000 | return  -114.1 | target_match 0.39 | final_x +0.01 | main_engine 0.03
+PROBE algo=vpg pattern=all seed=0 episodes=2250 | return  -114.8 | target_match 0.14 | final_x -0.13 | main_engine 0.07
+PROBE algo=vpg pattern=all seed=0 episodes=2500 | return  -109.9 | target_match 0.04 | final_x +0.04 | main_engine 0.03
+PROBE algo=vpg pattern=all seed=0 episodes=2750 | return  -116.2 | target_match 0.04 | final_x -0.04 | main_engine 0.09
+PROBE algo=vpg pattern=all seed=0 episodes=3000 | return  -116.0 | target_match 0.04 | final_x -0.05 | main_engine 0.35
+PROBE algo=vpg pattern=all seed=1 episodes=250 | return  -143.6 | target_match 0.03 | final_x +0.03 | main_engine 0.11
+PROBE algo=vpg pattern=all seed=1 episodes=500 | return  -119.3 | target_match 0.03 | final_x -0.07 | main_engine 0.07
+PROBE algo=vpg pattern=all seed=1 episodes=750 | return  -122.5 | target_match 0.04 | final_x -0.05 | main_engine 0.10
+PROBE algo=vpg pattern=all seed=1 episodes=1000 | return  -119.2 | target_match 0.03 | final_x -0.14 | main_engine 0.12
+PROBE algo=vpg pattern=all seed=1 episodes=1250 | return  -117.1 | target_match 0.04 | final_x +0.07 | main_engine 0.05
+PROBE algo=vpg pattern=all seed=1 episodes=1500 | return  -115.2 | target_match 0.03 | final_x -0.11 | main_engine 0.07
+PROBE algo=vpg pattern=all seed=1 episodes=1750 | return  -114.0 | target_match 0.04 | final_x -0.09 | main_engine 0.05
+PROBE algo=vpg pattern=all seed=1 episodes=2000 | return  -116.2 | target_match 0.04 | final_x -0.06 | main_engine 0.04
+PROBE algo=vpg pattern=all seed=1 episodes=2250 | return  -114.7 | target_match 0.04 | final_x -0.12 | main_engine 0.02
+PROBE algo=vpg pattern=all seed=1 episodes=2500 | return  -124.3 | target_match 0.03 | final_x -0.12 | main_engine 0.01
+PROBE algo=vpg pattern=all seed=1 episodes=2750 | return  -116.5 | target_match 0.06 | final_x +0.05 | main_engine 0.01
+PROBE algo=vpg pattern=all seed=1 episodes=3000 | return  -114.7 | target_match 0.03 | final_x -0.07 | main_engine 0.02
+PROBE algo=vpg pattern=all seed=2 episodes=250 | return  -138.9 | target_match 0.01 | final_x -0.02 | main_engine 0.24
+PROBE algo=vpg pattern=all seed=2 episodes=500 | return  -128.0 | target_match 0.57 | final_x -0.03 | main_engine 0.53
+PROBE algo=vpg pattern=all seed=2 episodes=750 | return  -131.8 | target_match 0.39 | final_x +0.12 | main_engine 0.46
+PROBE algo=vpg pattern=all seed=2 episodes=1000 | return  -125.5 | target_match 0.39 | final_x +0.03 | main_engine 0.13
+PROBE algo=vpg pattern=all seed=2 episodes=1250 | return  -115.9 | target_match 0.39 | final_x +0.12 | main_engine 0.10
+PROBE algo=vpg pattern=all seed=2 episodes=1500 | return  -117.7 | target_match 0.39 | final_x -0.28 | main_engine 0.01
+PROBE algo=vpg pattern=all seed=2 episodes=1750 | return  -115.9 | target_match 0.33 | final_x -0.16 | main_engine 0.00
+PROBE algo=vpg pattern=all seed=2 episodes=2000 | return  -115.7 | target_match 0.32 | final_x +0.05 | main_engine 0.02
+PROBE algo=vpg pattern=all seed=2 episodes=2250 | return  -110.0 | target_match 0.04 | final_x +0.02 | main_engine 0.01
+PROBE algo=vpg pattern=all seed=2 episodes=2500 | return  -121.6 | target_match 0.03 | final_x -0.13 | main_engine 0.03
+PROBE algo=vpg pattern=all seed=2 episodes=2750 | return  -114.6 | target_match 0.03 | final_x -0.09 | main_engine 0.01
+PROBE algo=vpg pattern=all seed=2 episodes=3000 | return  -121.1 | target_match 0.04 | final_x +0.08 | main_engine 0.00
+PROBE algo=dqn pattern=left seed=0 episodes=250 | return  -136.3 | target_match 0.41 | final_x +0.31 | main_engine 0.50
+PROBE algo=dqn pattern=left seed=0 episodes=500 | return   -67.2 | target_match 0.43 | final_x -0.01 | main_engine 0.58
+PROBE algo=dqn pattern=left seed=0 episodes=600 | return   -66.2 | target_match 0.37 | final_x +0.42 | main_engine 0.58
+PROBE algo=dqn pattern=left seed=1 episodes=250 | return  -128.0 | target_match 0.47 | final_x +0.23 | main_engine 0.47
+PROBE algo=dqn pattern=left seed=1 episodes=500 | return  -119.6 | target_match 0.32 | final_x +0.04 | main_engine 0.58
+PROBE algo=dqn pattern=left seed=1 episodes=600 | return   -89.0 | target_match 0.45 | final_x +0.26 | main_engine 0.55
+PROBE algo=dqn pattern=left seed=2 episodes=250 | return  -137.2 | target_match 0.57 | final_x -0.18 | main_engine 0.51
+PROBE algo=dqn pattern=left seed=2 episodes=500 | return   -55.7 | target_match 0.31 | final_x -0.08 | main_engine 0.52
+PROBE algo=dqn pattern=left seed=2 episodes=600 | return    37.7 | target_match 0.22 | final_x +0.15 | main_engine 0.45
+PROBE algo=dqn pattern=right seed=0 episodes=250 | return  -120.2 | target_match 0.06 | final_x +0.07 | main_engine 0.52
+PROBE algo=dqn pattern=right seed=0 episodes=500 | return   -83.5 | target_match 0.37 | final_x +0.17 | main_engine 0.56
+PROBE algo=dqn pattern=right seed=0 episodes=600 | return   -75.0 | target_match 0.23 | final_x -0.17 | main_engine 0.58
+PROBE algo=dqn pattern=right seed=1 episodes=250 | return  -110.5 | target_match 0.02 | final_x -0.15 | main_engine 0.53
+PROBE algo=dqn pattern=right seed=1 episodes=500 | return   -85.4 | target_match 0.55 | final_x -0.19 | main_engine 0.56
+PROBE algo=dqn pattern=right seed=1 episodes=600 | return   -44.9 | target_match 0.02 | final_x -0.14 | main_engine 0.51
+PROBE algo=dqn pattern=right seed=2 episodes=250 | return  -141.5 | target_match 0.37 | final_x -0.22 | main_engine 0.43
+PROBE algo=dqn pattern=right seed=2 episodes=500 | return  -109.0 | target_match 0.37 | final_x -0.27 | main_engine 0.57
+PROBE algo=dqn pattern=right seed=2 episodes=600 | return   -92.8 | target_match 0.01 | final_x -0.23 | main_engine 0.58
+PROBE algo=vpg pattern=left seed=0 episodes=250 | return  -133.3 | target_match 0.57 | final_x -0.12 | main_engine 0.44
+PROBE algo=vpg pattern=left seed=0 episodes=500 | return   -97.2 | target_match 0.57 | final_x -0.17 | main_engine 0.54
+PROBE algo=vpg pattern=left seed=0 episodes=750 | return   -65.8 | target_match 0.58 | final_x +0.18 | main_engine 0.57
+PROBE algo=vpg pattern=left seed=0 episodes=1000 | return  -129.8 | target_match 0.57 | final_x -0.20 | main_engine 0.64
+PROBE algo=vpg pattern=left seed=0 episodes=1250 | return   -92.3 | target_match 0.58 | final_x +0.49 | main_engine 0.56
+PROBE algo=vpg pattern=left seed=0 episodes=1500 | return   -60.9 | target_match 0.06 | final_x -0.06 | main_engine 0.66
+PROBE algo=vpg pattern=left seed=0 episodes=1750 | return   -52.7 | target_match 0.55 | final_x +0.12 | main_engine 0.54
+PROBE algo=vpg pattern=left seed=0 episodes=2000 | return   -78.2 | target_match 0.05 | final_x -0.08 | main_engine 0.58
+PROBE algo=vpg pattern=left seed=0 episodes=2250 | return   -34.6 | target_match 0.07 | final_x -0.08 | main_engine 0.41
+PROBE algo=vpg pattern=left seed=0 episodes=2500 | return   -51.6 | target_match 0.06 | final_x -0.17 | main_engine 0.46
+PROBE algo=vpg pattern=left seed=0 episodes=2750 | return   -71.5 | target_match 0.39 | final_x +0.01 | main_engine 0.44
+PROBE algo=vpg pattern=left seed=0 episodes=3000 | return   -67.4 | target_match 0.04 | final_x +0.21 | main_engine 0.51
+PROBE algo=vpg pattern=left seed=1 episodes=250 | return  -111.8 | target_match 0.53 | final_x -0.14 | main_engine 0.46
+PROBE algo=vpg pattern=left seed=1 episodes=500 | return  -132.5 | target_match 0.57 | final_x -0.04 | main_engine 0.59
+PROBE algo=vpg pattern=left seed=1 episodes=750 | return   -88.8 | target_match 0.57 | final_x +0.04 | main_engine 0.56
+PROBE algo=vpg pattern=left seed=1 episodes=1000 | return   -86.9 | target_match 0.57 | final_x -0.10 | main_engine 0.57
+PROBE algo=vpg pattern=left seed=1 episodes=1250 | return   -62.7 | target_match 0.57 | final_x -0.03 | main_engine 0.58
+PROBE algo=vpg pattern=left seed=1 episodes=1500 | return   -60.2 | target_match 0.06 | final_x -0.03 | main_engine 0.58
+PROBE algo=vpg pattern=left seed=1 episodes=1750 | return   -22.8 | target_match 0.04 | final_x -0.06 | main_engine 0.54
+PROBE algo=vpg pattern=left seed=1 episodes=2000 | return   -17.1 | target_match 0.11 | final_x +0.07 | main_engine 0.51
+PROBE algo=vpg pattern=left seed=1 episodes=2250 | return   -25.2 | target_match 0.57 | final_x +0.43 | main_engine 0.52
+PROBE algo=vpg pattern=left seed=1 episodes=2500 | return    -3.1 | target_match 0.06 | final_x +0.04 | main_engine 0.47
+PROBE algo=vpg pattern=left seed=1 episodes=2750 | return    -0.8 | target_match 0.53 | final_x -0.06 | main_engine 0.41
+PROBE algo=vpg pattern=left seed=1 episodes=3000 | return    20.7 | target_match 0.06 | final_x -0.08 | main_engine 0.31
+PROBE algo=vpg pattern=left seed=2 episodes=250 | return  -150.1 | target_match 0.57 | final_x +0.00 | main_engine 0.35
+PROBE algo=vpg pattern=left seed=2 episodes=500 | return  -145.5 | target_match 0.57 | final_x -0.17 | main_engine 0.52
+PROBE algo=vpg pattern=left seed=2 episodes=750 | return  -169.1 | target_match 0.57 | final_x -0.02 | main_engine 0.62
+PROBE algo=vpg pattern=left seed=2 episodes=1000 | return  -153.5 | target_match 0.57 | final_x +0.56 | main_engine 0.61
+PROBE algo=vpg pattern=left seed=2 episodes=1250 | return   -60.3 | target_match 0.32 | final_x +0.05 | main_engine 0.53
+PROBE algo=vpg pattern=left seed=2 episodes=1500 | return   -34.7 | target_match 0.08 | final_x -0.14 | main_engine 0.47
+PROBE algo=vpg pattern=left seed=2 episodes=1750 | return   -25.6 | target_match 0.57 | final_x -0.02 | main_engine 0.48
+PROBE algo=vpg pattern=left seed=2 episodes=2000 | return   -29.9 | target_match 0.57 | final_x +0.12 | main_engine 0.47
+PROBE algo=vpg pattern=left seed=2 episodes=2250 | return    -5.2 | target_match 0.10 | final_x -0.15 | main_engine 0.32
+PROBE algo=vpg pattern=left seed=2 episodes=2500 | return   -30.8 | target_match 0.05 | final_x +0.17 | main_engine 0.42
+PROBE algo=vpg pattern=right seed=0 episodes=250 | return  -127.1 | target_match 0.08 | final_x +0.07 | main_engine 0.28
+PROBE algo=vpg pattern=right seed=0 episodes=500 | return  -119.6 | target_match 0.39 | final_x -0.32 | main_engine 0.29
+PROBE algo=vpg pattern=right seed=0 episodes=750 | return   -82.4 | target_match 0.39 | final_x -0.00 | main_engine 0.41
+PROBE algo=vpg pattern=right seed=0 episodes=1000 | return   -85.7 | target_match 0.03 | final_x -0.12 | main_engine 0.41
+PROBE algo=vpg pattern=right seed=0 episodes=1250 | return   -64.1 | target_match 0.53 | final_x +0.04 | main_engine 0.47
+PROBE algo=vpg pattern=right seed=0 episodes=1500 | return   -79.4 | target_match 0.02 | final_x -0.00 | main_engine 0.50
+PROBE algo=vpg pattern=right seed=0 episodes=1750 | return   -66.3 | target_match 0.26 | final_x -0.12 | main_engine 0.51
+PROBE algo=vpg pattern=right seed=0 episodes=2000 | return   -85.9 | target_match 0.39 | final_x +0.12 | main_engine 0.49
+PROBE algo=vpg pattern=right seed=0 episodes=2250 | return   -90.1 | target_match 0.57 | final_x +0.17 | main_engine 0.59
+PROBE algo=vpg pattern=right seed=0 episodes=2500 | return   -53.9 | target_match 0.37 | final_x +0.15 | main_engine 0.55
+PROBE algo=vpg pattern=right seed=0 episodes=2750 | return   -58.7 | target_match 0.03 | final_x +0.17 | main_engine 0.46
+PROBE algo=vpg pattern=right seed=0 episodes=3000 | return   -50.2 | target_match 0.54 | final_x -0.01 | main_engine 0.44
+PROBE algo=vpg pattern=right seed=1 episodes=250 | return  -119.4 | target_match 0.57 | final_x +0.07 | main_engine 0.34
+PROBE algo=vpg pattern=right seed=1 episodes=500 | return  -102.3 | target_match 0.52 | final_x +0.02 | main_engine 0.37
+PROBE algo=vpg pattern=right seed=1 episodes=750 | return  -103.7 | target_match 0.18 | final_x +0.11 | main_engine 0.50
+PROBE algo=vpg pattern=right seed=1 episodes=1000 | return   -83.1 | target_match 0.55 | final_x +0.06 | main_engine 0.53
+PROBE algo=vpg pattern=right seed=1 episodes=1250 | return   -62.5 | target_match 0.08 | final_x +0.08 | main_engine 0.59
+PROBE algo=vpg pattern=right seed=1 episodes=1500 | return   -52.0 | target_match 0.04 | final_x +0.07 | main_engine 0.52
+PROBE algo=vpg pattern=right seed=1 episodes=1750 | return   -42.3 | target_match 0.04 | final_x -0.16 | main_engine 0.36
+PROBE algo=vpg pattern=right seed=1 episodes=2000 | return   -81.9 | target_match 0.06 | final_x +0.24 | main_engine 0.50
+PROBE algo=vpg pattern=right seed=1 episodes=2250 | return   -50.3 | target_match 0.04 | final_x +0.37 | main_engine 0.37
+PROBE algo=vpg pattern=right seed=1 episodes=2500 | return  -115.5 | target_match 0.42 | final_x +0.05 | main_engine 0.62
+PROBE algo=vpg pattern=right seed=1 episodes=2750 | return   -63.8 | target_match 0.05 | final_x +0.12 | main_engine 0.43
+PROBE algo=vpg pattern=right seed=1 episodes=3000 | return  -107.0 | target_match 0.25 | final_x +0.12 | main_engine 0.64
+PROBE algo=vpg pattern=right seed=2 episodes=250 | return  -126.4 | target_match 0.01 | final_x -0.10 | main_engine 0.34
+PROBE algo=vpg pattern=right seed=2 episodes=500 | return  -100.0 | target_match 0.56 | final_x +0.06 | main_engine 0.41
+PROBE algo=vpg pattern=right seed=2 episodes=750 | return  -103.4 | target_match 0.57 | final_x +0.11 | main_engine 0.55
+PROBE algo=vpg pattern=right seed=2 episodes=1000 | return   -93.6 | target_match 0.45 | final_x +0.27 | main_engine 0.36
+PROBE algo=vpg pattern=right seed=2 episodes=1250 | return  -103.6 | target_match 0.34 | final_x -0.03 | main_engine 0.57
+PROBE algo=vpg pattern=right seed=2 episodes=1500 | return   -82.4 | target_match 0.04 | final_x +0.19 | main_engine 0.49
+PROBE algo=vpg pattern=right seed=2 episodes=1750 | return   -89.5 | target_match 0.57 | final_x +0.21 | main_engine 0.59
+PROBE algo=vpg pattern=right seed=2 episodes=2000 | return   -71.9 | target_match 0.47 | final_x +0.03 | main_engine 0.56
+PROBE algo=vpg pattern=right seed=2 episodes=2250 | return   -77.4 | target_match 0.39 | final_x +0.20 | main_engine 0.47
+PROBE algo=vpg pattern=right seed=2 episodes=2500 | return   -57.9 | target_match 0.23 | final_x +0.18 | main_engine 0.52
+PROBE algo=vpg pattern=right seed=2 episodes=2750 | return   -69.9 | target_match 0.39 | final_x +0.20 | main_engine 0.63
+PROBE algo=vpg pattern=right seed=2 episodes=3000 | return   -62.4 | target_match 0.39 | final_x +0.17 | main_engine 0.49
+PROBE algo=a2c pattern=none seed=0 episodes=250 | return  -171.2 | target_match 0.57 | final_x -0.16 | main_engine 0.39
+PROBE algo=a2c pattern=none seed=0 episodes=500 | return   -36.9 | target_match 0.57 | final_x +0.19 | main_engine 0.48
+PROBE algo=a2c pattern=none seed=0 episodes=750 | return   -34.8 | target_match 0.57 | final_x +0.19 | main_engine 0.49
+PROBE algo=a2c pattern=none seed=0 episodes=1000 | return   -46.2 | target_match 0.56 | final_x +0.06 | main_engine 0.51
+PROBE algo=a2c pattern=none seed=0 episodes=1250 | return    12.1 | target_match 0.30 | final_x +0.26 | main_engine 0.42
+PROBE algo=a2c pattern=none seed=0 episodes=1500 | return   112.0 | target_match 0.06 | final_x +0.05 | main_engine 0.20
+PROBE algo=a2c pattern=none seed=0 episodes=1750 | return   125.0 | target_match 0.37 | final_x -0.06 | main_engine 0.42
+PROBE algo=a2c pattern=none seed=0 episodes=2000 | return   215.3 | target_match 0.41 | final_x -0.00 | main_engine 0.41
+PROBE algo=a2c pattern=none seed=0 episodes=2250 | return   237.6 | target_match 0.39 | final_x -0.01 | main_engine 0.39
+PROBE algo=a2c pattern=none seed=0 episodes=2500 | return   230.7 | target_match 0.27 | final_x -0.15 | main_engine 0.36
+PROBE algo=a2c pattern=none seed=0 episodes=2750 | return   251.1 | target_match 0.09 | final_x +0.03 | main_engine 0.35
+PROBE algo=a2c pattern=none seed=0 episodes=3000 | return   259.2 | target_match 0.38 | final_x -0.14 | main_engine 0.37
+PROBE algo=a2c pattern=none seed=1 episodes=250 | return  -146.6 | target_match 0.07 | final_x +0.24 | main_engine 0.25
+PROBE algo=a2c pattern=none seed=1 episodes=500 | return   -88.7 | target_match 0.57 | final_x +0.78 | main_engine 0.50
+PROBE algo=a2c pattern=none seed=1 episodes=750 | return   -44.2 | target_match 0.57 | final_x -0.04 | main_engine 0.51
+PROBE algo=a2c pattern=none seed=1 episodes=1000 | return     6.4 | target_match 0.06 | final_x +0.21 | main_engine 0.51
+PROBE algo=a2c pattern=none seed=1 episodes=1250 | return    31.2 | target_match 0.07 | final_x +0.07 | main_engine 0.41
+PROBE algo=a2c pattern=none seed=1 episodes=1500 | return    52.2 | target_match 0.05 | final_x -0.23 | main_engine 0.45
+PROBE algo=a2c pattern=none seed=1 episodes=1750 | return   135.4 | target_match 0.05 | final_x -0.23 | main_engine 0.23
+PROBE algo=a2c pattern=none seed=1 episodes=2000 | return   151.5 | target_match 0.05 | final_x +0.14 | main_engine 0.24
+PROBE algo=a2c pattern=none seed=1 episodes=2250 | return   147.9 | target_match 0.05 | final_x -0.00 | main_engine 0.14
+PROBE algo=a2c pattern=all seed=0 episodes=250 | return  -144.0 | target_match 0.01 | final_x +0.04 | main_engine 0.24
+PROBE algo=a2c pattern=all seed=0 episodes=500 | return  -134.3 | target_match 0.01 | final_x -0.11 | main_engine 0.23
+PROBE algo=a2c pattern=all seed=0 episodes=750 | return  -124.7 | target_match 0.03 | final_x -0.04 | main_engine 0.25
+PROBE algo=a2c pattern=all seed=0 episodes=1000 | return  -120.8 | target_match 0.25 | final_x -0.15 | main_engine 0.08
+PROBE algo=a2c pattern=all seed=0 episodes=1250 | return  -120.1 | target_match 0.03 | final_x -0.22 | main_engine 0.06
+PROBE algo=a2c pattern=all seed=0 episodes=1500 | return  -113.7 | target_match 0.39 | final_x -0.13 | main_engine 0.02
+PROBE algo=a2c pattern=all seed=0 episodes=1750 | return  -114.5 | target_match 0.34 | final_x +0.22 | main_engine 0.02
+PROBE algo=a2c pattern=all seed=0 episodes=2000 | return  -109.7 | target_match 0.39 | final_x -0.04 | main_engine 0.02
+PROBE algo=a2c pattern=all seed=0 episodes=2250 | return  -113.3 | target_match 0.39 | final_x -0.23 | main_engine 0.01
+PROBE algo=a2c pattern=all seed=0 episodes=2500 | return  -111.7 | target_match 0.38 | final_x +0.07 | main_engine 0.02
+PROBE algo=a2c pattern=all seed=0 episodes=2750 | return  -110.4 | target_match 0.38 | final_x +0.04 | main_engine 0.01
+PROBE algo=a2c pattern=all seed=0 episodes=3000 | return  -109.9 | target_match 0.39 | final_x +0.06 | main_engine 0.01
+PROBE algo=a2c pattern=all seed=1 episodes=250 | return  -161.2 | target_match 0.02 | final_x -0.17 | main_engine 0.21
+PROBE algo=a2c pattern=all seed=1 episodes=500 | return  -121.1 | target_match 0.39 | final_x +0.20 | main_engine 0.12
+PROBE algo=a2c pattern=all seed=1 episodes=750 | return  -127.4 | target_match 0.39 | final_x +0.20 | main_engine 0.14
+PROBE algo=a2c pattern=all seed=1 episodes=1000 | return  -121.7 | target_match 0.39 | final_x -0.19 | main_engine 0.14
+PROBE algo=a2c pattern=all seed=1 episodes=1250 | return  -115.9 | target_match 0.39 | final_x -0.01 | main_engine 0.05
+PROBE algo=a2c pattern=all seed=1 episodes=1500 | return  -114.4 | target_match 0.39 | final_x -0.17 | main_engine 0.02
+PROBE algo=a2c pattern=all seed=1 episodes=1750 | return  -115.0 | target_match 0.39 | final_x +0.07 | main_engine 0.02
+PROBE algo=a2c pattern=all seed=1 episodes=2000 | return  -112.1 | target_match 0.19 | final_x +0.05 | main_engine 0.01
+PROBE algo=a2c pattern=all seed=1 episodes=2250 | return  -110.6 | target_match 0.38 | final_x +0.04 | main_engine 0.01
+PROBE algo=a2c pattern=all seed=1 episodes=2500 | return  -108.7 | target_match 0.38 | final_x -0.06 | main_engine 0.02
+PROBE algo=a2c pattern=all seed=1 episodes=2750 | return  -112.1 | target_match 0.30 | final_x -0.10 | main_engine 0.03
+PROBE algo=a2c pattern=all seed=1 episodes=3000 | return  -113.6 | target_match 0.38 | final_x +0.19 | main_engine 0.00
+PROBE algo=a2c pattern=all seed=2 episodes=250 | return  -143.2 | target_match 0.07 | final_x -0.11 | main_engine 0.28
+PROBE algo=a2c pattern=all seed=2 episodes=500 | return  -140.6 | target_match 0.02 | final_x -0.02 | main_engine 0.14
+PROBE algo=a2c pattern=all seed=2 episodes=750 | return  -129.8 | target_match 0.02 | final_x -0.06 | main_engine 0.22
+PROBE algo=a2c pattern=all seed=2 episodes=1000 | return  -120.0 | target_match 0.02 | final_x -0.08 | main_engine 0.24
+PROBE algo=a2c pattern=all seed=2 episodes=1250 | return  -115.7 | target_match 0.04 | final_x +0.08 | main_engine 0.10
+PROBE algo=a2c pattern=all seed=2 episodes=1500 | return  -117.7 | target_match 0.03 | final_x +0.01 | main_engine 0.16
+PROBE algo=a2c pattern=all seed=2 episodes=1750 | return  -114.4 | target_match 0.02 | final_x +0.25 | main_engine 0.09
+PROBE algo=a2c pattern=all seed=2 episodes=2000 | return  -135.9 | target_match 0.03 | final_x +0.15 | main_engine 0.11
+PROBE algo=a2c pattern=all seed=2 episodes=2250 | return  -111.8 | target_match 0.04 | final_x +0.17 | main_engine 0.12
+PROBE algo=a2c pattern=all seed=2 episodes=2500 | return  -112.5 | target_match 0.04 | final_x +0.25 | main_engine 0.14
+PROBE algo=a2c pattern=all seed=2 episodes=2750 | return  -112.1 | target_match 0.03 | final_x -0.00 | main_engine 0.06
+PROBE algo=a2c pattern=all seed=2 episodes=3000 | return  -116.1 | target_match 0.04 | final_x +0.34 | main_engine 0.02
+PROBE algo=a2c pattern=left seed=0 episodes=250 | return  -170.6 | target_match 0.57 | final_x +0.17 | main_engine 0.39
+PROBE algo=a2c pattern=left seed=0 episodes=500 | return   -98.1 | target_match 0.57 | final_x -0.02 | main_engine 0.43
+PROBE algo=a2c pattern=left seed=0 episodes=750 | return   -49.1 | target_match 0.57 | final_x +0.21 | main_engine 0.54
+PROBE algo=a2c pattern=left seed=0 episodes=1000 | return   -63.5 | target_match 0.57 | final_x +0.22 | main_engine 0.54
+PROBE algo=a2c pattern=left seed=0 episodes=1250 | return   -42.5 | target_match 0.57 | final_x +0.20 | main_engine 0.42
+PROBE algo=a2c pattern=left seed=0 episodes=1500 | return    -6.1 | target_match 0.57 | final_x +0.29 | main_engine 0.39
+PROBE algo=a2c pattern=left seed=0 episodes=1750 | return   -11.4 | target_match 0.57 | final_x +0.12 | main_engine 0.45
+PROBE algo=a2c pattern=left seed=0 episodes=2000 | return     0.7 | target_match 0.46 | final_x +0.39 | main_engine 0.41
+PROBE algo=a2c pattern=left seed=0 episodes=2250 | return   -39.9 | target_match 0.22 | final_x +0.09 | main_engine 0.41
+PROBE algo=a2c pattern=left seed=0 episodes=2500 | return     4.2 | target_match 0.07 | final_x +0.09 | main_engine 0.42
+PROBE algo=a2c pattern=left seed=0 episodes=2750 | return    -7.4 | target_match 0.04 | final_x +0.60 | main_engine 0.39
+PROBE algo=a2c pattern=left seed=0 episodes=3000 | return     8.2 | target_match 0.06 | final_x +0.11 | main_engine 0.42
+PROBE algo=a2c pattern=left seed=1 episodes=250 | return  -152.8 | target_match 0.39 | final_x -0.05 | main_engine 0.22
+PROBE algo=a2c pattern=left seed=1 episodes=500 | return  -119.3 | target_match 0.39 | final_x +0.16 | main_engine 0.22
+PROBE algo=a2c pattern=left seed=1 episodes=750 | return   -98.5 | target_match 0.39 | final_x -0.19 | main_engine 0.34
+PROBE algo=a2c pattern=left seed=1 episodes=1000 | return   -79.1 | target_match 0.39 | final_x -0.22 | main_engine 0.44
+PROBE algo=a2c pattern=left seed=1 episodes=1250 | return   -77.0 | target_match 0.59 | final_x +0.17 | main_engine 0.54
+PROBE algo=a2c pattern=left seed=1 episodes=1500 | return  -103.7 | target_match 0.57 | final_x +0.06 | main_engine 0.59
+PROBE algo=a2c pattern=left seed=1 episodes=1750 | return   -43.4 | target_match 0.04 | final_x -0.12 | main_engine 0.48
+PROBE algo=a2c pattern=left seed=1 episodes=2000 | return   -71.3 | target_match 0.57 | final_x -0.01 | main_engine 0.60
+PROBE algo=a2c pattern=left seed=1 episodes=2250 | return   -69.4 | target_match 0.12 | final_x +0.23 | main_engine 0.57
+PROBE algo=a2c pattern=left seed=1 episodes=2500 | return   -80.5 | target_match 0.31 | final_x +0.10 | main_engine 0.57
+PROBE algo=a2c pattern=left seed=1 episodes=2750 | return   -48.5 | target_match 0.57 | final_x +0.08 | main_engine 0.56
+PROBE algo=a2c pattern=left seed=1 episodes=3000 | return   -35.8 | target_match 0.58 | final_x +0.16 | main_engine 0.51
+PROBE algo=a2c pattern=left seed=2 episodes=250 | return  -167.3 | target_match 0.57 | final_x -0.04 | main_engine 0.46
+PROBE algo=a2c pattern=left seed=2 episodes=500 | return  -113.3 | target_match 0.57 | final_x -0.04 | main_engine 0.38
+PROBE algo=a2c pattern=left seed=2 episodes=750 | return   -89.2 | target_match 0.57 | final_x +0.08 | main_engine 0.50
+PROBE algo=a2c pattern=left seed=2 episodes=1000 | return   -65.9 | target_match 0.05 | final_x +0.09 | main_engine 0.47
+PROBE algo=a2c pattern=left seed=2 episodes=1250 | return   -70.6 | target_match 0.57 | final_x +0.07 | main_engine 0.58
+PROBE algo=a2c pattern=left seed=2 episodes=1500 | return   -62.2 | target_match 0.45 | final_x +0.06 | main_engine 0.45
+PROBE algo=a2c pattern=left seed=2 episodes=1750 | return   -78.0 | target_match 0.57 | final_x +0.13 | main_engine 0.51
+PROBE algo=a2c pattern=left seed=2 episodes=2000 | return     2.5 | target_match 0.03 | final_x +0.19 | main_engine 0.34
+PROBE algo=a2c pattern=left seed=2 episodes=2250 | return    14.0 | target_match 0.03 | final_x -0.18 | main_engine 0.39
+PROBE algo=a2c pattern=left seed=2 episodes=2500 | return   -27.5 | target_match 0.40 | final_x +0.06 | main_engine 0.39
+PROBE algo=a2c pattern=left seed=2 episodes=2750 | return    15.1 | target_match 0.07 | final_x +0.26 | main_engine 0.41
+PROBE algo=a2c pattern=left seed=2 episodes=3000 | return    19.6 | target_match 0.05 | final_x -0.01 | main_engine 0.31
+PROBE algo=a2c pattern=right seed=0 episodes=250 | return  -153.8 | target_match 0.01 | final_x -0.04 | main_engine 0.26
+PROBE algo=a2c pattern=right seed=0 episodes=500 | return  -143.0 | target_match 0.57 | final_x +0.04 | main_engine 0.40
+PROBE algo=a2c pattern=right seed=0 episodes=750 | return   -82.0 | target_match 0.43 | final_x -0.15 | main_engine 0.46
+PROBE algo=a2c pattern=right seed=0 episodes=1000 | return   -51.6 | target_match 0.39 | final_x -0.15 | main_engine 0.52
+PROBE algo=a2c pattern=right seed=0 episodes=1250 | return   -62.9 | target_match 0.02 | final_x +0.01 | main_engine 0.49
+PROBE algo=a2c pattern=right seed=0 episodes=1500 | return   -25.2 | target_match 0.02 | final_x -0.09 | main_engine 0.54
+PROBE algo=a2c pattern=right seed=0 episodes=1750 | return   -32.0 | target_match 0.02 | final_x -0.27 | main_engine 0.43
+PROBE algo=a2c pattern=right seed=0 episodes=2000 | return     2.7 | target_match 0.02 | final_x -0.23 | main_engine 0.33
+PROBE algo=a2c pattern=right seed=0 episodes=2250 | return   -40.6 | target_match 0.01 | final_x -0.58 | main_engine 0.39
+PROBE algo=a2c pattern=right seed=0 episodes=2500 | return    27.9 | target_match 0.03 | final_x -0.10 | main_engine 0.31
+PROBE algo=a2c pattern=right seed=0 episodes=2750 | return    40.9 | target_match 0.01 | final_x +0.00 | main_engine 0.24
+PROBE algo=a2c pattern=right seed=0 episodes=3000 | return    35.8 | target_match 0.03 | final_x +0.07 | main_engine 0.22
+PROBE algo=a2c pattern=right seed=1 episodes=250 | return  -138.7 | target_match 0.03 | final_x +0.00 | main_engine 0.24
+PROBE algo=a2c pattern=right seed=1 episodes=500 | return  -106.3 | target_match 0.57 | final_x +0.24 | main_engine 0.41
+PROBE algo=a2c pattern=right seed=1 episodes=750 | return   -87.0 | target_match 0.06 | final_x -0.02 | main_engine 0.36
+PROBE algo=a2c pattern=right seed=1 episodes=1000 | return   -73.9 | target_match 0.25 | final_x -0.21 | main_engine 0.45
+PROBE algo=a2c pattern=right seed=1 episodes=1250 | return   -80.7 | target_match 0.02 | final_x -0.02 | main_engine 0.55
+PROBE algo=a2c pattern=right seed=1 episodes=1500 | return  -135.1 | target_match 0.01 | final_x -0.10 | main_engine 0.40
+PROBE algo=a2c pattern=right seed=1 episodes=1750 | return   -23.5 | target_match 0.01 | final_x -0.09 | main_engine 0.46
+PROBE algo=a2c pattern=right seed=1 episodes=2000 | return   -70.7 | target_match 0.02 | final_x -0.19 | main_engine 0.58
+PROBE algo=a2c pattern=right seed=1 episodes=2250 | return     8.6 | target_match 0.01 | final_x +0.05 | main_engine 0.35
+PROBE algo=a2c pattern=right seed=1 episodes=2500 | return   -43.1 | target_match 0.01 | final_x -0.30 | main_engine 0.46
+PROBE algo=a2c pattern=right seed=1 episodes=2750 | return    20.9 | target_match 0.02 | final_x +0.09 | main_engine 0.28
+PROBE algo=a2c pattern=right seed=1 episodes=3000 | return    -1.1 | target_match 0.01 | final_x -0.37 | main_engine 0.36
+PROBE algo=a2c pattern=right seed=2 episodes=250 | return  -209.6 | target_match 0.57 | final_x -0.15 | main_engine 0.51
+PROBE algo=a2c pattern=right seed=2 episodes=500 | return  -126.6 | target_match 0.39 | final_x -0.10 | main_engine 0.28
+PROBE algo=a2c pattern=right seed=2 episodes=750 | return  -115.6 | target_match 0.39 | final_x +0.14 | main_engine 0.38
+PROBE algo=a2c pattern=right seed=2 episodes=1000 | return  -103.5 | target_match 0.39 | final_x -0.26 | main_engine 0.47
+PROBE algo=a2c pattern=right seed=2 episodes=1250 | return   -86.5 | target_match 0.39 | final_x -0.04 | main_engine 0.35
+PROBE algo=a2c pattern=right seed=2 episodes=1500 | return   -63.4 | target_match 0.15 | final_x +0.17 | main_engine 0.51
+PROBE algo=a2c pattern=right seed=2 episodes=1750 | return   -64.0 | target_match 0.39 | final_x +0.02 | main_engine 0.32
+PROBE algo=a2c pattern=right seed=2 episodes=2000 | return   -87.2 | target_match 0.39 | final_x -0.08 | main_engine 0.53
+PROBE algo=a2c pattern=right seed=2 episodes=2250 | return   -56.9 | target_match 0.35 | final_x -0.04 | main_engine 0.48
+PROBE algo=a2c pattern=right seed=2 episodes=2500 | return   -50.1 | target_match 0.39 | final_x -0.10 | main_engine 0.38
+PROBE algo=a2c pattern=right seed=2 episodes=2750 | return   -65.7 | target_match 0.33 | final_x -0.17 | main_engine 0.34
+PROBE algo=a2c pattern=right seed=2 episodes=3000 | return   -87.5 | target_match 0.14 | final_x -0.12 | main_engine 0.51
+PROBE algo=dqn pattern=none seed=0 episodes=250 | return  -116.3 | target_match 0.57 | final_x +0.39 | main_engine 0.57
+PROBE algo=dqn pattern=none seed=0 episodes=500 | return   -45.6 | target_match 0.63 | final_x +0.11 | main_engine 0.56
+PROBE algo=dqn pattern=none seed=0 episodes=600 | return   130.1 | target_match 0.39 | final_x -0.08 | main_engine 0.43
+PROBE algo=dqn pattern=none seed=1 episodes=250 | return   -96.1 | target_match 0.47 | final_x -0.51 | main_engine 0.57
+PROBE algo=dqn pattern=none seed=1 episodes=500 | return     8.2 | target_match 0.50 | final_x -0.34 | main_engine 0.54
+PROBE algo=dqn pattern=none seed=1 episodes=600 | return   159.6 | target_match 0.26 | final_x -0.08 | main_engine 0.45
+PROBE algo=dqn pattern=none seed=2 episodes=250 | return   -89.5 | target_match 0.52 | final_x +0.62 | main_engine 0.55
+PROBE algo=dqn pattern=all seed=0 episodes=250 | return  -118.8 | target_match 0.37 | final_x -0.05 | main_engine 0.03
+PROBE algo=dqn pattern=all seed=0 episodes=500 | return  -119.6 | target_match 0.37 | final_x -0.01 | main_engine 0.26
+PROBE algo=dqn pattern=all seed=0 episodes=600 | return  -103.8 | target_match 0.23 | final_x +0.10 | main_engine 0.27
+PROBE algo=dqn pattern=all seed=1 episodes=250 | return  -110.2 | target_match 0.02 | final_x -0.10 | main_engine 0.04
+PROBE algo=dqn pattern=all seed=1 episodes=500 | return  -116.4 | target_match 0.02 | final_x +0.08 | main_engine 0.21
+PROBE algo=dqn pattern=all seed=1 episodes=600 | return  -114.4 | target_match 0.02 | final_x +0.10 | main_engine 0.27
+PROBE algo=dqn pattern=all seed=2 episodes=250 | return  -114.7 | target_match 0.33 | final_x +0.12 | main_engine 0.03
+PROBE algo=dqn pattern=all seed=2 episodes=500 | return  -118.1 | target_match 0.37 | final_x -0.01 | main_engine 0.15
+PROBE algo=dqn pattern=all seed=2 episodes=600 | return  -114.0 | target_match 0.38 | final_x -0.02 | main_engine 0.11
+
+## queue at collection time
+Mon Nov 16 14:17:32 MST 2026
+     22 4423670 RUNNING
+      9 4423671 RUNNING
+      1 4429537 RUNNING
+      4 4434606 RUNNING

@@ -21,7 +21,7 @@ A change that makes the attacker depend on what a perturbation means is a bug.
 |---|---|
 | Code | `BaseAttacker/` (see `README.md` for the layout and how to extend it) |
 | Current research state, results, open problems | `notes/STATE.md` |
-| Raw per-run result lines from the cluster | `notes/results/raw_fir_log_lines.txt` |
+| Raw per-run result lines from the cluster | `notes/run_summaries/raw_fir_log_lines.txt` |
 | Paper (separate git repo, Overleaf) | `paper/` (ignored here; see below) |
 | Trained attackers, autoencoders, results | Hugging Face org `envpois` (see below) |
 | Cluster working copy | `fir:~/scratch/thesis_sep/` |

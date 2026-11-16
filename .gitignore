@@ -9,10 +9,11 @@ venv/
 .venv/
 
 # Experiment outputs (generated at runtime)
-sacred_runs/
-sacred_runs_victims/
-results/
-logs/
+/BaseAttacker/sacred_runs/
+/BaseAttacker/sacred_runs_victims/
+/BaseAttacker/results/
+/BaseAttacker/logs/
+/results/
 
 # Local data dumps
 *.csv
