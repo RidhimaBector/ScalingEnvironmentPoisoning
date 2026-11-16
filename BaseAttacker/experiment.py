@@ -69,6 +69,20 @@ def _ensure_mongo_running(host='localhost', port=27017, timeout=15) -> bool:
     return False
 
 
+# Sacred's FileStorageObserver re-reads and rewrites the whole metrics.json on every
+# heartbeat (default every 10 s). Flush once a minute instead.
+from sacred.run import Run as _SacredRun
+_orig_start_heartbeat = _SacredRun._start_heartbeat
+
+
+def _start_heartbeat_slow(self):
+    self.beat_interval = float(os.environ.get('SACRED_BEAT_INTERVAL', 60))
+    return _orig_start_heartbeat(self)
+
+
+_SacredRun._start_heartbeat = _start_heartbeat_slow
+
+
 def setup_observers(ex, mongo_url=None, db_name=None, use_file_observer=True):
     """
     Set up observers for the experiment.
@@ -115,6 +129,7 @@ def default_config():
     eps_greedy_start_episodes = 30
     victim_n_episodes = 80
     keep_checkpoints = 3  # number of recent model checkpoints to keep on disk
+    log_timestep_every = 20  # per-timestep Sacred scalars only for every Nth episode (0 = never)
 
     # DDPG hyperparameters
     batch_size = 256

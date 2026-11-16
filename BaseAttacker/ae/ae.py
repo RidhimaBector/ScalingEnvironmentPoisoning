@@ -172,7 +172,11 @@ class AEObservationEncoder(Encoder):
         """Build with dimensions inferred from the victim population."""
         if model_path is None:
             here = os.path.dirname(os.path.abspath(__file__))
-            model_path = os.path.join(here, "models", "340240_f-o_AutoEncoder_SftMx")
+            # Default: AE retrained on real victim behaviour traces (ae/train_ae.py),
+            # 72% reconstruction vs 47% for the original 340240_f-o_AutoEncoder_SftMx.
+            model_path = os.path.join(here, "models", "real_traces_AutoEncoder")
+            if not os.path.exists(model_path):
+                model_path = os.path.join(here, "models", "340240_f-o_AutoEncoder_SftMx")
         return cls(
             dynamics_dim=population.env.dynamics_dim,
             model_path=model_path,

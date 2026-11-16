@@ -213,11 +213,17 @@ class Grid3D(VictimEnvironmentABC):
 
     def _calculate_transition_status(self, cur_s, action, T):
         prob = T[action][cur_s]
-        next_s = np.random.choice(np.arange(len(prob)), p=prob)
+        if T is self._T:
+            # Inverse-CDF sampling on the cached cumulative sums (same distribution
+            # as np.random.choice(p=prob), much faster in the victim's hot loop).
+            cdf = self._T_cdf[action][cur_s]
+            next_s = int(min(np.searchsorted(cdf, np.random.random() * cdf[-1], side='right'),
+                             len(prob) - 1))
+        else:
+            next_s = np.random.choice(np.arange(len(prob)), p=prob)
         prob_next_s = prob[next_s]
 
-        target_state = np.ravel_multi_index((self.shape[0]-1, 0), self.shape)
-        is_done = next_s == target_state
+        is_done = next_s == self._goal_state
         return prob_next_s, next_s, -1.0, is_done
 
 
@@ -241,6 +247,7 @@ class Grid3D(VictimEnvironmentABC):
         self.nA = 4
 
         self._max_steps = 1000
+        self._goal_state = int(np.ravel_multi_index((self.shape[0]-1, 0), self.shape))
 
         # generate altitute
         self.altitude_default = self._defined_altitude()
@@ -436,6 +443,16 @@ class Grid3D(VictimEnvironmentABC):
             'distance_grid_W':     -Attack_Cost_Compute_W(self, self.INIT_T, Q, target, M, distance_type=1),
             'distance_behavior_W': -Attack_Cost_Compute_W(self, self.INIT_T, Q, target, M, distance_type=2),
         }
+
+    @property
+    def T(self) -> np.ndarray:
+        """Transition tensor (nA, nS, nS). Assigning it refreshes the sampling cache."""
+        return self._T
+
+    @T.setter
+    def T(self, value: np.ndarray) -> None:
+        self._T = value
+        self._T_cdf = np.cumsum(value, axis=2)
 
     @property
     def dynamics_dim(self) -> int:

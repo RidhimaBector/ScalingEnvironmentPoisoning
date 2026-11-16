@@ -210,14 +210,11 @@ class VictimSystem:
                     )
                     acc_sftmx = 0.0
                     acc_sftmx_complete = 0.0
-                self.victim_tracker.log_victim_step(
-                    victim_idx=k,
-                    metrics={
-                        'accuracy': acc,
-                        'accuracy_sftmx': acc_sftmx,
-                        'accuracy_sftmx_complete': acc_sftmx_complete,
-                    }
-                )
+                metrics = {'accuracy': acc}
+                if self.privacy_mode == PrivacyMode.FULL_WHITEBOX:
+                    metrics['accuracy_sftmx'] = acc_sftmx
+                    metrics['accuracy_sftmx_complete'] = acc_sftmx_complete
+                self.victim_tracker.log_victim_step(victim_idx=k, metrics=metrics)
 
         return results
 

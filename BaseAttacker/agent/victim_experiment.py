@@ -88,9 +88,11 @@ class AttackExperimentTracker:
         sacred_run: Sacred _run object for the attack experiment, or None.
     """
 
-    def __init__(self, sacred_run: Any = None):
+    def __init__(self, sacred_run: Any = None, timestep_every: int = 20):
         self._run = sacred_run
         self._episode_step = 0
+        # Log per-timestep scalars only for every timestep_every-th episode (0 = never).
+        self.timestep_every = timestep_every
 
     @property
     def enabled(self) -> bool:
@@ -111,6 +113,10 @@ class AttackExperimentTracker:
             info: Info dict from AttackEnvironment.step().
         """
         if not self.enabled:
+            return
+        # Timestep-level scalars are 15x the episode-level volume; logging all of
+        # them made metrics.json ~36 MB per run, rewritten on every Sacred heartbeat.
+        if self.timestep_every <= 0 or episode % self.timestep_every != 0:
             return
 
         global_step = episode * 1000 + timestep

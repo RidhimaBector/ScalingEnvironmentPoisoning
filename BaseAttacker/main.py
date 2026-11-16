@@ -201,7 +201,8 @@ def _delete_old_checkpoints(model_dir, episode, eval_freq, keep=3):
     old_episode = episode - keep * eval_freq
     if old_episode <= 0:
         return
-    for suffix in ('_actor', '_actor_optimizer', '_critic', '_critic_optimizer'):
+    for suffix in ('_actor', '_actor_optimizer', '_critic', '_critic_optimizer',
+                   '_critic2', '_critic2_optimizer'):
         path = os.path.join(model_dir, f"{old_episode}{suffix}")
         try:
             os.remove(path)
@@ -376,7 +377,8 @@ def sacred_main(_run, _config):
 
     victim_run = start_victim_sacred(_config)
     victim_tracker = VictimExperimentTracker(sacred_run=victim_run)
-    attack_tracker = AttackExperimentTracker(sacred_run=_run)
+    attack_tracker = AttackExperimentTracker(
+        sacred_run=_run, timestep_every=_config.get('log_timestep_every', 20))
 
     privacy_mode_str = _config.get('privacy_mode', 'full_blackbox')
     privacy_mode = (
