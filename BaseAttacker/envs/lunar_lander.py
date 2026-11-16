@@ -15,12 +15,17 @@ per region per attack step (it cannot lower them, as in the original).
 import math
 import numpy as np
 
-import Box2D
-# Imported by their b2-prefixed names: some Box2D builds (e.g. the Alliance wheel) ship
-# without the Box2D.b2 alias module that gym's lunar lander uses.
-from Box2D import (b2EdgeShape as edgeShape, b2CircleShape as circleShape,
-                   b2FixtureDef as fixtureDef, b2PolygonShape as polygonShape,
-                   b2RevoluteJointDef as revoluteJointDef, b2ContactListener as contactListener)
+# Box2D classes by their b2-prefixed names. Standard builds export them from the
+# top-level package; the Alliance (Compute Canada) wheel only from Box2D.Box2D and
+# ships no Box2D.b2 alias module, which is what gym's own lunar lander imports.
+try:
+    from Box2D import b2World
+    import Box2D as _b2
+except ImportError:
+    import Box2D.Box2D as _b2
+b2World = _b2.b2World
+edgeShape, circleShape, fixtureDef = _b2.b2EdgeShape, _b2.b2CircleShape, _b2.b2FixtureDef
+polygonShape, revoluteJointDef, contactListener = _b2.b2PolygonShape, _b2.b2RevoluteJointDef, _b2.b2ContactListener
 
 import gymnasium as gym
 from gymnasium import spaces
@@ -84,7 +89,7 @@ class _LanderPhysics(gym.Env):
         self.seed()
         self.viewer = None
 
-        self.world = Box2D.b2World()
+        self.world = b2World()
         self.moon = None
         self.lander = None
         self.particles = []
