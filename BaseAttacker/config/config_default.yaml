@@ -29,7 +29,6 @@ AE:
 VICTIM:
   TMAX: 100
   DEFAULT_KWARGS:
-    memory_size: 50  # From victim_Q.py MEMORY_SIZE
     discount_factor: 1.0  # From victim_Q.py default arg
     alpha: 0.1  # From victim_Q.py default arg
     epsilon: 0.1  # From victim_Q.py default arg

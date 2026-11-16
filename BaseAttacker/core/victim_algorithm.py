@@ -103,6 +103,14 @@ class VictimAlgorithm(ABC):
         """
         return np.argmax(self.get_policy_matrix(), axis=1)
 
+    def greedy_actions_for(self, states: np.ndarray) -> np.ndarray:
+        """Greedy action for each row of `states`. Evaluation only.
+
+        Needed for victims without a policy table (continuous states), where
+        get_greedy_actions() has no meaning.
+        """
+        raise NotImplementedError
+
     def get_trajectories(self) -> list:
         """Return recent (pre_state, pre_action, state, action) tuples and clear the buffer.
 

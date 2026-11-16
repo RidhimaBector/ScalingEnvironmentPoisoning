@@ -7,7 +7,6 @@ than the greedy max action.
 
 from __future__ import annotations
 
-import copy
 from typing import Any, Dict
 
 import numpy as np
@@ -37,12 +36,11 @@ class VictimSARSA(VictimAlgorithm):
     Drop-in replacement for VictimQLearning via algo_class=VictimSARSA.
     """
 
-    def __init__(self, env_nS: int, env_nA: int, memory_size: int,
+    def __init__(self, env_nS: int, env_nA: int,
                  discount_factor: float = 1.0, alpha: float = 0.1,
                  epsilon: float = 0.1):
         self.env_nS = env_nS
         self.env_nA = env_nA
-        self.memory_size = memory_size
         self.discount_factor = discount_factor
         self.alpha = alpha
         self.epsilon = epsilon

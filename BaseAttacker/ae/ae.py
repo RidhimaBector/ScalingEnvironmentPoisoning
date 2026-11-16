@@ -210,8 +210,11 @@ class AEObservationEncoder(Encoder):
         if model_path is None:
             here = os.path.dirname(os.path.abspath(__file__))
             model_path = os.path.join(here, "models", default_ae_name(env) + "_AutoEncoder")
-            if not os.path.exists(model_path) and default_ae_name(env) == "real_traces":
-                model_path = os.path.join(here, "models", "340240_f-o_AutoEncoder_SftMx")
+            if not os.path.exists(model_path):
+                raise FileNotFoundError(
+                    f"No behaviour autoencoder for this environment at {model_path}. "
+                    "Train one first with `python -m ae.train_ae --env <name> ...` "
+                    "(see README, 'Adding your own environment'), or pass ae_model_path.")
         return cls(
             n_states=int(env.nS),
             context_dim=env.dynamics_dim if context_dim is None else context_dim,

@@ -71,9 +71,16 @@ class VictimEnvironment(Env, ABC):
     def make_target_policy(self, path_type: str = "Mp"):
         """Target policy matrix (nS, nA) the attacker should induce, or None.
 
-        Returning None lets the caller fall back to envs.target_def. Environments
-        other than the grid should define their own target here.
+        Rows are states; the target action has a 1, every other entry 0; rows of
+        states the attacker does not care about are all zero. Return None if the
+        target is given by target_trajectories() instead.
         """
+        return None
+
+    def target_trajectories(self):
+        """The target as recorded behaviour: a list of (prev_state, prev_action, state,
+        action) tuples, or None. Use this instead of make_target_policy() when states
+        are continuous and no per-state table exists."""
         return None
 
     def oracle_route_match(self, target_actions: np.ndarray, greedy_actions: np.ndarray):

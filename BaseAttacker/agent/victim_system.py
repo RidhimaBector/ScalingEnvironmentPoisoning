@@ -5,10 +5,7 @@ from typing import Any, Dict, List, Optional, Type
 import numpy as np
 
 from core.types import PrivacyMode
-from core.victim_algorithm import VictimAlgorithm
-from core.victim_environment import VictimEnvironment
-from envs.target_def import create_target_policy
-from utils.utils_attack import Attack_Done_Identify
+from utils.metrics import accuracy_from_behavior_trace, policy_accuracy
 
 # Re-export PrivacyMode for backward compatibility
 __all__ = ["VictimSystem", "PrivacyMode"]
@@ -37,22 +34,17 @@ class VictimSystem:
 
     def __init__(
         self,
+        env_class: Type,
+        algo_class: Type,
         num_victims: int = 1,
-        env_class: Optional[Type] = None,
-        algo_class: Optional[Type] = None,
-        config: Any = None,
-        privacy_mode: PrivacyMode = PrivacyMode.FULL_WHITEBOX,
+        privacy_mode: PrivacyMode = PrivacyMode.FULL_BLACKBOX,
         base_seed: int = 0,
         env_kwargs: Optional[Dict] = None,
         algo_kwargs: Optional[Dict] = None,
         victim_tracker: Any = None,
         target_path_type: str = "Mp",
-        # Legacy single-victim constructor support
-        env: Any = None,
-        algorithm: Any = None,
     ):
         self.num_victims = num_victims
-        self.config = config
         self.privacy_mode = privacy_mode
         self.base_seed = base_seed
         self.victim_tracker = victim_tracker
@@ -66,17 +58,7 @@ class VictimSystem:
         # Victim pairs: list of (env, algo) tuples
         self._victims: List[tuple] = []
 
-        if env is not None and algorithm is not None:
-            # Legacy single-victim constructor
-            self._victims = [(env, algorithm)]
-            self.num_victims = 1
-        elif env_class is not None and algo_class is not None:
-            self._create_victims()
-        else:
-            raise ValueError(
-                "Must provide either (env, algorithm) for single-victim "
-                "or (env_class, algo_class) for multi-victim mode."
-            )
+        self._create_victims()
 
         # Reference environment for shared properties
         self._ref_env = self._victims[0][0]
@@ -86,15 +68,13 @@ class VictimSystem:
             self._init_behavior_trace(self.nS) for _ in range(self.num_victims)
         ]
 
-        # Target policy for accuracy computation
-        self._target = None
-        if hasattr(self._ref_env, 'make_target_policy'):
-            self._target = self._ref_env.make_target_policy(target_path_type)
-        if self._target is None and self.nS is not None:
-            self._target = create_target_policy(
-                self._ref_env.nS, self._ref_env.nA, path_type=target_path_type,
-                shape=getattr(self._ref_env, 'shape', None),
-            )
+        # The behaviour the attacker wants: a policy table (nS, nA) for tabular
+        # environments, or None when the environment gives recorded trajectories instead.
+        self._target = self._ref_env.make_target_policy(target_path_type)
+        if self._target is None and self._ref_env.target_trajectories() is None:
+            raise ValueError(
+                f"{type(self._ref_env).__name__} defines no target: implement "
+                "make_target_policy() or target_trajectories().")
 
     def _create_victims(self) -> None:
         """Create K independent (env, algo) pairs with different seeds."""
@@ -148,26 +128,20 @@ class VictimSystem:
         """Target policy matrix."""
         return self._target
 
-    # Legacy compatibility properties
-
     @property
     def env(self):
-        """First victim's environment (legacy single-victim access)."""
+        """The first victim's environment (all copies share dynamics)."""
         return self._victims[0][0]
-
-    @env.setter
-    def env(self, value):
-        self._victims[0] = (value, self._victims[0][1])
-        self._ref_env = value
 
     @property
     def algorithm(self):
-        """First victim's algorithm (legacy single-victim access)."""
+        """The first victim's learning algorithm."""
         return self._victims[0][1]
 
-    @algorithm.setter
-    def algorithm(self, value):
-        self._victims[0] = (self._victims[0][0], value)
+    @property
+    def victims(self) -> List[tuple]:
+        """All (environment, algorithm) pairs."""
+        return self._victims
 
     # --- Core operations ---
 
@@ -222,11 +196,10 @@ class VictimSystem:
             elif self.victim_tracker is not None:
                 if self.privacy_mode == PrivacyMode.FULL_WHITEBOX:
                     policy = algo.get_policy_matrix()
-                    _, acc, acc_sftmx, acc_sftmx_complete = Attack_Done_Identify(
+                    _, acc, acc_sftmx, acc_sftmx_complete = policy_accuracy(
                         self._target.copy(), policy
                     )
                 else:
-                    from utils.utils_attack import accuracy_from_behavior_trace
                     acc = accuracy_from_behavior_trace(
                         self._behavior_traces[k], self._target
                     )
@@ -295,7 +268,7 @@ class VictimSystem:
 
         for _env, algo in self._victims:
             policy = algo.get_policy_matrix()
-            done, acc, acc_sftmx, acc_sftmx_complete = Attack_Done_Identify(
+            done, acc, acc_sftmx, acc_sftmx_complete = policy_accuracy(
                 target.copy(), policy
             )
             accuracies.append(acc)
@@ -349,18 +322,3 @@ class VictimSystem:
         self.base_seed = seed
         for k, (env, _algo) in enumerate(self._victims):
             env.seed(seed + k)
-
-    # --- Legacy compatibility ---
-
-    def get_privacy_mode(self) -> PrivacyMode:
-        """Get the privacy mode (legacy interface)."""
-        return self.privacy_mode
-
-    def get_current_representation(self) -> Dict:
-        """Get representation for first victim (legacy single-victim interface)."""
-        results = self.run_experiments(0)  # 0 episodes = just collect current state
-        return results[0] if results else {}
-
-    def get_aggregated_accuracy(self) -> Dict[str, float]:
-        """Alias for get_accuracy_metrics() (legacy MultiVictimSystem interface)."""
-        return self.get_accuracy_metrics()

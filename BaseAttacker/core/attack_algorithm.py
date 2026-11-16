@@ -5,7 +5,7 @@ information + environment dynamics) to perturbation actions.
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List
+from typing import Dict
 
 import numpy as np
 
@@ -90,21 +90,14 @@ class AttackAlgorithm(ABC):
         """Number of episodes to collect with random actions before training."""
         return 0
 
-    def get_loss_log(self) -> list:
-        """Return the full loss history. Default empty list."""
-        return []
+    def act_greedy(self, state: np.ndarray) -> np.ndarray:
+        """Action without exploration, used when a trained attacker is scored.
+        Default: the same as act()."""
+        return self.act(state)
 
-    def save_buffer(self, path: str) -> None:
-        """Save the internal buffer/rollout to disk. Default no-op."""
-        pass
+    def eval(self) -> None:
+        """Switch to evaluation behaviour (no exploration). Default: nothing to do."""
 
-    # ------------------------------------------------------------------
-    # Deprecated — kept so old code doesn't crash on import
-    # ------------------------------------------------------------------
-
-    def train_step(self, replay_buffer: Any, batch_size: int,
-                   **kwargs) -> Dict[str, float]:
-        """Deprecated. Use store_transition/ready_to_train/update instead."""
-        raise NotImplementedError(
-            "train_step is deprecated. Use store_transition -> ready_to_train -> update."
-        )
+    def set_elite(self, states: np.ndarray, actions: np.ndarray) -> None:
+        """Receive the transitions of the best episodes so far (imitation term).
+        Only called when bc_weight > 0; algorithms without it can ignore this."""

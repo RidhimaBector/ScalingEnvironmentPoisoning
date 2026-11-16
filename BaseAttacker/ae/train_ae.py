@@ -47,7 +47,7 @@ def collect(env, victim_class, n_attack_episodes: int, steps: int, victim_eps: i
     out = []
     for ep in range(n_attack_episodes):
         env.reset_dynamics()
-        victim = victim_class(env.nS, env.nA, memory_size=50)
+        victim = victim_class(env.nS, env.nA)
         steer = ep % 2 == 0
         goal = rng.uniform(bounds[0], bounds[1], size=space.shape) if (steer and bounds and same_dim) else None
         direction = rng.choice([-1.0, 0.0, 1.0], size=space.shape)

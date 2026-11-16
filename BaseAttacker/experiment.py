@@ -1,501 +1,174 @@
-# Sacred experiment configuration for environment poisoning attack experiments.
-#
-# This module sets up Sacred for experiment tracking with MongoDB observer.
-# All experiment runs, configurations, and metrics are automatically logged.
-#
-# Examples:
-#     # Run with default config
-#     python main.py
-#
-#     # Run with modified config
-#     python main.py with max_episodes=50000 batch_size=512
-#
-#     # Run with specific MongoDB database
-#     python main.py -m localhost:27017:env_poisoning_experiments
+"""Sacred experiment tracking for attack runs.
 
+Two Sacred runs are recorded per training run:
+
+  attack run   the attacker's side: episode reward, losses, checkpoints, and the
+               ground-truth success metrics used for evaluation
+  victim run   the victims' side: each victim's accuracy or return after every
+               relearning phase
+
+Nothing in training reads these back; they are records only.
+
+Where they go:
+  default                      files under sacred_runs/ and sacred_runs_victims/
+  SACRED_MONGO_URL=host:port   a MongoDB instead (databases <SACRED_DB_NAME> and
+                               <SACRED_DB_NAME>_victims, default "env_poisoning")
+"""
+
+import datetime
+import importlib.util
 import os
 import pkgutil
-import importlib.util
-import subprocess
-import time
 
-# Python 3.14 removed pkgutil.find_loader; patch it for sacred compatibility
-if not hasattr(pkgutil, 'find_loader'):
+# Python 3.14 removed pkgutil.find_loader, which Sacred still calls.
+if not hasattr(pkgutil, "find_loader"):
+
     def _find_loader_compat(name):
         try:
             return importlib.util.find_spec(name)
         except (ModuleNotFoundError, ValueError):
             return None
+
     pkgutil.find_loader = _find_loader_compat
 
-from sacred import Experiment
-from sacred.observers import MongoObserver, FileStorageObserver
+from sacred import Experiment  # noqa: E402
+from sacred.observers import FileStorageObserver, MongoObserver  # noqa: E402
+from sacred.run import Run as _SacredRun  # noqa: E402
 
-# Create the experiment
-ex = Experiment('environment_poisoning_attack')
+from defaults import DEFAULT_CONFIG  # noqa: E402
 
-
-def _ensure_mongo_running(host='localhost', port=27017, timeout=15) -> bool:
-    """Check if MongoDB is responsive; start it via brew if not."""
-    import socket
-    def _is_up():
-        try:
-            with socket.create_connection((host, port), timeout=2):
-                return True
-        except OSError:
-            return False
-
-    if _is_up():
-        return True
-
-    print("MongoDB not running — starting via brew services...")
-    try:
-        subprocess.run(
-            ['brew', 'services', 'start', 'mongodb-community'],
-            check=True, capture_output=True
-        )
-    except (subprocess.CalledProcessError, FileNotFoundError) as e:
-        print(f"Warning: Could not start MongoDB: {e}")
-        return False
-
-    deadline = time.time() + timeout
-    while time.time() < deadline:
-        if _is_up():
-            print("MongoDB started.")
-            return True
-        time.sleep(1)
-
-    print("Warning: MongoDB did not become ready in time.")
-    return False
-
+_HERE = os.path.dirname(os.path.abspath(__file__))
 
 # Sacred's FileStorageObserver re-reads and rewrites the whole metrics.json on every
-# heartbeat (default every 10 s). Flush once a minute instead.
-from sacred.run import Run as _SacredRun
+# heartbeat (every 10 s by default). Flush once a minute instead.
 _orig_start_heartbeat = _SacredRun._start_heartbeat
 
 
 def _start_heartbeat_slow(self):
-    self.beat_interval = float(os.environ.get('SACRED_BEAT_INTERVAL', 60))
+    self.beat_interval = float(os.environ.get("SACRED_BEAT_INTERVAL", 60))
     return _orig_start_heartbeat(self)
 
 
 _SacredRun._start_heartbeat = _start_heartbeat_slow
 
 
-def setup_observers(ex, mongo_url=None, db_name=None, use_file_observer=True):
-    """
-    Set up observers for the experiment.
-
-    Args:
-        ex: Sacred Experiment instance
-        mongo_url: MongoDB connection URL (default: localhost:27017)
-        db_name: Database name (default: env_poisoning)
-        use_file_observer: Whether to also use file observer as backup
-    """
-    # MongoDB observer (primary)
-    mongo_url = mongo_url or os.environ.get('SACRED_MONGO_URL', 'localhost:27017')
-    db_name = db_name or os.environ.get('SACRED_DB_NAME', 'env_poisoning')
-
-    mongo_connected = False
-    if _ensure_mongo_running():
+def _add_observer(experiment: Experiment, db_suffix: str, file_dir: str) -> None:
+    """MongoDB if SACRED_MONGO_URL is set and reachable, otherwise files."""
+    mongo_url = os.environ.get("SACRED_MONGO_URL")
+    if mongo_url:
+        db_name = os.environ.get("SACRED_DB_NAME", "env_poisoning") + db_suffix
         try:
-            ex.observers.append(MongoObserver(url=mongo_url, db_name=db_name))
-            print(f"MongoDB observer connected: {mongo_url}/{db_name}")
-            mongo_connected = True
-        except Exception as e:
-            print(f"Warning: Could not connect to MongoDB ({e}). Using file observer only.")
-
-    # File observer: only add as fallback when MongoDB is unavailable
-    if use_file_observer and not mongo_connected:
-        runs_dir = os.path.join(os.path.dirname(__file__), 'sacred_runs')
-        os.makedirs(runs_dir, exist_ok=True)
-        ex.observers.append(FileStorageObserver(runs_dir))
+            experiment.observers.append(MongoObserver(url=mongo_url, db_name=db_name))
+            return
+        except Exception as exc:  # unreachable server, missing pymongo, ...
+            print(
+                f"Warning: MongoDB at {mongo_url} unavailable ({exc}); logging to files."
+            )
+    path = os.path.join(_HERE, file_dir)
+    os.makedirs(path, exist_ok=True)
+    experiment.observers.append(FileStorageObserver(path))
 
 
-# Default configuration - mirrors config_default.yaml but exposed to Sacred
-@ex.config
-def default_config():
-    """Default experiment configuration."""
-    # Experiment settings
-    experiment_name = "env_poisoning_attack"
-    privacy_mode = "full_blackbox"  # full_whitebox | full_blackbox
+# --- attack run -------------------------------------------------------------
 
-    # Training parameters
-    seed = 0
-    max_episodes = 30000
-    max_timesteps = 15
-    eval_freq_episode = 20
-    eps_greedy_start_episodes = 30
-    victim_n_episodes = 80
-    keep_checkpoints = 3  # number of recent model checkpoints to keep on disk
-    log_timestep_every = 20  # per-timestep Sacred scalars only for every Nth episode (0 = never)
-
-    # DDPG hyperparameters
-    batch_size = 256
-    discount = 0.9
-    tau = 0.005
-    attack_rate = 0.001    # critic learning rate
-    attack_prate = 0.0001  # actor learning rate
-    expl_noise = 0.1       # std of Gaussian exploration noise added to DDPG actions
-    updates_per_step = 15  # DDPG gradient updates per attack episode
-    # Attack reward: "trace" (last action per state) or "traj" (action frequencies
-    # over the victim's observed trajectories; blackbox-safe and less noisy)
-    reward_mode = "traj"
-    # What the attacker sees besides victim behaviour: "actions" = running sum of its own
-    # perturbations (default, no read access to the environment), "env" = the
-    # environment's dynamics vector (how all runs before 2026-11-17 were done), "none".
-    obs_dynamics = "actions"
-    env_kwargs = None      # extra constructor arguments for the environment class
-    victim_kwargs = None   # extra constructor arguments for the victim algorithm
-    env_args = ""          # same, from the command line: "n_states:12" or "initial_random:1500"
-    victim_args = ""
-    effort_weight = 0.0    # reward_mode="embedding": weight of the attack-size penalty
-    lstm_embedding_dim = None  # encoder_mode="lstm": override config LSTM_ENCODER sizes
-    lstm_seq_len = None
-    lstm_memory_size = None
-    ae_model_path = None   # None = ae/models/<default>; else path to AE weights
-    lstm_append_dynamics = True  # lstm mode: append current altitude (16D) to the 128D embedding
-    td3 = False            # twin critics + target smoothing + delayed actor updates
-    normalize_obs = False  # altitude in the observation scaled to [-1, 1]; first obs = real altitude
-    push_cem = False      # adapt push directions towards high-reward push episodes
-    cem_batch = 16        # push episodes per adaptive-push update
-    cem_elite = 4         # highest-reward push episodes kept per update
-    cem_lr = 0.5          # step towards the elite direction frequencies
-    cem_floor = 0.05      # min probability per direction; < 0 = 0.25 / n_cells
-    bc_weight = 0.0       # weight of imitating the top elite_k episodes in the actor loss
-    elite_k = 20
-    explore_push_prob = 0.0  # fraction of episodes that push each cell in one fixed random direction
-    policy_noise = 0.2
-    noise_clip = 0.5
-    policy_freq = 2
-
-    # Autoencoder settings
-    ae_embedding_size = 5
-    ae_seq_len = 5
-    ae_n_epochs = 10
-
-    # Victim Q-learning settings
-    victim_memory_size = 50
-    victim_discount_factor = 1.0
-    victim_alpha = 0.1
-    victim_epsilon = 0.1
-
-    # Model directory
-    model_dir = None  # Will be auto-generated if None
-
-    # Victim population
-    num_victims = 1
-
-    # Victim algorithm: "qlearning", "sarsa", or "reinforce"
-    victim_algo = "qlearning"
-
-    # Attack algorithm: "ddpg" (off-policy) or "ppo" (on-policy)
-    attack_algo = "ddpg"
-
-    # Victim environment: "grid3d" (default)
-    env = "grid3d"
-
-    # Optional grid shape as [rows, cols]. None = use env default (e.g. [4,4] for Grid3D).
-    # Example: env_shape=[6,6] for a 6x6 grid.
-    env_shape = None
-
-    # Shorthand for square grids: grid_size=6 → (6,6). Overrides env_shape if set.
-    grid_size = None
-
-    # Observation encoder: "lstm" (LSTMTrajectoryEncoder, fully blackbox) or
-    # "whitebox" (VictimEncoder: Q+dynamics+trace) or
-    # "ae" (pre-trained AE on behavior_trace + altitude)
-    encoder_mode = "lstm"
-
-
-@ex.named_config
-def whitebox():
-    """Full whitebox attack configuration."""
-    privacy_mode = "full_whitebox"
-
-
-@ex.named_config
-def blackbox():
-    """Full blackbox attack configuration."""
-    privacy_mode = "full_blackbox"
+ex = Experiment("environment_poisoning_attack")
+ex.add_config(DEFAULT_CONFIG)
+_add_observer(ex, "", "sacred_runs")
 
 
 @ex.named_config
 def quick_test():
-    """Quick test configuration for debugging."""
-    max_episodes = 100
-    max_timesteps = 5
-    eval_freq_episode = 10
-    eps_greedy_start_episodes = 5
+    """A run that finishes in seconds, to check an installation."""
+    max_episodes = 5  # noqa: F841
+    max_timesteps = 3  # noqa: F841
+    victim_n_episodes = 5  # noqa: F841
+    eps_greedy_start_episodes = 2  # noqa: F841
+    batch_size = 4  # noqa: F841
 
 
 @ex.named_config
-def long_training():
-    """Extended training configuration."""
-    max_episodes = 100000
-    eval_freq_episode = 100
+def lander():
+    """LunarLander with a DQN victim: trajectory encoder and embedding reward."""
+    env = "lunarlander"  # noqa: F841
+    victim_algo = "dqn"  # noqa: F841
+    encoder_mode = "lstm"  # noqa: F841
+    reward_mode = "embedding"  # noqa: F841
+    effort_weight = 0.1  # noqa: F841
+    lstm_seq_len = 200  # noqa: F841
+    lstm_memory_size = 4000  # noqa: F841
+    lstm_embedding_dim = 100  # noqa: F841
+    victim_n_episodes = 20  # noqa: F841
+    max_timesteps = 10  # noqa: F841
+    max_episodes = 1000  # noqa: F841
 
 
-class SacredMetricsLogger:
-    """
-    Helper class to log metrics to Sacred during training.
-
-    Usage:
-        logger = SacredMetricsLogger(_run)
-        logger.log_metric("accuracy", 0.95, step=100)
-        logger.log_episode_metrics(episode=1, metrics_dict)
-    """
-
-    def __init__(self, run):
-        """
-        Initialize the metrics logger.
-
-        Args:
-            run: Sacred _run object passed to the main function
-        """
-        self._run = run
-        self._step_counters = {}
-
-    def log_metric(self, name, value, step=None):
-        """
-        Log a single metric value.
-
-        Args:
-            name: Metric name (e.g., "training.loss", "accuracy")
-            value: Metric value
-            step: Optional step number (auto-increments if not provided)
-        """
-        if step is None:
-            step = self._step_counters.get(name, 0)
-            self._step_counters[name] = step + 1
-
-        self._run.log_scalar(name, value, step)
-
-    def log_episode_metrics(self, episode, metrics_dict):
-        """
-        Log all metrics for an episode.
-
-        Args:
-            episode: Episode number
-            metrics_dict: Dictionary of metric_name -> value
-        """
-        for name, value in metrics_dict.items():
-            self._run.log_scalar(name, value, episode)
-
-    def log_timestep_metrics(self, episode, timestep, metrics_dict):
-        """
-        Log metrics for a specific timestep within an episode.
-
-        Args:
-            episode: Episode number
-            timestep: Timestep within episode
-            metrics_dict: Dictionary of metric_name -> value
-        """
-        global_step = episode * 1000 + timestep  # Combine for unique step
-        for name, value in metrics_dict.items():
-            self._run.log_scalar(f"timestep.{name}", value, global_step)
-
-    def log_artifact(self, filename):
-        """
-        Log a file as an artifact.
-
-        Args:
-            filename: Path to the file to log
-        """
-        self._run.add_artifact(filename)
-
-    def log_info(self, key, value):
-        """
-        Log arbitrary info to the run's info dict.
-
-        Args:
-            key: Info key
-            value: Info value
-        """
-        self._run.info[key] = value
-
-    def log_collective_metrics(self, episode, metrics_dict, per_victim_accuracies=None):
-        """
-        Log metrics for collective (multi-victim) attack mode.
-
-        Args:
-            episode: Episode number
-            metrics_dict: Dictionary of collective metrics (mean/min/max/std accuracy, etc.)
-            per_victim_accuracies: Optional list of per-victim accuracy values
-        """
-        # Log collective metrics
-        for name, value in metrics_dict.items():
-            if not name.startswith('per_victim'):  # Skip per-victim lists
-                self._run.log_scalar(f"collective.{name}", value, episode)
-
-        # Log per-victim accuracies if provided
-        if per_victim_accuracies is not None:
-            for k, acc in enumerate(per_victim_accuracies):
-                self._run.log_scalar(f"victim_{k}.accuracy", acc, episode)
+@ex.named_config
+def whitebox():
+    """The attacker reads the victim's policy table directly (upper reference)."""
+    privacy_mode = "full_whitebox"  # noqa: F841
+    encoder_mode = "whitebox"  # noqa: F841
 
 
-# --- Dual experiment: victim tracking ---
-#
-# The victim experiment is a SEPARATE Sacred experiment instance that logs
-# per-victim metrics (accuracy, behavior traces) independently from the
-# attack experiment. This gives clean separation:
-#
-#   Attack Sacred (ex)  → DDPG loss, episode reward, mean accuracy, checkpoints
-#   Victim Sacred (victim_ex) → per-victim accuracy, convergence, behavior stats
-#
-# Data flow:
-#   VictimSystem.run_experiments()
-#     → trains victims
-#     → logs per-victim metrics to Victim Sacred (via VictimExperimentTracker)
-#     → returns results to Encoder
-#     → Encoder produces state for Attack Agent
-#     → attack metrics logged to Attack Sacred (via AttackExperimentTracker)
+# --- victim run -------------------------------------------------------------
 
-victim_ex = Experiment('victim_tracking')
-
-
-@victim_ex.config
-def victim_default_config():
-    """Default config for victim experiment."""
-    experiment_name = "victim_tracking"
-    num_victims = 1
-    privacy_mode = "full_blackbox"
-    victim_n_episodes = 80
-    seed = 0
+victim_ex = Experiment("victim_tracking")
+victim_ex.add_config(
+    {
+        "num_victims": 1,
+        "privacy_mode": "full_blackbox",
+        "victim_n_episodes": 80,
+        "seed": 0,
+    }
+)
 
 
 @victim_ex.main
-def victim_main(_run, _config):
-    """No-op main. The victim experiment is started manually via
-    start_victim_sacred() and kept alive for the duration of training.
-    The _run object is passed to VictimExperimentTracker for logging.
-    """
-    pass
+def _victim_main():
+    """Never called: the victim run is opened and closed by hand (below)."""
 
 
-def _setup_victim_observers():
-    """Add observers to victim_ex (separate DB/file storage from attack)."""
-    if victim_ex.observers:
-        return  # Already configured
+class _NoOutput:
+    """Stands in for Sacred's captured-output file, which a hand-started run lacks."""
 
-    mongo_url = os.environ.get('SACRED_MONGO_URL', 'localhost:27017')
-    db_name = os.environ.get('SACRED_DB_NAME', 'env_poisoning')
-    victim_db = f"{db_name}_victims"
+    closed = False
 
-    victim_mongo_connected = False
-    if os.environ.get('SACRED_FILE_ONLY', '').lower() not in ('1', 'true', 'yes') and _ensure_mongo_running():
-        try:
-            victim_ex.observers.append(MongoObserver(url=mongo_url, db_name=victim_db))
-            print(f"Victim MongoDB observer connected: {mongo_url}/{victim_db}")
-            victim_mongo_connected = True
-        except Exception as e:
-            print(f"Warning: Victim MongoDB unavailable ({e})")
-
-    # File observer: only add as fallback when MongoDB is unavailable
-    if not victim_mongo_connected:
-        runs_dir = os.path.join(os.path.dirname(__file__), 'sacred_runs_victims')
-        os.makedirs(runs_dir, exist_ok=True)
-        victim_ex.observers.append(FileStorageObserver(runs_dir))
+    def get(self):
+        return ""
 
 
-def start_victim_sacred(attack_config):
-    """Start the victim Sacred experiment and return a live _run object.
-
-    Uses Sacred's _create_run() to get a Run object without blocking.
-    The Run is started (observers notified) and stays open until
-    finish_victim_sacred() is called.
-
-    Args:
-        attack_config: Dict from the attack experiment's _config.
-
-    Returns:
-        Sacred Run object, or None if startup fails.
-    """
-    _setup_victim_observers()
-
+def start_victim_sacred(attack_config: dict):
+    """Open the victim run and return its Sacred Run object (None if that fails)."""
+    if not victim_ex.observers:
+        _add_observer(victim_ex, "_victims", "sacred_runs_victims")
     try:
-        config_updates = {
-            'num_victims': attack_config.get('num_victims', 1),
-            'privacy_mode': attack_config.get('privacy_mode', 'full_whitebox'),
-            'victim_n_episodes': attack_config.get('victim_n_episodes', 80),
-            'seed': attack_config.get('seed', 0),
-        }
         run = victim_ex._create_run(
-            config_updates=config_updates,
+            config_updates={
+                k: attack_config[k]
+                for k in ("num_victims", "privacy_mode", "victim_n_episodes", "seed")
+            }
         )
-        # _create_run doesn't set _output_file (normally set by run()).
-        # The heartbeat thread needs .closed and .get(), so provide a stub.
         if run._output_file is None:
-            class _DummyOutput:
-                closed = False
-                def get(self):
-                    return ""
-            run._output_file = _DummyOutput()
-        # Notify observers that the experiment has started
+            run._output_file = _NoOutput()
         run._emit_started()
-        # Start heartbeat so metrics are periodically flushed to file observer
         run._start_heartbeat()
-        print(f"Victim Sacred experiment started: run_id={run._id}")
         return run
-
-    except Exception as e:
-        print(f"Warning: Could not start victim Sacred experiment ({e}). "
-              "Victim metrics will not be logged to Sacred.")
+    except Exception as exc:
+        print(f"Warning: victim metrics will not be logged to Sacred ({exc}).")
         return None
 
 
-def finish_victim_sacred(run, status='COMPLETED'):
-    """Signal that the victim Sacred experiment is complete.
-
-    Args:
-        run: Sacred Run object from start_victim_sacred().
-        status: Final status ('COMPLETED' or 'FAILED').
-    """
+def finish_victim_sacred(run, status: str = "COMPLETED") -> None:
+    """Close the victim run opened by start_victim_sacred()."""
     if run is None:
         return
     try:
-        import datetime
-        # Flush pending metrics via a final heartbeat
         run._emit_heartbeat()
         run._stop_heartbeat()
-        # Sacred observers expect stop_time to be set
         run.stop_time = datetime.datetime.now()
-        if status == 'COMPLETED':
+        if status == "COMPLETED":
             run._emit_completed(result=None)
         else:
             run.fail_trace = [status]
             run._emit_failed()
-        print(f"Victim Sacred experiment finished: {status}")
-    except Exception as e:
-        print(f"Warning: Error finishing victim Sacred experiment: {e}")
-
-
-def create_dual_experiments(mongo_url=None, db_name=None):
-    """Create and configure both attack and victim Sacred experiments.
-
-    Returns:
-        Tuple of (attack_experiment, victim_experiment).
-    """
-    mongo_url = mongo_url or os.environ.get('SACRED_MONGO_URL', 'localhost:27017')
-    db_name = db_name or os.environ.get('SACRED_DB_NAME', 'env_poisoning')
-
-    setup_observers(ex, mongo_url, db_name)
-    _setup_victim_observers()
-
-    return ex, victim_ex
-
-
-# Initialize observers when module is imported
-# Can be customized via environment variables:
-#   SACRED_MONGO_URL=localhost:27017
-#   SACRED_DB_NAME=env_poisoning
-#   SACRED_FILE_ONLY=1  (to disable MongoDB)
-if os.environ.get('SACRED_FILE_ONLY', '').lower() not in ('1', 'true', 'yes'):
-    setup_observers(ex)
-else:
-    # File observer only
-    runs_dir = os.path.join(os.path.dirname(__file__), 'sacred_runs')
-    os.makedirs(runs_dir, exist_ok=True)
-    ex.observers.append(FileStorageObserver(runs_dir))
-    print(f"Using file observer only: {runs_dir}")
+    except Exception as exc:
+        print(f"Warning: error closing the victim Sacred run: {exc}")

@@ -62,7 +62,7 @@ class Encoder(ABC):
 
         Default: behavior_trace-based (blackbox-safe). Override for whitebox.
         """
-        from utils.utils_attack import accuracy_from_behavior_trace
+        from utils.metrics import accuracy_from_behavior_trace
         accuracies = []
         for data in victim_data:
             trace = data.get('behavior_trace')

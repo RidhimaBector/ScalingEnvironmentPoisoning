@@ -238,6 +238,11 @@ class LSTMTrajectoryEncoder(Encoder):
     # ---------------------------------------------------------------- #
 
     @property
+    def seq_len(self) -> int:
+        """Length of the trajectory window that is embedded."""
+        return self._seq_len
+
+    @property
     def embedding_dim(self) -> int:
         return self._embedding_dim * self._num_victims
 

@@ -11,9 +11,13 @@ import importlib
 
 from victim.victim_dqn import VictimDQN
 from victim.victim_pg import VictimA2C, VictimVPG
-from victim.victim_Q import VictimQLearning
+from victim.victim_qlearning import VictimQLearning
 from victim.victim_reinforce import VictimREINFORCE
 from victim.victim_sarsa import VictimSARSA
+
+
+from attack.ddpg import DDPG
+from attack.ppo import PPO
 
 
 class _LazyClasses(dict):
@@ -28,8 +32,8 @@ class _LazyClasses(dict):
 
 
 ENV_MAP = _LazyClasses({
-    "grid3d": "envs.env3D_4x4:Grid3D",
-    "ring": "envs.chain:SlipperyRing",
+    "grid3d": "envs.grid3d:Grid3D",
+    "ring": "envs.ring:SlipperyRing",
     "lunarlander": "envs.lunar_lander:LunarLanderAttack",
 })
 
@@ -40,4 +44,9 @@ VICTIM_ALGO_MAP = {
     "dqn": VictimDQN,
     "vpg": VictimVPG,
     "a2c": VictimA2C,
+}
+
+ATTACK_ALGO_MAP = {
+    "ddpg": DDPG,
+    "ppo": PPO,
 }

@@ -1,22 +1,6 @@
-import os
-import sys
-from os.path import abspath, dirname
+"""Target policies for grid environments."""
 
 import numpy as np
-
-from utils.utils_buf import Memory
-
-if "../" not in sys.path:
-    sys.path.append("../")
-
-from yacs.config import CfgNode as CN
-
-yaml_name = os.path.join(dirname(dirname(abspath(__file__))), "config", "config_default.yaml")
-fcfg = open(yaml_name)
-config = CN.load_cfg(fcfg)
-config.freeze()
-
-MEMORY_SIZE = config.AE.MEMORY_SIZE
 
 
 def create_target_policy(nS: int, nA: int, path_type: str = "Mp", shape=None) -> np.ndarray:
@@ -72,9 +56,3 @@ def create_target_policy(nS: int, nA: int, path_type: str = "Mp", shape=None) ->
             target[s][0] = 1.0
 
     return target
-
-
-# Default target for backward compatibility (used by victim_Q.py)
-TARGET = create_target_policy(16, 4, "Mp")
-
-MEM_Target = Memory(MEMORY_SIZE)
