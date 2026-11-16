@@ -18,7 +18,6 @@ import math
 from typing import Dict, Tuple
 
 import numpy as np
-import ot
 from gymnasium import spaces
 from gymnasium.utils import seeding
 
@@ -180,6 +179,7 @@ class Grid3D(VictimEnvironment):
     def compute_distance_metrics(self, algo, target: np.ndarray) -> Dict[str, float]:
         """White-box only: Wasserstein and KL distance rates between the victim's policy
         and the target, negated so that higher means closer."""
+        import ot  # optional dependency (POT), only needed here
         coords = np.array(
             [[i, j] for i in range(self.shape[0]) for j in range(self.shape[1])]
         )

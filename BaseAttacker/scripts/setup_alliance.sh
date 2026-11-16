@@ -16,10 +16,13 @@ pip install -q --upgrade pip
 
 # Prefer the cluster wheelhouse (--no-index); fall back to PyPI package by package.
 for pkg in torch numpy scipy gymnasium yacs "sacred>=0.8.4" "setuptools<81" matplotlib \
-           pytest huggingface_hub POT Box2D; do
+           pytest huggingface_hub Box2D; do
   pip install -q --no-index "$pkg" 2>/dev/null || pip install -q "$pkg" \
     || echo "WARNING: could not install $pkg (Box2D is only needed for LunarLander)"
 done
+
+# POT (white-box distance metrics only) often has to compile from source and is skipped
+# here; install it with `pip install POT` if you use privacy_mode=full_whitebox.
 
 mkdir -p logs
 python -m pytest tests -q

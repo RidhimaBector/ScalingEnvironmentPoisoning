@@ -5,7 +5,6 @@ setting). Functions that take a behaviour trace or trajectories use only what a
 black-box attacker can observe.
 """
 import numpy as np
-import ot
 from scipy.special import softmax
 
 
@@ -55,6 +54,7 @@ def accuracy_from_behavior_trace(behavior_trace: np.ndarray, target: np.ndarray)
 
 
 def Attack_Cost_Compute_W(env, init_T, policy_matrix, target, cost_matrix, distance_type=0):
+    import ot  # optional dependency (POT); only the white-box distance metrics need it
     """Wasserstein distance rate between the victim's Markov chain and the target's.
 
     Generalized over env.nS and env.nA — no hardcoded grid sizes.
