@@ -90,6 +90,11 @@ class ObservationEncoder:
             emb = np.concatenate([np.asarray(emb, dtype=np.float64), dyn])
         return emb
 
+    def target_similarity(self) -> float:
+        """Similarity of victim behaviour to the target, if the inner encoder provides it."""
+        fn = getattr(self._inner, 'target_similarity', None)
+        return float(fn()) if fn is not None else 0.0
+
     def train_encoder(self) -> None:
         self._inner.train_encoder()
 

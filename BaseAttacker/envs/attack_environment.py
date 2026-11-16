@@ -42,6 +42,7 @@ class AttackEnvironment(Env):
         encoder: Optional[Encoder] = None,
         reward_mode: str = "trace",
         obs_dynamics: str = "env",
+        effort_weight: float = 0.0,
     ):
         super().__init__()
 
@@ -58,6 +59,9 @@ class AttackEnvironment(Env):
         if obs_dynamics not in ("actions", "env", "none"):
             raise ValueError(f"obs_dynamics must be actions|env|none, got {obs_dynamics!r}")
         self._obs_dynamics = obs_dynamics
+        # Weight of the attack-size penalty in reward_mode="embedding" (0.1 in the
+        # original lander attack). Measured from the attacker's own actions.
+        self._effort_weight = effort_weight
 
         # Target policy: explicit > environment's own > grid default
         if target_policy is not None:
@@ -68,15 +72,15 @@ class AttackEnvironment(Env):
         env_nS = victim_population.nS
 
         # Obs space: encoded embedding when encoder is injected; raw dynamics otherwise
+        ref_env = victim_population.env
         if encoder is not None:
             self.observation_space = spaces.Box(
                 low=-np.inf, high=np.inf, shape=(encoder.embedding_dim,), dtype=np.float64
             )
         else:
             self.observation_space = spaces.Box(
-                low=-np.inf, high=np.inf, shape=(env_nS,), dtype=np.float64
+                low=-np.inf, high=np.inf, shape=(ref_env.dynamics_dim,), dtype=np.float64
             )
-        ref_env = victim_population.env
         if hasattr(ref_env, 'perturbation_space'):
             self.action_space = ref_env.perturbation_space
         else:
@@ -143,12 +147,23 @@ class AttackEnvironment(Env):
         # 3. Metrics and reward
         if self._encoder is not None:
             obs = self._encoder.encode(results, self._attacker_context())
-            trace_acc = self._encoder.compute_reward(results, self._target)
-            traj_acc = float(np.mean([
-                accuracy_from_trajectories(r.get('trajectories', []), self._target)
-                for r in results
-            ]))
-            if self._reward_mode == "traj":
+            if self._target is not None:
+                trace_acc = self._encoder.compute_reward(results, self._target)
+                traj_acc = float(np.mean([
+                    accuracy_from_trajectories(r.get('trajectories', []), self._target)
+                    for r in results
+                ]))
+            else:
+                trace_acc = traj_acc = 0.0   # no per-state target table
+            if self._reward_mode == "embedding":
+                # Similarity of the victim's behaviour embedding to the target's, minus a
+                # penalty on how much the attacker has changed (as in the lander attack).
+                sim = self._encoder.target_similarity()
+                span = np.maximum(np.abs(self.action_space.high), np.abs(self.action_space.low))
+                effort = float(np.linalg.norm(self._sent) /
+                               max(np.linalg.norm(span * max(self._step_count, 1)), 1e-8))
+                reward = (1 - self._effort_weight) * sim - self._effort_weight * effort
+            elif self._reward_mode == "traj":
                 reward = traj_acc
             elif self._reward_mode == "mix":
                 reward = 0.5 * (trace_acc + traj_acc)
@@ -161,6 +176,8 @@ class AttackEnvironment(Env):
                 'accuracy': reward,
                 'trace_accuracy': trace_acc,
                 'traj_accuracy': traj_acc,
+                'target_similarity': self._encoder.target_similarity()
+                if self._reward_mode == "embedding" else 0.0,
                 'victim_results': results,
             }
         else:
@@ -215,6 +232,8 @@ class AttackEnvironment(Env):
         path_match: 1.0 if the greedy rollout from the start state visits exactly
             the target path, else 0.0 (mean over victims).
         """
+        if self._target is None:
+            return self._oracle_metrics_trajectory_target()
         accs, matches = [], []
         tgt_actions = np.argmax(self._target, axis=1)
         for env, algo in self._victim_population._victims:
@@ -226,6 +245,23 @@ class AttackEnvironment(Env):
                 matches.append(float(match))
         return {'greedy_accuracy': float(np.mean(accs)),
                 'path_match': float(np.mean(matches)) if matches else 0.0}
+
+    def _oracle_metrics_trajectory_target(self) -> Dict[str, float]:
+        """Ground truth when the target is recorded behaviour instead of a policy table:
+        the share of target states in which the victim's greedy action equals the
+        target's action. Evaluation only; never shown to the attacker."""
+        env0 = self._victim_population.env
+        if not hasattr(self, '_target_sa'):
+            traj = env0.target_trajectories() if hasattr(env0, 'target_trajectories') else []
+            self._target_sa = (np.stack([t[2] for t in traj]).astype(np.float32),
+                               np.array([int(t[3]) for t in traj])) if traj else None
+        if self._target_sa is None:
+            return {'greedy_accuracy': 0.0, 'path_match': 0.0}
+        states, actions = self._target_sa
+        accs = [float(np.mean(algo.greedy_actions_for(states) == actions))
+                for _env, algo in self._victim_population._victims
+                if hasattr(algo, 'greedy_actions_for')]
+        return {'greedy_accuracy': float(np.mean(accs)) if accs else 0.0, 'path_match': 0.0}
 
     def _attacker_context(self):
         """The non-behaviour part of the attacker's observation (see obs_dynamics)."""

@@ -294,7 +294,7 @@ class LSTMTrajectoryEncoder(Encoder):
     # ---------------------------------------------------------------- #
 
     @classmethod
-    def from_population(cls, population: Any, config: Any) -> 'LSTMTrajectoryEncoder':
+    def from_population(cls, population: Any, config: Any, **overrides: Any) -> 'LSTMTrajectoryEncoder':
         """Build an encoder with dimensions inferred from the victim population.
 
         Args:
@@ -325,9 +325,9 @@ class LSTMTrajectoryEncoder(Encoder):
         return cls(
             state_dim=state_dim,
             num_actions=num_actions,
-            embedding_dim=cfg.EMBEDDING_DIM,
-            seq_len=cfg.SEQ_LEN,
-            memory_size=cfg.MEMORY_SIZE,
+            embedding_dim=overrides.get('embedding_dim') or cfg.EMBEDDING_DIM,
+            seq_len=overrides.get('seq_len') or cfg.SEQ_LEN,
+            memory_size=overrides.get('memory_size') or cfg.MEMORY_SIZE,
             n_epochs=cfg.N_EPOCHS,
             lr=cfg.LR,
             num_victims=population.num_victims,
@@ -390,6 +390,31 @@ class LSTMTrajectoryEncoder(Encoder):
                 prev_action = None
             else:
                 cur_raw = next_raw
+
+    def set_target_trajectories(self, transitions) -> None:
+        """Use recorded target behaviour: a list of (pre_state, pre_action, state, action)."""
+        self._target_memory.clear()
+        for pre_s, pre_a, s, a in transitions:
+            self._target_memory.push(
+                self._to_state_array(pre_s), float(pre_a), self._to_state_array(s), float(a))
+
+    def target_similarity(self) -> float:
+        """Cosine similarity between the victims' current embedding and the target's
+        (mean over victims); 0 until both have a full window. This is the attack signal
+        when there is no per-state target table, as in the original lander attack."""
+        if len(self._target_memory) < self._seq_len:
+            return 0.0
+        sims = []
+        for mem in self._victim_memories:
+            if len(mem) < self._seq_len:
+                continue
+            A = self._build_enc_tensor(mem.get_recent(self._seq_len))
+            B = self._build_enc_tensor(self._target_memory.get_recent(self._seq_len))
+            self._enc_lstm.eval()
+            with torch.no_grad():
+                z = self._enc_lstm(torch.cat([A, B], dim=1))
+            sims.append(float(torch.nn.functional.cosine_similarity(z[0], z[1], dim=0)))
+        return float(np.mean(sims)) if sims else 0.0
 
     # ---------------------------------------------------------------- #
     #  Internal helpers                                                  #

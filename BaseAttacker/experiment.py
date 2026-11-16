@@ -147,6 +147,11 @@ def default_config():
     # environment's dynamics vector (how all runs before 2026-11-17 were done), "none".
     obs_dynamics = "actions"
     env_kwargs = None      # extra constructor arguments for the environment class
+    victim_kwargs = None   # extra constructor arguments for the victim algorithm
+    effort_weight = 0.0    # reward_mode="embedding": weight of the attack-size penalty
+    lstm_embedding_dim = None  # encoder_mode="lstm": override config LSTM_ENCODER sizes
+    lstm_seq_len = None
+    lstm_memory_size = None
     ae_model_path = None   # None = ae/models/<default>; else path to AE weights
     lstm_append_dynamics = True  # lstm mode: append current altitude (16D) to the 128D embedding
     td3 = False            # twin critics + target smoothing + delayed actor updates

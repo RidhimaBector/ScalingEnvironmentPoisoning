@@ -73,10 +73,15 @@ def build_population(args, privacy_mode: PrivacyMode, victim_tracker=None):
     else:
         env_kwargs = dict(getattr(args, 'env_kwargs', None) or {})
 
-    algo_kwargs = dict(config.VICTIM.DEFAULT_KWARGS)
-    victim_alpha = getattr(args, 'victim_alpha', None)
-    if victim_alpha is not None:
-        algo_kwargs['alpha'] = victim_alpha
+    if hasattr(algo_class, 'from_env'):
+        # Function-approximation victims size themselves from the environment
+        algo_kwargs = dict(getattr(args, 'victim_kwargs', None) or {})
+    else:
+        algo_kwargs = dict(config.VICTIM.DEFAULT_KWARGS)
+        victim_alpha = getattr(args, 'victim_alpha', None)
+        if victim_alpha is not None:
+            algo_kwargs['alpha'] = victim_alpha
+        algo_kwargs.update(getattr(args, 'victim_kwargs', None) or {})
 
     if num_victims > 1:
         return VictimSystem(
@@ -92,9 +97,10 @@ def build_population(args, privacy_mode: PrivacyMode, victim_tracker=None):
         )
     else:
         victim_env = env_class(**env_kwargs)
-        victim_algo = algo_class(
-            victim_env.nS, victim_env.nA, **algo_kwargs
-        )
+        if hasattr(algo_class, 'from_env'):
+            victim_algo = algo_class.from_env(victim_env, **algo_kwargs)
+        else:
+            victim_algo = algo_class(victim_env.nS, victim_env.nA, **algo_kwargs)
         return VictimSystem(
             env=victim_env,
             algorithm=victim_algo,
@@ -114,6 +120,7 @@ def build_attack_env(population, args, encoder=None):
         encoder=encoder,
         reward_mode=getattr(args, 'reward_mode', 'trace'),
         obs_dynamics=getattr(args, 'obs_dynamics', 'actions'),
+        effort_weight=getattr(args, 'effort_weight', 0.0),
     )
 
 
@@ -144,12 +151,17 @@ def build_encoders(population, args):
             population, model_path=getattr(args, 'ae_model_path', None),
             context_dim=context_dim, context_bounds=bounds, initial_context=initial_context)
     elif encoder_mode == 'lstm':
-        inner = LSTMTrajectoryEncoder.from_population(population, config)
-        inner.populate_target_memory(
-            population.env,
-            population.target,
-            n_steps=config.LSTM_ENCODER.SEQ_LEN * 2,
-        )
+        inner = LSTMTrajectoryEncoder.from_population(
+            population, config,
+            embedding_dim=getattr(args, 'lstm_embedding_dim', None),
+            seq_len=getattr(args, 'lstm_seq_len', None),
+            memory_size=getattr(args, 'lstm_memory_size', None))
+        if hasattr(env, 'target_trajectories'):
+            # Target given as recorded behaviour (e.g. the lander)
+            inner.set_target_trajectories(env.target_trajectories())
+        else:
+            inner.populate_target_memory(
+                env, population.target, n_steps=inner._seq_len * 2)
     else:
         inner = VictimEncoder.from_population(population)
 
@@ -444,6 +456,11 @@ def sacred_main(_run, _config):
     args.normalize_obs = _config.get('normalize_obs', False)
     args.explore_push_prob = _config.get('explore_push_prob', 0.0)
     args.obs_dynamics = _config.get('obs_dynamics', 'actions')
+    args.effort_weight = _config.get('effort_weight', 0.0)
+    args.victim_kwargs = _config.get('victim_kwargs', None)
+    args.lstm_embedding_dim = _config.get('lstm_embedding_dim', None)
+    args.lstm_seq_len = _config.get('lstm_seq_len', None)
+    args.lstm_memory_size = _config.get('lstm_memory_size', None)
     args.env_kwargs = _config.get('env_kwargs', None)
     args.push_cem = _config.get('push_cem', False)
     args.cem_batch = _config.get('cem_batch', 16)
@@ -458,7 +475,8 @@ def sacred_main(_run, _config):
         json.dump({k: _config.get(k) for k in (
             'env', 'grid_size', 'env_shape', 'env_kwargs', 'victim_algo', 'encoder_mode',
             'ae_model_path', 'obs_dynamics', 'normalize_obs', 'td3', 'lstm_append_dynamics',
-            'victim_n_episodes', 'max_timesteps', 'reward_mode', 'seed')}, fh, indent=1)
+            'victim_n_episodes', 'max_timesteps', 'reward_mode', 'seed', 'effort_weight',
+            'victim_kwargs', 'lstm_embedding_dim', 'lstm_seq_len', 'lstm_memory_size')}, fh, indent=1)
 
     population = build_population(args, privacy_mode, victim_tracker)
     obs_encoder, action_translator = build_encoders(population, args)

@@ -81,17 +81,16 @@ class VictimSystem:
         # Reference environment for shared properties
         self._ref_env = self._victims[0][0]
 
-        # Behavior traces: (nS, 2) per victim
+        # Behavior traces: (nS, 2) per victim; None when the environment has no state table
         self._behavior_traces = [
-            self._init_behavior_trace(self._ref_env.nS)
-            for _ in range(self.num_victims)
+            self._init_behavior_trace(self.nS) for _ in range(self.num_victims)
         ]
 
         # Target policy for accuracy computation
         self._target = None
         if hasattr(self._ref_env, 'make_target_policy'):
             self._target = self._ref_env.make_target_policy(target_path_type)
-        if self._target is None:
+        if self._target is None and self.nS is not None:
             self._target = create_target_policy(
                 self._ref_env.nS, self._ref_env.nA, path_type=target_path_type,
                 shape=getattr(self._ref_env, 'shape', None),
@@ -105,19 +104,25 @@ class VictimSystem:
             env = self._env_class(**self._env_kwargs)
             env.seed(seed)
 
-            env_nS = getattr(env, 'nS', env.observation_space.n)
-            env_nA = getattr(env, 'nA', env.action_space.n)
-            algo_kwargs = {
-                'env_nS': env_nS,
-                'env_nA': env_nA,
-                **self._algo_kwargs,
-            }
-            algo = self._algo_class(**algo_kwargs)
+            if hasattr(self._algo_class, 'from_env'):
+                # Algorithms that size themselves from the environment (e.g. DQN)
+                algo = self._algo_class.from_env(env, **self._algo_kwargs)
+            else:
+                env_nS = getattr(env, 'nS', None) or env.observation_space.n
+                env_nA = getattr(env, 'nA', None) or env.action_space.n
+                algo_kwargs = {
+                    'env_nS': env_nS,
+                    'env_nA': env_nA,
+                    **self._algo_kwargs,
+                }
+                algo = self._algo_class(**algo_kwargs)
 
             self._victims.append((env, algo))
 
-    def _init_behavior_trace(self, n_states: int) -> np.ndarray:
-        """Initialize behavior trace matrix (nS, 2), col1=-1 (unvisited)."""
+    def _init_behavior_trace(self, n_states):
+        """Initialize behavior trace matrix (nS, 2), col1=-1 (unvisited). None if no state table."""
+        if n_states is None:
+            return None
         trace = np.ones((n_states, 2)) * -1
         trace[:, 0] = np.arange(n_states)
         return trace
@@ -127,12 +132,16 @@ class VictimSystem:
     @property
     def nS(self) -> int:
         """Number of states in the environment."""
-        return getattr(self._ref_env, 'nS', self._ref_env.observation_space.n)
+        n = getattr(self._ref_env, 'nS', None)
+        if n is None:
+            n = getattr(self._ref_env.observation_space, 'n', None)  # None for continuous states
+        return None if n is None else int(n)
 
     @property
     def nA(self) -> int:
         """Number of actions in the environment."""
-        return getattr(self._ref_env, 'nA', self._ref_env.action_space.n)
+        n = getattr(self._ref_env, 'nA', None)
+        return int(n if n is not None else self._ref_env.action_space.n)
 
     @property
     def target(self) -> np.ndarray:
@@ -190,7 +199,9 @@ class VictimSystem:
             algo.train(env, num_episodes)
 
             # Update behavior trace
-            if hasattr(algo, 'get_behavior_trace'):
+            if self.nS is None:
+                pass  # continuous states: behaviour is exposed as trajectories only
+            elif hasattr(algo, 'get_behavior_trace'):
                 self._behavior_traces[k] = algo.get_behavior_trace()
             else:
                 greedy_actions = algo.get_greedy_actions()
@@ -202,7 +213,13 @@ class VictimSystem:
             results.append(result)
 
             # Log to Sacred if tracker available — use only observable data
-            if self.victim_tracker is not None:
+            if self.victim_tracker is not None and self._target is None:
+                # No target policy table: log the victim's own episode return instead
+                stats = getattr(algo, 'last_stats', None) or {}
+                rewards = stats.get('episode_rewards') or [0.0]
+                self.victim_tracker.log_victim_step(
+                    victim_idx=k, metrics={'episode_return': float(np.mean(rewards))})
+            elif self.victim_tracker is not None:
                 if self.privacy_mode == PrivacyMode.FULL_WHITEBOX:
                     policy = algo.get_policy_matrix()
                     _, acc, acc_sftmx, acc_sftmx_complete = Attack_Done_Identify(
@@ -238,10 +255,14 @@ class VictimSystem:
             Dict with victim data.
         """
         result = {
-            'behavior_trace': self._behavior_traces[k].copy(),
             'victim_idx': k,
             'trajectories': algo.get_trajectories(),
         }
+        if self._behavior_traces[k] is not None:
+            result['behavior_trace'] = self._behavior_traces[k].copy()
+        stats = getattr(algo, 'last_stats', None)
+        if stats and stats.get('episode_rewards'):
+            result['victim_return'] = float(np.mean(stats['episode_rewards']))
 
         if self.privacy_mode == PrivacyMode.FULL_WHITEBOX:
             result.update(algo.get_whitebox_data())
