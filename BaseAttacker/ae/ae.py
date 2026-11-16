@@ -71,11 +71,11 @@ class Encoder_Decoder(nn.Module):
 
 
 class AutoEncoder():
-    def __init__(self, enc_in_size, enc_out_size, dec_in_size, dec_out_size, lr):
+    def __init__(self, enc_in_size, enc_out_size, dec_in_size, dec_out_size, lr, hidden=36):
 
         self.lr = lr
-        self.Encoder = Policy_Representation(enc_in_size, enc_out_size).to(device)
-        self.Decoder = Policy_Imitation(dec_in_size, dec_out_size).to(device)
+        self.Encoder = Policy_Representation(enc_in_size, enc_out_size, hidden, hidden).to(device)
+        self.Decoder = Policy_Imitation(dec_in_size, dec_out_size, hidden, hidden).to(device)
         self.Model = Encoder_Decoder(self.Encoder, self.Decoder, self.lr).to(device)
 
     """ Training the Encoder-Decoder network """
@@ -133,6 +133,11 @@ class AutoEncoder():
         return load_model
 
 
+def default_ae_name(rows: int, cols: int) -> str:
+    """File stem (under ae/models/) of the trace AE for a rows x cols grid."""
+    return "real_traces" if (rows, cols) == (4, 4) else f"real_traces_{rows}x{cols}"
+
+
 class AEObservationEncoder(Encoder):
     """Replicates main-branch state: AE(behavior_trace)(5D) + altitude(nS D).
 
@@ -157,12 +162,24 @@ class AEObservationEncoder(Encoder):
         # initial_dynamics: unperturbed altitude, used for the first observation of an episode
         self._initial_dynamics = None if initial_dynamics is None else np.asarray(initial_dynamics).flatten()
 
+        # Embedding size and hidden width are read from the checkpoint, so AEs trained
+        # for other grid sizes (ae/train_ae.py --grid_size N) load without extra flags.
+        sd = torch.load(model_path, map_location=device, weights_only=True)
+        emb = sd['encoder.fc3.weight'].shape[0]
+        hidden = sd['encoder.fc1.weight'].shape[0]
+        if sd['encoder.fc1.weight'].shape[1] != dynamics_dim * 2:
+            raise ValueError(
+                f"AE at {model_path} was trained for {sd['encoder.fc1.weight'].shape[1] // 2} states, "
+                f"but this grid has {dynamics_dim}. Train one with: "
+                f"python -m ae.train_ae --grid_size <N>")
+        self.EMBEDDING_SIZE = emb
         self._ae = AutoEncoder(
             enc_in_size=dynamics_dim * 2,  # behavior_trace is (nS, 2), flattened = nS*2
-            enc_out_size=5,
-            dec_in_size=6,
+            enc_out_size=emb,
+            dec_in_size=emb + 1,
             dec_out_size=5,
             lr=0.001,
+            hidden=hidden,
         )
         self._ae.load(model_path)
 
@@ -174,8 +191,9 @@ class AEObservationEncoder(Encoder):
             here = os.path.dirname(os.path.abspath(__file__))
             # Default: AE retrained on real victim behaviour traces (ae/train_ae.py),
             # 72% reconstruction vs 47% for the original 340240_f-o_AutoEncoder_SftMx.
-            model_path = os.path.join(here, "models", "real_traces_AutoEncoder")
-            if not os.path.exists(model_path):
+            rows, cols = population.env.shape
+            model_path = os.path.join(here, "models", default_ae_name(rows, cols) + "_AutoEncoder")
+            if not os.path.exists(model_path) and (rows, cols) == (4, 4):
                 model_path = os.path.join(here, "models", "340240_f-o_AutoEncoder_SftMx")
         return cls(
             dynamics_dim=population.env.dynamics_dim,

@@ -83,6 +83,7 @@ def main():
     ap.add_argument('--encoder_mode', default='ae')
     ap.add_argument('--ae_model_path', default=None)
     ap.add_argument('--grid_size', type=int, default=None)
+    ap.add_argument('--env_shape', type=int, nargs=2, default=None, metavar=('ROWS', 'COLS'))
     ap.add_argument('--victim_n_episodes', type=int, default=80)
     ap.add_argument('--max_timesteps', type=int, default=15)
     ap.add_argument('--episodes', type=int, default=20)
@@ -95,7 +96,7 @@ def main():
     class Args: pass
     args = Args()
     args.__dict__.update(num_victims=1, victim_algo='qlearning', env='grid3d', grid_size=a.grid_size,
-                         env_shape=None, victim_alpha=0.1, seed=0, encoder_mode=a.encoder_mode,
+                         env_shape=a.env_shape, victim_alpha=0.1, seed=0, encoder_mode=a.encoder_mode,
                          ae_model_path=a.ae_model_path, victim_n_episodes=a.victim_n_episodes,
                          attack_algo='ddpg', reward_mode='trace', expl_noise=0.0,
                          lstm_append_dynamics=not a.lstm_no_dynamics,

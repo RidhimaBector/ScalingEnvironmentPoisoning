@@ -18,7 +18,7 @@ import torch
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from ae.ae import AutoEncoder, device
+from ae.ae import AutoEncoder, default_ae_name, device
 from envs.env3D_4x4 import Grid3D
 from victim.victim_Q import VictimQLearning
 
@@ -31,11 +31,11 @@ def trace_to_actions(trace: np.ndarray) -> np.ndarray:
     return a
 
 
-def collect(n_attack_episodes: int, steps: int, victim_eps: int, seed: int) -> np.ndarray:
+def collect(n_attack_episodes: int, steps: int, victim_eps: int, seed: int, shape=(4, 4)) -> np.ndarray:
     """Return an (N, nS) int array of per-state last actions (4 = unvisited)."""
     rng = np.random.default_rng(seed)
     np.random.seed(seed)
-    env = Grid3D()
+    env = Grid3D(grid_dimensions=tuple(shape))
     out = []
     for ep in range(n_attack_episodes):
         env.reset_dynamics()
@@ -70,7 +70,12 @@ def recon_accuracy(ae: AutoEncoder, actions: np.ndarray) -> float:
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('--out', default='ae/models/real_traces')
+    ap.add_argument('--out', default=None, help='default: ae/models/real_traces[_NxN]')
+    ap.add_argument('--grid_size', type=int, default=4, help='square grid N x N')
+    ap.add_argument('--shape', type=int, nargs=2, default=None, metavar=('ROWS', 'COLS'),
+                    help='rectangular grid; overrides --grid_size')
+    ap.add_argument('--embedding', type=int, default=None, help='default: 5 for 4x4, else nS // 3')
+    ap.add_argument('--hidden', type=int, default=None, help='default: 36 for 4x4, else 2 * nS')
     ap.add_argument('--epochs', type=int, default=60)
     ap.add_argument('--attack_episodes', type=int, default=600)
     ap.add_argument('--steps', type=int, default=15)
@@ -82,7 +87,13 @@ def main():
     args = ap.parse_args()
 
     torch.manual_seed(args.seed)
-    data = collect(args.attack_episodes, args.steps, args.victim_eps, args.seed)
+    rows, cols = args.shape or (args.grid_size, args.grid_size)
+    is_4x4 = (rows, cols) == (4, 4)
+    if args.out is None:
+        args.out = os.path.join('ae', 'models', default_ae_name(rows, cols))
+    emb = args.embedding or (5 if is_4x4 else rows * cols // 3)
+    hidden = args.hidden or (36 if is_4x4 else 2 * rows * cols)
+    data = collect(args.attack_episodes, args.steps, args.victim_eps, args.seed, (rows, cols))
     perm = np.random.default_rng(args.seed).permutation(len(data))
     n_val = len(data) // 10
     val, train = data[perm[:n_val]], data[perm[n_val:]]
@@ -90,7 +101,10 @@ def main():
           f"unvisited frac={np.mean(data == UNVISITED):.3f}")
 
     nS = data.shape[1]
-    ae = AutoEncoder(enc_in_size=nS * 2, enc_out_size=5, dec_in_size=6, dec_out_size=5, lr=args.lr)
+    ae = AutoEncoder(enc_in_size=nS * 2, enc_out_size=emb, dec_in_size=emb + 1, dec_out_size=5,
+                     lr=args.lr, hidden=hidden)
+    majority = max(np.mean(val == k) for k in range(5))
+    print(f"grid {rows}x{cols}  embedding={emb}  hidden={hidden}  majority-class baseline={majority:.3f}")
     if args.init:
         ae.load(args.init)
         print(f"init from {args.init}: val recon acc = {recon_accuracy(ae, val):.3f}")

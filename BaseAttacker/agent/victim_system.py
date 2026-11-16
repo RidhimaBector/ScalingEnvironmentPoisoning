@@ -89,7 +89,8 @@ class VictimSystem:
 
         # Target policy for accuracy computation
         self._target = create_target_policy(
-            self._ref_env.nS, self._ref_env.nA, path_type=target_path_type
+            self._ref_env.nS, self._ref_env.nA, path_type=target_path_type,
+            shape=getattr(self._ref_env, 'shape', None),
         )
 
     def _create_victims(self) -> None:

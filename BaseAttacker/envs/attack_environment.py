@@ -55,7 +55,8 @@ class AttackEnvironment(Env):
             self._target = target_policy
         else:
             self._target = create_target_policy(
-                victim_population.nS, victim_population.nA, path_type=target_path_type
+                victim_population.nS, victim_population.nA, path_type=target_path_type,
+                shape=getattr(victim_population.env, 'shape', None),
             )
 
         env_nS = victim_population.nS

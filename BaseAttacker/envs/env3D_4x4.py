@@ -105,104 +105,41 @@ class Grid3D(VictimEnvironmentABC):
 
 
     def _calculate_dynamics(self, shape, nA, nS, A):
-        # Base probability of struggling uphill
-        Bstrug = 0.9
-        # Base probability of stilding downhill
-        Bslide = 0.2
+        """Transition tensor T[a][s][s'] for a rows x cols grid with altitude A.
 
-        wsize = shape[0]
+        Moving to a neighbour: the agent stays put with a probability that grows when
+        the neighbour is higher (struggling uphill), slides one cell further with a
+        probability that grows when it is lower, and otherwise moves one cell.
+        """
+        Bstrug = 0.9   # base probability of struggling uphill
+        Bslide = 0.2   # base probability of sliding downhill
+        rows, cols = shape
+        # action -> (d_row, d_col): 0=NORTH, 1=EAST, 2=SOUTH, 3=WEST
+        moves = ((-1, 0), (0, 1), (1, 0), (0, -1))
 
         T = np.zeros((nA, nS, nS))
         for a in range(nA):
             T[a] = np.eye(nS)
 
-        for row in range(0, wsize):
-            for col in range(0, wsize):
+        for row in range(rows):
+            for col in range(cols):
+                s1 = row * cols + col
+                for a, (dr, dc) in enumerate(moves):
+                    r2, c2 = row + dr, col + dc
+                    if not (0 <= r2 < rows and 0 <= c2 < cols):
+                        continue  # wall: stay in place
+                    r3, c3 = row + 2 * dr, col + 2 * dc
+                    can_slide = 0 <= r3 < rows and 0 <= c3 < cols
 
-                # -- current state --
-                s1 = row*wsize + col
-
-                # -- check north --
-                if row > 0:
-                    s2 = (row-1)*wsize + col
-                    s3 = (row-2)*wsize + col
-
-                    # slope
-                    diff = A[row-1][col] - A[row][col]
-
-                    if row > 1:
-                        slip = Bslide/(1+math.exp(2+2*diff))
-                    else:
-                        slip = 0
-                    stay = Bstrug/(1+math.exp(2-2*diff))
+                    diff = A[r2][c2] - A[row][col]
+                    slip = Bslide / (1 + math.exp(2 + 2 * diff)) if can_slide else 0
+                    stay = Bstrug / (1 + math.exp(2 - 2 * diff))
                     move = 1 - slip - stay
 
-                    T[0][s1][s1] = stay
-                    T[0][s1][s2] = move
-                    if row > 1:
-                        T[0][s1][s3] = slip
-
-                # -- check east --
-                if col < wsize-1 :
-                    s2 = row*wsize + col + 1
-                    s3 = row*wsize + col + 2
-
-                    # slope
-                    diff = A[row][col+1] - A[row][col]
-
-                    if col < wsize-2 :
-                        slip = Bslide/(1+math.exp(2+2*diff))
-                    else:
-                        slip = 0
-                    stay = Bstrug/(1+math.exp(2-2*diff))
-                    move = 1 - slip - stay
-
-                    T[1][s1][s1] = stay
-                    T[1][s1][s2] = move
-                    if col < wsize-2:
-                        T[1][s1][s3] = slip
-
-                # -- check south --
-                if row < wsize-1:
-                    s2 = (row+1)*wsize + col
-                    s3 = (row+2)*wsize + col
-
-                    # slope
-                    diff = A[row+1][col] - A[row][col]
-
-                    if (row+2) < wsize:
-                        slip = Bslide/(1+math.exp(2+2*diff))
-                    else:
-                        slip = 0
-
-                    stay = Bstrug/(1+math.exp(2-2*diff))
-                    move = 1 - slip - stay
-
-                    T[2][s1][s1] = stay
-                    T[2][s1][s2] = move
-                    if row+2 < wsize:
-                        T[2][s1][s3] = slip
-
-                # -- check west --
-                if col>0:
-                    s2 = row*wsize + col - 1
-                    s3 = row*wsize + col - 2
-
-                    # slope
-                    diff = A[row][col-1] - A[row][col]
-
-                    if col > 1:
-                        slip = Bslide/(1+math.exp(2+2*diff))
-                    else:
-                        slip = 0
-
-                    stay = Bstrug/(1+math.exp(2-2*diff))
-                    move = 1 - slip - stay
-
-                    T[3][s1][s1] = stay
-                    T[3][s1][s2] = move
-                    if col > 1:
-                        T[3][s1][s3] = slip
+                    T[a][s1][s1] = stay
+                    T[a][s1][r2 * cols + c2] = move
+                    if can_slide:
+                        T[a][s1][r3 * cols + c3] = slip
 
         small = 0.000001
         for a in range(nA):

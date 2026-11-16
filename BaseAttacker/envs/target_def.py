@@ -19,7 +19,7 @@ config.freeze()
 MEMORY_SIZE = config.AE.MEMORY_SIZE
 
 
-def create_target_policy(nS: int, nA: int, path_type: str = "Mp") -> np.ndarray:
+def create_target_policy(nS: int, nA: int, path_type: str = "Mp", shape=None) -> np.ndarray:
     """Create a target policy matrix.
 
     Args:
@@ -33,8 +33,11 @@ def create_target_policy(nS: int, nA: int, path_type: str = "Mp") -> np.ndarray:
     target = np.zeros((nS, nA))
 
     # Infer grid shape from nS (assumes square or near-square grid)
-    ncols = int(round(nS ** 0.5))
-    nrows = nS // ncols
+    if shape is not None:
+        nrows, ncols = int(shape[0]), int(shape[1])
+    else:
+        ncols = int(round(nS ** 0.5))
+        nrows = nS // ncols
 
     if nA >= 4 and nrows * ncols == nS and path_type in ("Mp", "M", "H", "E"):
         # Actions: 0=NORTH, 1=EAST, 2=SOUTH, 3=WEST
