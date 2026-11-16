@@ -270,6 +270,10 @@ BaseAttacker/
 - The PPO attacker and the white-box encoder run but were not part of the reported
   experiments.
 
+## License
+
+MIT; see [LICENSE](LICENSE). The LunarLander physics is adapted from OpenAI Gym (MIT).
+
 ## Citation
 
 ```

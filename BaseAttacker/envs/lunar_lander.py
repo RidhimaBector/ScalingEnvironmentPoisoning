@@ -10,6 +10,9 @@ The attack: the screen is split into 10 vertical regions. Each region has a fail
 level in [0, 5]; when the lander fires an engine inside a region, the thrust loses its
 vertical component with probability level / 5. The attacker raises levels by up to 1
 per region per attack step (it cannot lower them, as in the original).
+
+The lander physics derives from the LunarLander environment of OpenAI Gym
+(MIT License, Copyright (c) 2016 OpenAI).
 """
 
 import math
