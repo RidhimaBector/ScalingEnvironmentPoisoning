@@ -1,10 +1,10 @@
 """Collect score.json files from finished runs into one table.
 
-    python scripts/collect_scores.py results/s27_*            # one row per run
-    python scripts/collect_scores.py results/s27_* --by cell  # mean over seeds
+    python scripts/collect_scores.py results/sweep-3x3x3/*            # one row per run
+    python scripts/collect_scores.py results/sweep-3x3x3/* --by cell  # mean over seeds
 
 Columns: target_match and route are ground truth on fresh victims, shown as
-"no attack -> attacked". A run's name is expected to end in _s<seed>.
+"no attack -> attacked". Runs are named by naming.py and end in __seed<N>.
 """
 import argparse
 import json
@@ -26,7 +26,7 @@ def main():
             continue
         s = json.load(open(path))
         name = os.path.basename(d.rstrip("/"))
-        rows.append((re.sub(r"_s\d+$", "", name), name, s))
+        rows.append((re.sub(r"__seed\d+$", "", name), name, s))
 
     print(f"{'run':40s} {'victims':>7s} {'target_match':>15s} {'route':>13s} {'victim_return':>17s}")
     if a.by == "run":

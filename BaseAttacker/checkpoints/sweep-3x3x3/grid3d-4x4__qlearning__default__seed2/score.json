@@ -1,0 +1,23 @@
+{
+ "run_dir": "results/fir_s27_grid4_qlearning_s2",
+ "checkpoint": "best_model",
+ "episodes": 20,
+ "env": "grid3d",
+ "env_kwargs": {},
+ "grid_size": 4,
+ "victim_algo": "qlearning",
+ "baseline": {
+  "greedy_accuracy": 0.43888888888888894,
+  "path_match": 0.0,
+  "target_similarity": 0.0,
+  "victim_return": 0.0
+ },
+ "attacked": {
+  "greedy_accuracy": 0.9944444444444445,
+  "path_match": 0.95,
+  "target_similarity": 0.0,
+  "victim_return": 0.0
+ },
+ "route_count": 19,
+ "baseline_route_count": 0
+}

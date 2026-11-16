@@ -23,4 +23,4 @@ CONFIGS=(
 )
 CFG=(${CONFIGS[$((SLURM_ARRAY_TASK_ID / 3))]})
 SEED=$((SLURM_ARRAY_TASK_ID % 3))
-train_and_score ablation4_${CFG[0]}_s${SEED} $BASE "${CFG[@]:1}" seed=$SEED
+train_and_score experiment=ablation-4x4 config_name=${CFG[0]} $BASE "${CFG[@]:1}" seed=$SEED

@@ -73,13 +73,14 @@ All commands run from `BaseAttacker/`.
 
 ```bash
 # Train an attacker on the 4x4 grid against a Q-learning victim (about 35 min, 1 CPU)
-python main.py with seed=0 model_dir=results/grid4_s0
+python main.py with seed=0 experiment=demo
+RUN=results/demo/grid3d-4x4__qlearning__default__seed0
 
 # Score it on 20 fresh victims, against a no-attack baseline
-python score_attack.py --run_dir results/grid4_s0
+python score_attack.py --run_dir $RUN
 
 # Draw what it did (grid environments)
-python plot_grid_attack.py --run_dir results/grid4_s0
+python plot_grid_attack.py --run_dir $RUN
 ```
 
 `score_attack.py` prints one line:
@@ -107,6 +108,19 @@ python main.py with lander victim_algo=a2c
 Every setting is listed with its default and meaning in
 [`BaseAttacker/defaults.py`](BaseAttacker/defaults.py).
 
+### Run names
+
+Every run is named by one convention ([`naming.py`](BaseAttacker/naming.py)), used for
+its results folder and for its path on the Hugging Face Hub:
+
+```
+results/<experiment>/<env>-<variant>__<victim>__<config>__seed<N>
+results/sweep-3x3x3/grid3d-5x5__sarsa__default__seed0
+```
+
+Set the first and third parts with `experiment=<name>` and `config_name=<label>`; the
+rest is derived from the settings.
+
 ### Experiment tracking
 
 Runs are recorded with [Sacred](https://github.com/IDSIA/sacred): the attacker's run
@@ -128,7 +142,7 @@ sbatch --account=<acct> --array=0-17 scripts/slurm/sweep_ablation_4x4.sh   # one
 sbatch --account=<acct> --array=0-35 scripts/slurm/sweep_grid_sizes.sh     # 5x5, 6x6, 8x8
 sbatch --account=<acct> --array=0-80 scripts/slurm/sweep_3x3x3.sh          # 3 envs x 3 variants x 3 victims
 
-python scripts/collect_scores.py results/s27_* --by cell                   # table of results
+python scripts/collect_scores.py results/sweep-3x3x3/* --by cell           # table of results
 ```
 
 Without a cluster, each script's `train_and_score` line shows the exact `main.py`
@@ -152,6 +166,18 @@ Things to know when comparing with reported numbers:
 - **The exact-route criterion gets stricter with size.** One wrong state breaks it, so
   also read `target_match`.
 - Runs are seeded, but results are not bit-identical across machines or library versions.
+
+### Publishing runs
+
+Cluster runs upload themselves when they finish ([`publish.py`](BaseAttacker/publish.py)):
+the scored checkpoint, `run_config.json` and `score.json` to a model repository, and
+one JSON record per run plus its log to a dataset repository, both under the run's
+name. Set `HF_ATTACKERS_REPO` and `HF_RESULTS_REPO` to your own repositories and log
+in once with `hf auth login` (or set `HF_TOKEN`). `HF_PUBLISH=0` switches it off. An
+upload that fails never fails the run; `python publish.py --pending results` retries.
+
+A trained example is included: `python score_attack.py --run_dir
+checkpoints/sweep-3x3x3/grid3d-4x4__qlearning__default__seed2`.
 
 ## Extending
 
@@ -256,7 +282,10 @@ BaseAttacker/
   agent/                victim population, perturbation dispatch, Sacred trackers
   utils/metrics.py      accuracy and distance measures
   config/               hyperparameters internal to the learners
-  scripts/              SLURM sweeps and result collection
+  naming.py             the run naming convention
+  publish.py            upload finished runs to the Hugging Face Hub
+  checkpoints/          one trained attacker, as an example
+  scripts/              SLURM sweeps, result collection, feasibility probes
   tests/                interface contract tests and end-to-end smoke tests
 ```
 

@@ -16,6 +16,6 @@ source scripts/slurm/common.sh
 
 SEED=$SLURM_ARRAY_TASK_ID
 OBS=${OBS:-actions}
-train_and_score grid4_${OBS}_s${SEED} \
+train_and_score experiment=grid4-main config_name=obs-$OBS \
     env=grid3d victim_algo=qlearning encoder_mode=ae reward_mode=trace obs_dynamics=$OBS \
     explore_push_prob=0.2 push_cem=True cem_floor=0.05 max_episodes=6000 seed=$SEED

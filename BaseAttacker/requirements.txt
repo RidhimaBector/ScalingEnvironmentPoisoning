@@ -8,6 +8,9 @@ pot            # optimal-transport distances (white-box metrics on the grid)
 sacred>=0.8.4  # experiment tracking
 setuptools<81  # sacred 0.8.x still imports pkg_resources
 
+# Publishing runs to the Hugging Face Hub (publish.py)
+huggingface_hub
+
 # Figures (plot_grid_attack.py)
 matplotlib
 

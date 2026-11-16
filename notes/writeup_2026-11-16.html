@@ -1,0 +1,261 @@
+<title>Black-box grid poisoning</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600&family=JetBrains+Mono:wght@400&display=swap">
+<style>
+/* Layout: single reading column (max 720px), paper-style numbered sections, figures and tables break out to full column width. */
+:root {
+  --bg: #f7f8fa; --surface: #ffffff; --fg: #171a21; --muted: #5b6372; --rule: #d9dde4;
+  --natural: #2b6fc2; --poison: #c9541f; --ok: #1d7f5a; --cell: 23, 26, 33;
+  --display: "Space Grotesk", "Inter", system-ui, sans-serif;
+  --body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #12151b; --surface: #1a1e26; --fg: #e8eaee; --muted: #9aa3b2; --rule: #2e3440;
+  --natural: #6ea8ec; --poison: #f08a55; --ok: #5cc79d; --cell: 232, 234, 238; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #12151b; --surface: #1a1e26; --fg: #e8eaee; --muted: #9aa3b2; --rule: #2e3440;
+  --natural: #6ea8ec; --poison: #f08a55; --ok: #5cc79d; --cell: 232, 234, 238; color-scheme: dark }
+body { background: var(--bg); color: var(--fg); font: 16px/1.65 var(--body);
+  padding-block: 40px 64px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+main { max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+h1 { font: 600 30px/1.2 var(--display); margin: 0; text-wrap: balance; }
+h2 { font: 600 19px/1.3 var(--display); margin: 20px 0 0; text-wrap: balance; }
+p, ul { margin: 0; } ul { padding-left: 20px; } li + li { margin-top: 6px; }
+.meta { color: var(--muted); font-size: 14px; }
+.abstract { background: var(--surface); border: 1px solid var(--rule); border-radius: 8px; padding: 16px 20px; }
+.abstract b, th, .k { font-weight: 600; }
+code { font: 13.5px var(--mono); }
+figure { margin: 0; background: var(--surface); border: 1px solid var(--rule); border-radius: 8px; padding: 16px; }
+figcaption { color: var(--muted); font-size: 14px; line-height: 1.5; margin-top: 10px; }
+svg { display: block; width: 100%; height: auto; }
+svg text { font-family: var(--body); fill: var(--fg); }
+svg .m { fill: var(--muted); }
+.scroll { overflow-x: auto; background: var(--surface); border: 1px solid var(--rule); border-radius: 8px; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; font-variant-numeric: tabular-nums; }
+th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+tr:last-child td { border-bottom: 0; }
+th { font-size: 13px; color: var(--muted); white-space: nowrap; }
+td.n, th.n { text-align: right; white-space: nowrap; }
+tr.best td { color: var(--ok); font-weight: 600; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--muted); margin-bottom: 8px; }
+.sw { display: inline-block; width: 18px; height: 4px; border-radius: 2px; vertical-align: middle; margin-right: 6px; }
+</style>
+<main>
+  <header>
+    <h1>Black-box environment poisoning of a Q-learning victim in a 4×4 altitude grid</h1>
+    <p class="meta">Working write-up · ScalingEnvironmentPoisoning / BaseAttacker · 16 November 2026 · rounds 1–7 on 4×4 and first 5×5 and 6×6 runs complete</p>
+  </header>
+
+  <div class="abstract">
+    <p><b>Summary.</b> An attacker that sees only the victim's behaviour, never its Q-table, learns to reshape the altitude of a 4×4 grid so that a tabular Q-learning victim abandons its natural 3-move route and follows a 9-move perimeter route chosen by the attacker. With a retrained trajectory autoencoder, a trace-based reward, and an adaptive push exploration scheme trained for 6000 episodes, 9 of 18 seeds produced attackers that put 15–20 of 20 previously unseen victims on the exact target route. Earlier configurations succeeded on about 1 seed in 4. The attacker's own training reward identifies the successful seeds without ground truth, so training several seeds and keeping the highest-reward one gives a working attacker. On larger grids the same method gets 80–99% of target states right but rarely the exact route: 1 of 6 seeds on 5×5 and none on 6×6.</p>
+  </div>
+
+  <h2>1. Setting</h2>
+  <ul>
+    <li><span class="k">Environment.</span> Grid3D, 4×4. Each cell has an altitude in [0, 10]; transition probabilities depend on altitude differences (uphill moves often fail, downhill moves can slide). Start is the top-left cell (state 0), goal the bottom-left (state 12), reward −1 per step.</li>
+    <li><span class="k">Victim.</span> Tabular Q-learning (α = 0.1, γ = 1), actions sampled from softmax over Q. It trains 80 episodes after every attack step and keeps its Q-table within an attack episode.</li>
+    <li><span class="k">Attacker.</span> One attack episode is 15 steps. Each step adds a vector in [−1, 1]<sup>16</sup> to the altitude map (clipped to [0, 10]).</li>
+    <li><span class="k">Target.</span> The perimeter route 0→1→2→3→7→11→15→14→13→12 (9 target states). The natural route is 0→4→8→12.</li>
+    <li><span class="k">Black-box constraint.</span> The attacker observes a 5-D autoencoder embedding of the victim's behaviour trace (last action taken in each state) plus the 16 altitudes it controls: 21 dimensions. Its reward is the fraction of target states whose last observed action matches the target.</li>
+  </ul>
+
+  <figure>
+    <div class="legend"><span><span class="sw" style="background:var(--natural)"></span>Natural greedy route</span><span><span class="sw" style="background:var(--poison)"></span>Poisoned greedy route</span><span>Cell shade and number = altitude</span></div>
+    <svg id="grids" viewBox="0 0 680 330" role="img" aria-label="Natural and poisoned altitude maps with the victim's greedy route on each"></svg>
+    <figcaption><b>Figure 1.</b> Left: unperturbed altitude and the victim's natural route. Right: altitude after 15 attack steps by the round-6 attacker (seed 2) and the route all 20 fresh victims then followed. The attacker raises the perimeter and lowers the interior.</figcaption>
+  </figure>
+
+  <h2>2. Method</h2>
+  <figure>
+    <div class="legend"><span><span class="sw" style="background:var(--poison)"></span>Attacker</span><span><span class="sw" style="background:var(--natural)"></span>Environment and victim</span></div>
+    <svg viewBox="0 0 680 430" role="img" aria-label="The experiment loop: one attack episode of 15 steps, and what happens across episodes">
+      <defs><marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
+      <rect x="40" y="34" width="600" height="250" rx="10" fill="none" stroke="var(--muted)" stroke-dasharray="5 5"/>
+      <text x="56" y="58" font-size="13" font-weight="600">One attack episode: fresh victim, natural altitude, 15 steps</text>
+      <g font-size="13" text-anchor="middle">
+        <rect x="60" y="80" width="170" height="56" rx="6" fill="var(--surface)" stroke="var(--poison)" stroke-width="1.5"/>
+        <text x="145" y="103" font-weight="600">Attacker observes</text><text x="145" y="122" class="m" font-size="12">Trace embedding + altitude</text>
+        <rect x="255" y="80" width="170" height="56" rx="6" fill="var(--surface)" stroke="var(--poison)" stroke-width="1.5"/>
+        <text x="340" y="103" font-weight="600">Attacker acts</text><text x="340" y="122" class="m" font-size="12">±1 altitude per cell</text>
+        <rect x="450" y="80" width="170" height="56" rx="6" fill="var(--surface)" stroke="var(--natural)" stroke-width="1.5"/>
+        <text x="535" y="103" font-weight="600">Altitude shifts</text><text x="535" y="122" class="m" font-size="12">Grid dynamics change</text>
+        <rect x="450" y="200" width="170" height="56" rx="6" fill="var(--surface)" stroke="var(--natural)" stroke-width="1.5"/>
+        <text x="535" y="223" font-weight="600">Victim relearns</text><text x="535" y="242" class="m" font-size="12">80 Q-learning episodes</text>
+        <rect x="255" y="200" width="170" height="56" rx="6" fill="var(--surface)" stroke="var(--poison)" stroke-width="1.5"/>
+        <text x="340" y="223" font-weight="600">Attacker is scored</text><text x="340" y="242" class="m" font-size="12">Target states matched</text>
+        <rect x="60" y="200" width="170" height="56" rx="6" fill="var(--surface)" stroke="var(--poison)" stroke-width="1.5"/>
+        <text x="145" y="223" font-weight="600">Step is stored</text><text x="145" y="242" class="m" font-size="12">Replay buffer</text>
+      </g>
+      <g stroke="var(--muted)" stroke-width="1.5" fill="none">
+        <line x1="232" y1="108" x2="251" y2="108" marker-end="url(#ah)"/>
+        <line x1="427" y1="108" x2="446" y2="108" marker-end="url(#ah)"/>
+        <line x1="535" y1="138" x2="535" y2="196" marker-end="url(#ah)"/>
+        <line x1="448" y1="228" x2="429" y2="228" marker-end="url(#ah)"/>
+        <line x1="253" y1="228" x2="234" y2="228" marker-end="url(#ah)"/>
+        <line x1="145" y1="198" x2="145" y2="140" marker-end="url(#ah)"/>
+      </g>
+      <text x="155" y="173" font-size="12" class="m">next step</text>
+      <rect x="40" y="304" width="600" height="106" rx="10" fill="none" stroke="var(--muted)" stroke-dasharray="5 5"/>
+      <text x="56" y="328" font-size="13" font-weight="600">Across 6000 attack episodes</text>
+      <g font-size="13" text-anchor="middle">
+        <rect x="60" y="340" width="170" height="56" rx="6" fill="var(--surface)" stroke="var(--poison)" stroke-width="1.5"/>
+        <text x="145" y="363" font-weight="600">Learn</text><text x="145" y="382" class="m" font-size="12">15 DDPG updates per episode</text>
+        <rect x="255" y="340" width="170" height="56" rx="6" fill="var(--surface)" stroke="var(--poison)" stroke-width="1.5"/>
+        <text x="340" y="363" font-weight="600">Explore</text><text x="340" y="382" class="m" font-size="12">Adaptive push, 1 in 5</text>
+        <rect x="450" y="340" width="170" height="56" rx="6" fill="var(--surface)" stroke="var(--rule)" stroke-width="1.5"/>
+        <text x="535" y="363" font-weight="600">Evaluate</text><text x="535" y="382" class="m" font-size="12">20 fresh victims, exact route</text>
+      </g>
+    </svg>
+    <figcaption><b>Figure 2.</b> The experiment loop. Inside one attack episode the attacker repeatedly reads the victim's behaviour, nudges the altitude, and is scored on how many target states the retrained victim now matches. Across episodes it learns from the replay buffer; one episode in five is a push episode that holds a fixed direction per cell. After training, the best checkpoint is tested once against victims it has never seen.</figcaption>
+  </figure>
+  <ul>
+    <li><span class="k">Learner.</span> DDPG (actor lr 1e-4, critic lr 1e-3, γ = 0.9, batch 256, 15 gradient updates per episode, Gaussian action noise σ = 0.1). The checkpoint with the best 50-episode mean training reward is kept.</li>
+    <li><span class="k">Autoencoder.</span> The shipped trace autoencoder reconstructed 46.7% of held-out trace entries (majority baseline 42.8%). Retraining on real victim traces gave 72.1%.</li>
+    <li><span class="k">Push exploration.</span> In a fraction of episodes every cell is pushed in one fixed direction (down, hold, up) for all 15 steps, so the replay buffer contains altitude maps far from the natural one.</li>
+    <li><span class="k">Adaptive push.</span> The per-cell direction probabilities are updated by a cross-entropy step: every 16 push episodes they move halfway toward the 4 with the highest reward.</li>
+    <li><span class="k">Evaluation.</span> Each trained attacker runs deterministically against 20 fresh victims. A victim counts as poisoned when its greedy (argmax-Q) route at attack step 15 equals the target route exactly. A seed counts as successful when at least 11 of 20 victims are poisoned. Ground-truth Q-values are used only here.</li>
+  </ul>
+
+  <h2>3. Results</h2>
+  <div class="scroll">
+    <table>
+      <thead><tr><th>Round</th><th>Configuration (trace reward unless noted)</th><th class="n">Episodes</th><th class="n">Seeds OK</th><th>Poisoned victims of 20, per seed</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td>Original autoencoder</td><td class="n">3000</td><td class="n">0 / 3</td><td>0, 0, 0</td></tr>
+        <tr><td>1</td><td>Retrained autoencoder</td><td class="n">3000</td><td class="n">2 / 3</td><td>0, 17, 14</td></tr>
+        <tr><td>1</td><td>Retrained autoencoder, trajectory-frequency reward</td><td class="n">3000</td><td class="n">0 / 3</td><td>0, 0, 0</td></tr>
+        <tr><td>1</td><td>LSTM trajectory encoder + altitude</td><td class="n">3000</td><td class="n">0 / 3</td><td>0, 0, 0</td></tr>
+        <tr><td>2</td><td>Twin critics + normalised input + push + longer warm-up</td><td class="n">5000</td><td class="n">1 / 3</td><td>0, 0, 11</td></tr>
+        <tr><td>3</td><td>Round-1 best, seeds 3–5</td><td class="n">3000</td><td class="n">0 / 3</td><td>0, 0, 0</td></tr>
+        <tr><td>3</td><td>+ twin critics only</td><td class="n">3000</td><td class="n">0 / 3</td><td>0, 0, 0</td></tr>
+        <tr><td>3</td><td>+ normalised input only</td><td class="n">3000</td><td class="n">1 / 3</td><td>0, 13, 0</td></tr>
+        <tr><td>3</td><td>+ exploration noise 0.2</td><td class="n">3000</td><td class="n">0 / 3</td><td>0, 0, 0</td></tr>
+        <tr><td>3</td><td>Mixed trace and trajectory reward</td><td class="n">3000</td><td class="n">1 / 3</td><td>7, 19, 0</td></tr>
+        <tr><td>3–4</td><td>+ push exploration (uniform), 15 seeds</td><td class="n">3000</td><td class="n">4 / 15</td><td>0, 0, 20 · 0, 15, 0, 0, 0, 0, 0, 0, 20, 0, 0, 13</td></tr>
+        <tr><td>5</td><td>Adaptive push</td><td class="n">3000</td><td class="n">1 / 6</td><td>16, 0, 0, 0, 0, 0</td></tr>
+        <tr><td>5</td><td>Uniform push + elite imitation (weight 5)</td><td class="n">3000</td><td class="n">0 / 6</td><td>0, 0, 0, 0, 0, 0</td></tr>
+        <tr><td>5</td><td>Adaptive push + elite imitation (weight 1)</td><td class="n">3000</td><td class="n">2 / 6</td><td>12, 2, 0, 0, 0, 14</td></tr>
+        <tr class="best"><td>6–7</td><td>Adaptive push, 18 seeds</td><td class="n">6000</td><td class="n">9 / 18</td><td>20, 16, 20, 0, 18, 17 · 15, 0, 0, 17, 18, 0, 0, 0, 10, 0, 16, 0</td></tr>
+        <tr><td>6</td><td>Adaptive push + elite imitation (weight 1)</td><td class="n">6000</td><td class="n">3 / 6</td><td>0, 15, 16, 17, 0, 0</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <figure>
+    <svg id="strip" viewBox="0 0 680 230" role="img" aria-label="Poisoned victims out of 20 per seed for three configurations"></svg>
+    <figcaption><b>Figure 3.</b> Poisoned victims out of 20 for each seed (one dot per seed). Outcomes are bimodal: a seed either fails completely or poisons most victims. Longer training raises the share of succeeding seeds from about a quarter to a half.</figcaption>
+  </figure>
+
+  <ul>
+    <li><span class="k">The autoencoder mattered.</span> With the original model no seed succeeded; with the retrained one, 2 of 3 did under otherwise identical settings.</li>
+    <li><span class="k">Reward choice.</span> The trajectory-frequency reward reached a consistent greedy match of about 0.85 but never the exact route. The trace reward is noisier but is the only one that produced exact routes.</li>
+    <li><span class="k">Stabilisation tricks did not help.</span> Twin critics, normalised inputs, more noise and elite imitation were each neutral or harmful across seeds.</li>
+    <li><span class="k">Exploration was not the bottleneck at 3000 episodes.</span> In round 5 the adaptive push search itself reached reward ≥ 13 in 12–36 of its last 100 push episodes on three seeds whose learned policies still poisoned 0 of 20 victims. Doubling training to 6000 episodes let the policy absorb those episodes.</li>
+    <li><span class="k">Ground-truth-free model selection.</span> Among the 54 trace-reward runs on 4×4 without imitation for which both numbers are recorded, all 18 with a best training reward of at least 12.5 poisoned 10 or more of 20 victims, and all 36 below 12.5 poisoned none. With imitation the rule is unreliable (two runs above 13.0 poisoned 7 and 2).</li>
+    <li><span class="k">What the attack looks like.</span> Successful attackers converge on the same map: perimeter cells at altitude 10, interior cells at 0. Under attack, victims visit perimeter cells with probability 0.89–0.96 per episode, against 0.01–0.15 before.</li>
+  </ul>
+
+  <h2>4. Larger grids</h2>
+  <p>The environment, target route, autoencoder and evaluation were generalised to any rows × columns grid; transition matrices on square grids are unchanged. A separate trace autoencoder is trained per grid size (held-out reconstruction 0.66 on 5×5 and 0.59 on 6×6, against 0.72 on 4×4).</p>
+  <div class="scroll">
+    <table>
+      <thead><tr><th>Grid</th><th class="n">Route length</th><th>Hand-built map: exact route</th><th class="n">Seeds OK</th><th>Poisoned of 20, per seed</th><th>Greedy match, per seed</th></tr></thead>
+      <tbody>
+        <tr><td>4×4</td><td class="n">9</td><td>1.00 (low interior)</td><td class="n">9 / 18</td><td>see section 3</td><td>0.74–1.00</td></tr>
+        <tr><td>5×5</td><td class="n">12</td><td>1.00 (striped interior)</td><td class="n">1 / 6</td><td>0, 9, 0, 20, 0, 0</td><td>0.91, 0.96, 0.90, 1.00, 0.61, 0.95</td></tr>
+        <tr><td>6×6</td><td class="n">15</td><td>0.65 (checkerboard interior)</td><td class="n">0 / 6</td><td>0, 0, 0, 0, 0, 0</td><td>0.93, 0.85, 0.87, 0.86, 0.83, 0.80</td></tr>
+        <tr><td>8×8</td><td class="n">21</td><td>0.68 (checkerboard interior)</td><td class="n">running</td><td>—</td><td>—</td></tr>
+        <tr><td>10×10</td><td class="n">27</td><td>0.85 (checkerboard interior)</td><td class="n">not run</td><td>—</td><td>—</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <ul>
+    <li><span class="k">Hand-built map.</span> Altitude set directly, with no learning: perimeter at 10 and one of three interiors (all low, alternating rows, checkerboard). The column gives the best of the three, as the share of 8 victims on the exact route over attack steps 11–15. It is a lower bound on what is reachable, not a ceiling. The all-low interior that works on 4×4 scores 0.00 on 8×8, because a flat low interior becomes a shortcut to the goal once the perimeter is long; an interior with barriers closes it.</li>
+    <li><span class="k">Learned attackers.</span> Adaptive push, 8000 episodes, 6 seeds per grid. Greedy match is the share of target states with the attacker's action over the last 5 attack steps. Most seeds get 80–96% of target states right on both grids; one 5×5 seed poisons all 20 victims.</li>
+    <li><span class="k">Reading.</span> The exact-route criterion gets stricter with route length, because one wrong state breaks it. Hand-built maps reach the exact route on every size tested, so the learned attacker is the limit on larger grids. In these runs the push search itself stalled: its episodes averaged 62–76% of target states and almost never produced the full route.</li>
+    <li><span class="k">In progress.</span> A tuning sweep on 5×5, 6×6 and 8×8 (12,000 episodes, search settings scaled to the number of cells, 4 seeds per setting) is running. The aim is at least 80% of fresh victims on the exact route at every size.</li>
+  </ul>
+
+  <h2>5. Engineering changes</h2>
+  <ul>
+    <li>Victim action and transition sampling now use cached cumulative sums. The sampled distributions match the originals to within 0.003 over 200,000 draws.</li>
+    <li>Sacred previously logged six scalars for every attack step and rewrote a 36 MB metrics file every 10 seconds. Step-level scalars are now logged for every 20th episode and the heartbeat is 60 seconds; a 6000-episode run writes 6.9 MB.</li>
+    <li>Net effect on the cluster: 6000 episodes take 32–39 minutes per job, where 3000 took 21–41 minutes before (about 1.8× faster).</li>
+    <li>The retrained autoencoder is now the default.</li>
+  </ul>
+
+  <h2>6. Limitations</h2>
+  <ul>
+    <li>Sample sizes are small: 3 to 6 seeds for most configurations, 15 for uniform push and 18 for adaptive push. The first 6 adaptive-push seeds gave 5 of 6; the next 12 gave 4 of 12.</li>
+    <li>A single training run succeeds about half the time on 4×4. Reliability comes from training several seeds and selecting on training reward.</li>
+    <li>One victim algorithm, one victim per run and one target route. Larger grids were run once, with the 4×4 hyperparameters and no tuning.</li>
+    <li>Rounds 2–6 were designed after looking at ground-truth evaluations of earlier rounds, so the configuration search is not itself black-box. The 12.5 reward threshold was also read off results after the fact.</li>
+    <li>Round 6 changed training length and code speed together with nothing else, but the 3000-episode and 6000-episode adaptive-push runs come from different rounds and are compared on 6 seeds each.</li>
+    <li>Adaptive push is a search procedure added on top of DDPG; how much of the final policy is learned control and how much is a memorised altitude map has not been tested.</li>
+    <li>Near-ties in Q at the start state make the exact-route criterion flicker, so even a hand-built ideal altitude map does not give 20 of 20 at every step.</li>
+  </ul>
+
+  <h2>7. Status</h2>
+  <p>The 4×4 rounds and the first larger-grid runs have finished; the larger-grid tuning sweep is running. All code, sweep scripts (<code>run_fir.sh</code> to <code>run_fir_v7.sh</code>, <code>run_fir_grids.sh</code>) and the evaluation script (<code>eval_attack.py</code>) are on the <code>main</code> branch.</p>
+</main>
+<script>
+(function () {
+  var NS = 'http://www.w3.org/2000/svg';
+  function el(parent, tag, attrs, text) {
+    var e = document.createElementNS(NS, tag);
+    for (var k in attrs) e.setAttribute(k, attrs[k]);
+    if (text != null) e.textContent = text;
+    parent.appendChild(e); return e;
+  }
+  var g = document.getElementById('grids'), S = 64;
+  var maps = [
+    { x: 50, title: 'Natural', col: 'var(--natural)', alt: [8,8,8,8,6,6,6,6,4,4,4,4,2,2,2,2], path: [0,4,8,12] },
+    { x: 374, title: 'Poisoned (after 15 attack steps)', col: 'var(--poison)', alt: [10,10,10,10,0,0,0,10,10,0,0,10,3,10,10,10], path: [0,1,2,3,7,11,15,14,13,12] }
+  ];
+  maps.forEach(function (m) {
+    var y0 = 40;
+    el(g, 'text', { x: m.x, y: 24, 'font-size': 14, 'font-weight': 600 }, m.title);
+    for (var i = 0; i < 16; i++) {
+      var c = i % 4, r = (i - c) / 4;
+      el(g, 'rect', { x: m.x + c * S + 1.5, y: y0 + r * S + 1.5, width: S - 3, height: S - 3, rx: 5,
+        fill: 'rgba(var(--cell),' + (0.04 + 0.032 * m.alt[i]).toFixed(2) + ')', stroke: 'var(--rule)' });
+      el(g, 'text', { x: m.x + c * S + 9, y: y0 + r * S + 19, 'font-size': 12, class: 'm' }, m.alt[i]);
+    }
+    var pts = m.path.map(function (s) { var c = s % 4, r = (s - c) / 4; return [m.x + c * S + S / 2, y0 + r * S + S / 2 + 6]; });
+    el(g, 'polyline', { points: pts.map(function (p) { return p.join(','); }).join(' '), fill: 'none', stroke: m.col,
+      'stroke-width': 5, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' });
+    el(g, 'circle', { cx: pts[0][0], cy: pts[0][1], r: 8, fill: 'var(--surface)', stroke: m.col, 'stroke-width': 3 });
+    el(g, 'circle', { cx: pts[pts.length - 1][0], cy: pts[pts.length - 1][1], r: 9, fill: m.col });
+    el(g, 'text', { x: m.x, y: y0 + 4 * S + 22, 'font-size': 12, class: 'm' }, 'Open circle = start, filled = goal · ' + (m.path.length - 1) + ' moves');
+  });
+
+  var s = document.getElementById('strip');
+  var rows = [
+    { label: 'Uniform push, 3000 episodes', sub: '4 of 15 seeds', v: [0,0,20,0,15,0,0,0,0,0,0,20,0,0,13] },
+    { label: 'Adaptive push, 3000 episodes', sub: '1 of 6 seeds', v: [16,0,0,0,0,0] },
+    { label: 'Adaptive push, 6000 episodes', sub: '9 of 18 seeds', v: [20,16,20,0,18,17,15,0,0,17,18,0,0,0,10,0,16,0] }
+  ];
+  var X0 = 250, X1 = 650, Y0 = 30, RH = 56;
+  function px(v) { return X0 + (X1 - X0) * v / 20; }
+  [0, 5, 10, 15, 20].forEach(function (t) {
+    el(s, 'line', { x1: px(t), y1: Y0 - 8, x2: px(t), y2: Y0 + rows.length * RH - 14, stroke: 'var(--rule)' });
+    el(s, 'text', { x: px(t), y: Y0 + rows.length * RH + 6, 'font-size': 12, 'text-anchor': 'middle', class: 'm' }, t);
+  });
+  el(s, 'line', { x1: px(11), y1: Y0 - 8, x2: px(11), y2: Y0 + rows.length * RH - 14, stroke: 'var(--muted)', 'stroke-dasharray': '4 4' });
+  el(s, 'text', { x: px(11) + 6, y: Y0 - 12, 'font-size': 12, class: 'm' }, 'success threshold (11)');
+  el(s, 'text', { x: (X0 + X1) / 2, y: Y0 + rows.length * RH + 26, 'font-size': 12, 'text-anchor': 'middle', class: 'm' }, 'Poisoned victims out of 20');
+  rows.forEach(function (r, i) {
+    var y = Y0 + i * RH + 16;
+    el(s, 'text', { x: 10, y: y - 2, 'font-size': 13, 'font-weight': 600 }, r.label);
+    el(s, 'text', { x: 10, y: y + 15, 'font-size': 12, class: 'm' }, r.sub);
+    var seen = {};
+    r.v.forEach(function (v) {
+      var n = seen[v] = (seen[v] || 0) + 1;
+      var col = Math.floor((n - 1) / 3), row = (n - 1) % 3;
+      el(s, 'circle', { cx: px(v) + col * 11, cy: y - 8 + row * 11, r: 4.5,
+        fill: v >= 11 ? 'var(--poison)' : 'var(--muted)', 'fill-opacity': v >= 11 ? 1 : 0.55 });
+    });
+  });
+})();
+</script>

@@ -55,3 +55,21 @@ def test_config_helpers():
     cfg = resolve_config({"env": "ring", "env_args": "n_states:12", "not_a_setting": 1})
     assert cfg["env_kwargs"] == {"n_states": 12} and "not_a_setting" not in cfg
     assert resolve_config({"grid_size": 5})["env_kwargs"]["grid_dimensions"] == (5, 5)
+
+
+def test_run_naming_round_trip():
+    from naming import parse_run_name, run_name, run_path
+    cases = [
+        ({"env": "grid3d", "grid_size": 5, "victim_algo": "sarsa", "seed": 0, "experiment": "sweep-3x3x3"},
+         "sweep-3x3x3/grid3d-5x5__sarsa__default__seed0"),
+        ({"env": "ring", "env_args": "n_states:12", "victim_algo": "qlearning", "seed": 2},
+         "adhoc/ring-n12__qlearning__default__seed2"),
+        ({"env": "lunarlander", "env_args": "initial_random:1000", "victim_algo": "dqn", "seed": 1,
+          "config_name": "TD3 on"}, "adhoc/lunarlander-kick1000__dqn__td3-on__seed1"),
+        ({"env": "grid3d", "victim_algo": "qlearning", "seed": 7}, "adhoc/grid3d-4x4__qlearning__default__seed7"),
+    ]
+    for settings, expected in cases:
+        cfg = resolve_config(settings)
+        assert run_path(cfg) == expected
+        parts = parse_run_name(run_name(cfg))
+        assert parts["env"] == cfg["env"] and parts["seed"] == cfg["seed"]

@@ -13,7 +13,10 @@ learning rates of the tabular victims, ...) live in config/config_default.yaml.
 DEFAULT_CONFIG = {
     # --- run ---
     "seed": 0,
-    "model_dir": None,  # where checkpoints go; None = results/run_<id>_<time>
+    # Naming (see naming.py): results/<experiment>/<env>-<variant>__<victim>__<config_name>__seed<N>
+    "experiment": "adhoc",        # the sweep or study this run belongs to
+    "config_name": "default",     # label of the attacker configuration within the experiment
+    "model_dir": None,            # where checkpoints go; None = results/<experiment>/<run name>
     "max_episodes": 6000,  # attack episodes
     "max_timesteps": 15,  # attack steps per attack episode
     "eval_freq_episode": 20,  # save a numbered checkpoint every N episodes

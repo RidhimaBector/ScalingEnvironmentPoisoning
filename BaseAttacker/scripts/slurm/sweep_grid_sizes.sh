@@ -23,6 +23,6 @@ T=$SLURM_ARRAY_TASK_ID
 N=${SIZES[$((T / (3 * NSEEDS)))]}
 CFG=(${CONFIGS[$(((T / NSEEDS) % 3))]})
 SEED=$((T % NSEEDS))
-train_and_score grid${N}_${CFG[0]}_s${SEED} \
+train_and_score experiment=grid-sizes config_name=${CFG[0]} \
     env=grid3d grid_size=$N victim_algo=qlearning encoder_mode=ae reward_mode=trace \
     obs_dynamics=env push_cem=True cem_floor=-1 "${CFG[@]:1}" max_episodes=12000 seed=$SEED

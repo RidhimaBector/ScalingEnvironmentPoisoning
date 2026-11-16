@@ -16,7 +16,6 @@ The loop, per attack episode:
     3. the attacker updates from its replay buffer
 """
 
-import datetime
 import json
 import os
 import time
@@ -34,6 +33,8 @@ from builders import (
     resolve_config,
 )
 from experiment import ex, finish_victim_sacred, start_victim_sacred
+from naming import run_name, run_path
+from publish import _git_commit
 
 CHECKPOINT_SUFFIXES = (
     "_actor",
@@ -196,8 +197,9 @@ def train(
 def sacred_main(_run, _config):
     cfg = resolve_config(dict(_config))
     if cfg["model_dir"] is None:
-        stamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        cfg["model_dir"] = f"results/run_{_run._id}_{stamp}"
+        cfg["model_dir"] = os.path.join("results", run_path(cfg))
+    cfg["run_name"] = run_name(cfg)
+    cfg["code_commit"] = _git_commit()
     os.makedirs(cfg["model_dir"], exist_ok=True)
     _run.info["model_dir"] = cfg["model_dir"]
     # Everything needed to rebuild this run later (read by score_attack.py)
@@ -221,6 +223,13 @@ def sacred_main(_run, _config):
         # Always close the victim run: its heartbeat thread would keep the process alive.
         finish_victim_sacred(victim_run, status=f"FAILED: {exc}")
         raise
+
+
+@ex.command(unobserved=True)
+def print_run_dir(_config):
+    """Print the folder a run with these settings writes to (used by the sweep scripts)."""
+    cfg = resolve_config(dict(_config))
+    print(cfg["model_dir"] or os.path.join("results", run_path(cfg)))
 
 
 if __name__ == "__main__":
