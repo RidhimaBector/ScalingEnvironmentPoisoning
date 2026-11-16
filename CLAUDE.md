@@ -87,7 +87,11 @@ and Hub path, never an ad hoc name.
 - Each SSH session needs a Duo approval on the user's phone (tell them before
   connecting) and lasts about an hour. SLURM commands and `module` need a login shell:
   wrap them in `bash -lc "..."`.
-- First-time setup there: `bash scripts/setup_alliance.sh <venv path>` from `BaseAttacker/`.
+- Set up and verified 2026-11-16: code at
+  `/project/aip-s2ganapa/kunwar/envpois/ScalingEnvironmentPoisoning`, venv at
+  `/project/aip-s2ganapa/kunwar/venvs/envpois`. Exact submit command: `notes/STATE.md`, section 7.
+- Smoke-test any sweep first: `EXTRA_ARGS="max_episodes=100 experiment=smoke"` with
+  `--array=0-1 --time=00:20:00`, then delete the smoke results so they are not published.
 
 ## Hugging Face
 

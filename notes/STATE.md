@@ -164,13 +164,26 @@ fir is where everything so far ran. killarney is the second cluster; see the end
 - Typical speed: 4x4, 6000 episodes: ~35 min. 6x6, 12000: ~5 h. 8x8, 12000: ~8 h.
   Ring, 3000: ~10 min. Lander VPG/A2C, 1000 episodes at K=20: ~45 min; DQN ~25 h.
 
-**killarney** (Alliance; set up requested 2026-11-16, not yet verified there):
-account `aip-s2ganapa`; code and venv belong under `/project/aip-s2ganapa/kunwar/`,
-outputs under `$SCRATCH` (NFS, purge-eligible), so submit with
-`RESULTS_ROOT=$SCRATCH/envpois/results`. SSH needs a Duo tap from the user roughly
-hourly; `sbatch`, `squeue` and `module` only exist in a login shell (`bash -lc "..."`).
-First-time setup: `bash scripts/setup_alliance.sh <venv path>`. Per-cluster values are
-tabulated in `BaseAttacker/scripts/slurm/README.md`.
+**killarney** (Alliance; set up and verified 2026-11-16):
+
+- Account `aip-s2ganapa`. Code: `/project/aip-s2ganapa/kunwar/envpois/ScalingEnvironmentPoisoning`.
+  venv: `/project/aip-s2ganapa/kunwar/venvs/envpois` (built with `scripts/setup_alliance.sh`;
+  torch 2.14, Box2D present). Results: `$SCRATCH/envpois/results` (= `/scratch/kunwar/...`,
+  NFS, purge-eligible).
+- Verified there: 27 tests pass (lander included); a 2-task smoke run of
+  `sweep_ablation_4x4.sh` trained, scored and attempted to publish (job 7679356,
+  about 2.5 min per task for 120 episodes). Its output folders were deleted afterwards.
+- Submit from `BaseAttacker/` in a login shell:
+  ```bash
+  export PYTHON_MODULE=python/3.12 VENV=/project/aip-s2ganapa/kunwar/venvs/envpois RESULTS_ROOT=$SCRATCH/envpois/results
+  sbatch --account=aip-s2ganapa --array=<range> scripts/slurm/<sweep>.sh
+  ```
+- POT does not build there, so it is not installed; only `privacy_mode=full_whitebox`
+  needs it (the code imports it lazily and the white-box test is skipped).
+- No Hugging Face token there either: runs end as `PUBLISH_PENDING`.
+- SSH needs a Duo tap from the user and the connection lasts about an hour. `sbatch`,
+  `squeue`, `sacct` and `module` only exist in a login shell (`bash -lc "..."`).
+  `git pull` over HTTPS occasionally fails with "Broken pipe"; retry.
 
 ## 8. Hugging Face
 
