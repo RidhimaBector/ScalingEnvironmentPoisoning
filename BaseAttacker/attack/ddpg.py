@@ -36,8 +36,9 @@ def _fanin_init(size):
 
 
 def _soft_update(target: nn.Module, source: nn.Module, tau: float) -> None:
-    for t, s in zip(target.parameters(), source.parameters()):
-        t.data.copy_(t.data * (1.0 - tau) + s.data * tau)
+    with torch.no_grad():
+        for t, s in zip(target.parameters(), source.parameters()):
+            t.lerp_(s, tau)  # t <- (1 - tau) * t + tau * s
 
 
 class Actor(nn.Module):

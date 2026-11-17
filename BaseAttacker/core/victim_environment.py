@@ -6,10 +6,22 @@ how dynamics are exposed.
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict
+from typing import Any, Dict, NamedTuple, Optional
 
 import numpy as np
 from gymnasium import Env, spaces
+
+
+class TabularModel(NamedTuple):
+    """An environment with discrete states, written out as a table. Environments that
+    can return one from tabular_model() let tabular victims train with compiled loops
+    (victim/fast_tabular.py), which is many times faster; it changes nothing else."""
+
+    cdf: np.ndarray  # (nA, nS, nS) cumulative transition probabilities over next states
+    start: int  # state every episode starts in
+    terminal: np.ndarray  # (nS,) bool: arriving here ends the episode
+    reward: np.ndarray  # (nS,) reward for arriving in each state
+    max_steps: int  # episode step limit
 
 
 class VictimEnvironment(Env, ABC):
@@ -81,6 +93,12 @@ class VictimEnvironment(Env, ABC):
         """The target as recorded behaviour: a list of (prev_state, prev_action, state,
         action) tuples, or None. Use this instead of make_target_policy() when states
         are continuous and no per-state table exists."""
+        return None
+
+    def tabular_model(self) -> Optional[TabularModel]:
+        """The current dynamics as a TabularModel, if this environment is a finite MDP
+        with one start state. Optional: None (the default) means victims step through
+        reset()/step() as usual."""
         return None
 
     def oracle_route_match(self, target_actions: np.ndarray, greedy_actions: np.ndarray):

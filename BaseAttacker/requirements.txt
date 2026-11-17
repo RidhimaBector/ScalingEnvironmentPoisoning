@@ -7,6 +7,8 @@ yacs
 sacred>=0.8.4  # experiment tracking
 setuptools<81  # sacred 0.8.x still imports pkg_resources
 
+numba  # compiled victim training loops (victim/fast_tabular.py); optional but ~6x faster runs
+
 # Publishing runs to the Hugging Face Hub (publish.py)
 huggingface_hub
 

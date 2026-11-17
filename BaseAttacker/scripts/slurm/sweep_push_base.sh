@@ -2,16 +2,14 @@
 # Two changes to the attacker, alone and together, on 4x4, 5x5 and 6x6 grids with
 # Q-learning victims and the own-actions observation, 4 seeds each:
 #
+#   plain           neither change (the comparison)
 #   base            push_base=True: act as the push search's best directions + the
 #                   actor's correction (pre-trained autoencoder)
 #   online-ae       ae_model_path=online: autoencoder fitted on the run's own first
 #                   500 episodes, no pre-training (plain actor)
 #   base-online-ae  both
 #
-# The comparison without either change is sweep_obs_comparison.sh (config obs-actions,
-# same seeds, 5x5 and 6x6) and sweep_3x3x3.sh (4x4).
-#
-#     sbatch --account=<acct> --array=0-35 scripts/slurm/sweep_push_base.sh
+#     sbatch --account=<acct> --array=0-47 scripts/slurm/sweep_push_base.sh   # 6x6 only: 32-47
 #
 #SBATCH --job-name=pushbase
 #SBATCH --cpus-per-task=1
@@ -23,13 +21,14 @@ source scripts/slurm/common.sh
 SIZES=(4 5 6)
 NSEEDS=4
 CONFIGS=(
+  "plain           push_base=False"
   "base            push_base=True"
   "online-ae       ae_model_path=online"
   "base-online-ae  push_base=True ae_model_path=online"
 )
 T=$SLURM_ARRAY_TASK_ID
-N=${SIZES[$((T / (3 * NSEEDS)))]}
-CFG=(${CONFIGS[$(((T / NSEEDS) % 3))]})
+N=${SIZES[$((T / (4 * NSEEDS)))]}
+CFG=(${CONFIGS[$(((T / NSEEDS) % 4))]})
 SEED=$((T % NSEEDS))
 if [ "$N" -eq 4 ]; then
   SEARCH="explore_push_prob=0.2 max_episodes=6000"

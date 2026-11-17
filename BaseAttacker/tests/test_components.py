@@ -93,6 +93,58 @@ def test_online_autoencoder_learns_observed_traces():
     assert not np.allclose(z[0], z[1]), "different behaviours get different embeddings"
 
 
+def _victims_after_training(env_fn, algo, monkeypatch, compiled, victims=40, episodes=300):
+    """Mean length of each victim's last 100 episodes, for the Python or compiled loop."""
+    from registry import VICTIM_ALGO_MAP
+    monkeypatch.setenv("ENVPOIS_NO_JIT", "0" if compiled else "1")
+    out = []
+    for seed in range(victims):
+        np.random.seed(seed)
+        env = env_fn()
+        victim = VICTIM_ALGO_MAP[algo](env.nS, env.nA)
+        stats = victim.train(env, episodes)
+        assert len(victim.get_trajectories()) > 0
+        out.append(np.mean(stats["episode_lengths"][-100:]))
+    return np.array(out)
+
+
+def test_compiled_victims_learn_like_the_python_loops(monkeypatch):
+    """The compiled training loops are a speed-up only: same learning, statistically."""
+    import pytest
+    from envs.ring import SlipperyRing
+    from victim import fast_tabular
+    if not fast_tabular.HAVE_NUMBA:
+        pytest.skip("numba not installed: victims use the Python loops")
+    for env_fn in (Grid3D, lambda: SlipperyRing(8)):
+        assert fast_tabular.model_of(env_fn()) is not None
+        for algo in ("qlearning", "sarsa"):
+            slow = _victims_after_training(env_fn, algo, monkeypatch, compiled=False)
+            fast = _victims_after_training(env_fn, algo, monkeypatch, compiled=True)
+            spread = np.sqrt(slow.var() / len(slow) + fast.var() / len(fast))
+            assert abs(slow.mean() - fast.mean()) < 4 * spread + 0.05, (algo, slow.mean(), fast.mean())
+    # REINFORCE: too slow in Python to compare here; check the compiled loop runs
+    fast = _victims_after_training(Grid3D, "reinforce", monkeypatch, compiled=True, victims=2, episodes=20)
+    assert np.isfinite(fast).all()
+
+
+def test_tabular_model_matches_step():
+    """The transition table an environment reports is the one its step() samples from."""
+    from envs.ring import SlipperyRing
+    for env in (Grid3D(), SlipperyRing(8)):
+        env.apply_perturbation(np.random.default_rng(1).uniform(-1, 1, env.perturbation_space.shape))
+        model = env.tabular_model()
+        probs = np.diff(model.cdf, axis=2, prepend=0.0)
+        np.random.seed(0)
+        for action in range(env.nA):
+            counts = np.zeros(env.nS)
+            for _ in range(4000):
+                env.reset()
+                nxt = env.step(action)[0]
+                counts[nxt] += 1
+            expected = probs[action, model.start] / probs[action, model.start].sum()
+            assert np.abs(counts / 4000 - expected).max() < 0.04
+
+
 def test_config_helpers():
     assert parse_kv("n_states:12,gamma:0.5,name:x") == {"n_states": 12, "gamma": 0.5, "name": "x"}
     cfg = resolve_config({"env": "ring", "env_args": "n_states:12", "not_a_setting": 1})

@@ -21,7 +21,7 @@ import numpy as np
 from gymnasium import spaces
 from gymnasium.utils import seeding
 
-from core.victim_environment import VictimEnvironment
+from core.victim_environment import TabularModel, VictimEnvironment
 from envs.target_def import create_target_policy
 from utils.metrics import Attack_Cost_Compute_K, Attack_Cost_Compute_W, greedy_path
 
@@ -131,6 +131,13 @@ class Grid3D(VictimEnvironment):
         prob = self._T[action][self.s][next_state]
         self.s = next_state
         return next_state, -1.0, next_state == self._goal_state, False, {"prob": prob}
+
+    def tabular_model(self) -> TabularModel:
+        terminal = np.zeros(self.nS, dtype=bool)
+        terminal[self._goal_state] = True
+        return TabularModel(
+            self._T_cdf, self.start_state, terminal, np.full(self.nS, -1.0), self.max_steps
+        )
 
     # --- VictimEnvironment interface: what the attacker can change ---
 

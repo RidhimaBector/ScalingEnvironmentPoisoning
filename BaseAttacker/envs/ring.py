@@ -18,7 +18,7 @@ import numpy as np
 from gymnasium import spaces
 from gymnasium.utils import seeding
 
-from core.victim_environment import VictimEnvironment
+from core.victim_environment import TabularModel, VictimEnvironment
 
 
 class SlipperyRing(VictimEnvironment):
@@ -54,6 +54,19 @@ class SlipperyRing(VictimEnvironment):
         if np.random.random() < 1.0 - 0.9 * self.friction[self.s]:
             self.s = (self.s + (1 if action == 0 else -1)) % self.nS
         return self.s, -1.0, self.s == self.goal, False, {}
+
+    def tabular_model(self) -> TabularModel:
+        move = 1.0 - 0.9 * self.friction  # chance that a move out of each state succeeds
+        T = np.zeros((self.nA, self.nS, self.nS))
+        states = np.arange(self.nS)
+        for action, step in ((0, 1), (1, -1)):
+            T[action, states, states] = 1.0 - move
+            T[action, states, (states + step) % self.nS] += move
+        terminal = np.zeros(self.nS, dtype=bool)
+        terminal[self.goal] = True
+        return TabularModel(
+            np.cumsum(T, axis=2), 0, terminal, np.full(self.nS, -1.0), self.max_steps
+        )
 
     # --- VictimEnvironment interface ---
     @property

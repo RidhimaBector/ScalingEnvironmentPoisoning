@@ -175,10 +175,10 @@ def accuracy_from_trajectories(trajectories, target: np.ndarray) -> float:
     """
     nS, nA = target.shape
     counts = np.zeros((nS, nA))
-    for pre_s, pre_a, s, a in trajectories:
-        counts[int(pre_s), int(pre_a)] += 1
-    if trajectories:
-        counts[int(trajectories[-1][2]), int(trajectories[-1][3])] += 1
+    if len(trajectories):
+        rows = np.asarray(trajectories, dtype=np.int64).reshape(-1, 4)
+        np.add.at(counts, (rows[:, 0], rows[:, 1]), 1)
+        counts[rows[-1, 2], rows[-1, 3]] += 1
     target_map = np.sum(target, axis=1)
     target_actions = np.argmax(target, axis=1)
     visits = counts.sum(axis=1)

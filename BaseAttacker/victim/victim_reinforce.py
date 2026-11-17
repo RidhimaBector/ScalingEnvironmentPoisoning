@@ -10,6 +10,7 @@ from typing import Any, Dict
 
 import numpy as np
 from core.victim_algorithm import VictimAlgorithm
+from victim import fast_tabular
 from scipy.special import softmax
 
 from typing import TYPE_CHECKING
@@ -64,7 +65,24 @@ class VictimREINFORCE(VictimAlgorithm):
         self._trajectory_buffer.clear()
         return out
 
+
+    def _train_compiled(self, model, num_episodes: int) -> Dict[str, Any]:
+        """The same training as _run_episode, run by the compiled loop."""
+        returns, lengths, rows, last = fast_tabular.train_reinforce(
+            model.cdf, model.start, model.terminal, model.reward, model.max_steps,
+            num_episodes, self.H, self._transitions, self.alpha, self.discount_factor,
+            fast_tabular.new_seed())
+        self._trajectory_buffer.extend(fast_tabular.as_tuples(rows))
+        return {
+            'episode_rewards': returns.tolist(),
+            'episode_lengths': lengths.tolist(),
+            'transitions': fast_tabular.as_tuples(last),
+        }
+
     def train(self, env: VictimEnvironment, num_episodes: int) -> Dict[str, Any]:
+        model = fast_tabular.model_of(env)
+        if model is not None:
+            return self._train_compiled(model, num_episodes)
         stats: Dict[str, Any] = {
             'episode_rewards': [],
             'episode_lengths': [],
