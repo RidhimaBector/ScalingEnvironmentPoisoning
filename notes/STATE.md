@@ -98,6 +98,34 @@ Still running then: the 9 grid REINFORCE cells (about 800-1300 episodes done; th
 the 8 h limit unscored), ring-16 REINFORCE seed 0 (finishing), and the 9 lander DQN
 cells (110-260 of 1000 episodes; training stops at 13 h, then they are scored).
 
+### Final state of the sweep, `2026-11-17 04:20 MST` (cluster time)
+
+All three jobs have ended; nothing of this project is queued on fir. 68 of 81 cells
+have a score; 13 timed out unscored.
+
+| Cell | Seeds (poisoned of 20, baseline in brackets; target match without -> with attack) |
+|---|---|
+| ring 12, REINFORCE | 0, 1, 1 (baseline 2, 2, 2); 0.47 -> 0.45, 0.47, 0.52: no effect |
+| ring 16, REINFORCE | 0, 0, 0 (baseline 0); 0.39 -> 0.50, 0.44, 0.44. Seeds 1 and 2 were scored from checkpoints at 1019 and 2059 of 3000 episodes |
+| ring 16, SARSA seed 2 (rerun) | 20 |
+| lander 500, DQN | seeds 1, 2 scored at 512 and 487 of 1000 episodes: target match 0.39 -> 0.46, 0.33 -> 0.32; similarity 0.84 -> 0.68, 0.87 -> 0.63; victim return -103 -> -119, -94 -> -141. Seed 0 timed out |
+| lander 1000, DQN | seeds 0, 1 at 556 and 523 episodes: target match 0.55 -> 0.41, 0.51 -> 0.57; similarity 0.82 -> 0.67, 0.83 -> 0.71; victim return -106 -> -108, -86 -> -106. Seed 2 timed out |
+| lander 1500, DQN | seed 1 at 449 episodes: target match 0.47 -> 0.54; similarity 0.83 -> 0.72; victim return -92 -> -123. Seeds 0, 2 timed out |
+
+Read of the lander DQN cells: similarity to the target *falls* under attack in all 5
+scored runs (by 0.11 to 0.24) and the victim's return falls in all 5; target match
+moves both ways. The attack changes these victims but not towards the target. The
+victims are still untrained (returns near -100), so this is not a valid test either.
+
+Timed out unscored (13): the 9 grid REINFORCE cells (tasks 6-8, 15-17, 24-26 of
+`4423670`, 8 h limit) and 4 lander DQN cells (tasks 54, 65, 72, 74 of `4423671`, 15 h
+limit, reached during scoring). Their checkpoints are in the old checkout on fir and
+can be scored by hand with the command below.
+
+Totals by victim family, counting a seed as working at 11 or more of 20:
+grid 4x4 Q-learning/SARSA 5 of 6; grid 5x5 and 6x6 0 of 12; ring Q-learning/SARSA
+17 of 18 (the miss is 10/20); ring REINFORCE 0 of 9; lander 0 of 23 scored.
+
 Not finished when last checked (earlier note): grid 5x5 / 6x6 with Q-learning and SARSA (40-95%
 done); every REINFORCE cell (grid: ~300 of 6000-12000 episodes; ring: 20-95%); lander
 DQN (~50 of 1000 episodes). The grid/ring job has an 8 h limit and the default 21 h
