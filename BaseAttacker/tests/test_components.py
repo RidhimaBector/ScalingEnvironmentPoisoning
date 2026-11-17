@@ -74,7 +74,10 @@ def test_ddpg_base_is_added_and_saved(tmp_path):
 
 
 def test_online_autoencoder_learns_observed_traces():
+    import torch
     from ae.ae import AEObservationEncoder
+    torch.manual_seed(0)
+    np.random.seed(0)
     rng = np.random.default_rng(0)
     enc = AEObservationEncoder(n_states=8, context_dim=0, model_path="online",
                                n_actions=2, online_episodes=3, online_epochs=150)

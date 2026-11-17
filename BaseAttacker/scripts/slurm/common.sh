@@ -11,6 +11,7 @@
 #     TRAIN_TIMEOUT   training stops itself after this long so scoring still runs (default 21h)
 #     HF_PUBLISH=0    do not upload to the Hugging Face Hub (see publish.py)
 #     RESULTS_ROOT    where runs are written (default: results/ under BaseAttacker)
+#     SCORE_EPISODES  fresh victims a finished run is scored on (default 20)
 #     EXTRA_ARGS      extra main.py settings appended to every run, e.g. to smoke-test a
 #                     sweep: EXTRA_ARGS="max_episodes=100 experiment=smoke"
 #
@@ -33,6 +34,6 @@ train_and_score() {
   run_dir=$(python main.py print_run_dir with "$@" 2>/dev/null | tail -n 1)
   echo "run: $run_dir  settings: $*"
   timeout "${TRAIN_TIMEOUT:-21h}" python -u main.py with "$@"
-  python score_attack.py --run_dir "$run_dir" --episodes 20
+  python score_attack.py --run_dir "$run_dir" --episodes "${SCORE_EPISODES:-20}"
   python publish.py --run_dir "$run_dir" --log "logs/${SLURM_JOB_NAME:-run}_${SLURM_ARRAY_JOB_ID:-0}_${SLURM_ARRAY_TASK_ID:-0}.out"
 }

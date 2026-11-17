@@ -15,6 +15,11 @@ and ground truth at the final attack step is compared:
   similarity     similarity of the victim's behaviour embedding to the target's
                  (reward_mode="embedding" runs)
   victim_return  the victim's own mean episode return
+  state_gap      targets given as recorded trajectories: distance between the mean
+                 state the victim visited in the final step and the target's mean
+                 state, in units of the target's per-dimension spread (lower = closer)
+  action_gap     same targets: total-variation distance between how often the victim
+                 took each action and how often the target did (0 = same, 1 = disjoint)
 
 The run is rebuilt from the run_config.json that main.py wrote next to its checkpoints.
 
@@ -39,6 +44,27 @@ from builders import (
 )
 
 METRICS = ("greedy_accuracy", "path_match", "target_similarity", "victim_return")
+GAPS = ("state_gap", "action_gap")
+
+
+def trajectory_gaps(victim_results, recorded) -> dict:
+    """How far the victim's observed states and actions are from a recorded target."""
+    steps = [t for r in victim_results for t in r.get("trajectories", [])]
+    if not steps or not recorded:
+        return {}
+    states = np.stack([np.asarray(t[2], dtype=float).reshape(-1) for t in steps])
+    target_states = np.stack([np.asarray(t[2], dtype=float).reshape(-1) for t in recorded])
+    spread = target_states.std(axis=0) + 1e-8
+    state_gap = np.linalg.norm((states.mean(axis=0) - target_states.mean(axis=0)) / spread)
+    actions = np.array([int(t[3]) for t in steps])
+    target_actions = np.array([int(t[3]) for t in recorded])
+    n = int(max(actions.max(), target_actions.max())) + 1
+    freq = np.bincount(actions, minlength=n) / len(actions)
+    target_freq = np.bincount(target_actions, minlength=n) / len(target_actions)
+    return {
+        "state_gap": float(state_gap / np.sqrt(states.shape[1])),
+        "action_gap": float(0.5 * np.abs(freq - target_freq).sum()),
+    }
 
 
 def load_run(run_dir: str, checkpoint: str = "best_model", overrides=None):
@@ -83,8 +109,10 @@ def rollout(attack_env, translator, policy, steps: int) -> dict:
 def score(run_dir: str, checkpoint: str = "best_model", episodes: int = 20) -> dict:
     cfg, attack_env, translator, attacker, used = load_run(run_dir, checkpoint)
     zeros = np.zeros(attack_env.action_space.shape)
-    baseline = {k: [] for k in METRICS}
-    attacked = {k: [] for k in METRICS}
+    recorded = attack_env.victim_system.env.target_trajectories()
+    names = METRICS + (GAPS if recorded else ())
+    baseline = {k: [] for k in names}
+    attacked = {k: [] for k in names}
     for ep in range(episodes):
         for store, policy in (
             (baseline, lambda obs: zeros),
@@ -93,7 +121,9 @@ def score(run_dir: str, checkpoint: str = "best_model", episodes: int = 20) -> d
             np.random.seed(5000 + ep)  # same victim randomness for both conditions
             torch.manual_seed(5000 + ep)
             info = rollout(attack_env, translator, policy, cfg["max_timesteps"])
-            for k in METRICS:
+            if recorded:
+                info = {**info, **trajectory_gaps(info.get("victim_results", []), recorded)}
+            for k in names:
                 store[k].append(float(info.get(k, 0.0)))
     return {
         "run_dir": run_dir,
@@ -102,8 +132,8 @@ def score(run_dir: str, checkpoint: str = "best_model", episodes: int = 20) -> d
         "env": cfg["env"],
         "env_kwargs": cfg["env_kwargs"],
         "victim_algo": cfg["victim_algo"],
-        "baseline": {k: float(np.mean(baseline[k])) for k in METRICS},
-        "attacked": {k: float(np.mean(attacked[k])) for k in METRICS},
+        "baseline": {k: float(np.mean(baseline[k])) for k in names},
+        "attacked": {k: float(np.mean(attacked[k])) for k in names},
         "baseline_route_count": int(np.sum(baseline["path_match"])),
         "route_count": int(np.sum(attacked["path_match"])),
         "per_victim": {"baseline": baseline, "attacked": attacked},
@@ -127,6 +157,12 @@ def main():
         f" | route {out['baseline_route_count']}/{n} -> {out['route_count']}/{n}"
         f" | similarity {b['target_similarity']:.2f} -> {t['target_similarity']:.2f}"
         f" | victim_return {b['victim_return']:.1f} -> {t['victim_return']:.1f}"
+        + (
+            f" | state_gap {b['state_gap']:.2f} -> {t['state_gap']:.2f}"
+            f" | action_gap {b['action_gap']:.2f} -> {t['action_gap']:.2f}"
+            if "state_gap" in b
+            else ""
+        )
     )
 
 
