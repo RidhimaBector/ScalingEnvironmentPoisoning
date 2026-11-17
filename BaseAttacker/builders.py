@@ -127,6 +127,8 @@ def build_encoders(population: VictimSystem, cfg: Dict[str, Any]):
         inner = AEObservationEncoder.from_population(
             population,
             model_path=cfg["ae_model_path"],
+            online_episodes=cfg["ae_online_episodes"],
+            online_epochs=cfg["ae_online_epochs"],
             context_dim=context_dim,
             context_bounds=bounds,
             initial_context=initial_context,

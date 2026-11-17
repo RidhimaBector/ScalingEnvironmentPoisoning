@@ -43,7 +43,13 @@ DEFAULT_CONFIG = {
     #                      online (any victim; required for continuous states)
     #               "whitebox" reads the victim's policy table directly
     "encoder_mode": "ae",
-    "ae_model_path": None,  # None = ae/models/<default for this environment>
+    # ae_model_path: None = ae/models/<default for this environment>, pre-trained with
+    # ae/train_ae.py on simulated victims. "online" = no pre-training: the autoencoder
+    # is fitted during the run on the traces the attacker observes in its first
+    # ae_online_episodes attack episodes (exploration only), then frozen.
+    "ae_model_path": None,
+    "ae_online_episodes": 500,
+    "ae_online_epochs": 60,
     # obs_dynamics: what is appended to the behaviour embedding
     #   "actions" the running sum of the attacker's own perturbations (no read access
     #             to the environment)
@@ -86,4 +92,8 @@ DEFAULT_CONFIG = {
     "cem_elite": 4,  # best push episodes kept per update
     "cem_lr": 0.5,  # step towards the elite direction frequencies
     "cem_floor": -1.0,  # min probability per direction; < 0 = 0.25 / n_dims
+    # push_base: the attacker acts as (the push search's current best directions) +
+    # (the actor's correction), so what the search finds is never lost by the actor.
+    "push_base": False,
+    "push_base_conf": 0.5,  # a direction enters the base once its probability reaches this
 }

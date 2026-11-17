@@ -42,6 +42,9 @@ def run(tmp_path, **settings):
     dict(env="grid3d", victim_algo="qlearning", encoder_mode="whitebox", privacy_mode="full_whitebox"),
     dict(env="ring", victim_algo="qlearning"),
     dict(env="ring", victim_algo="sarsa", explore_push_prob=0.0),
+    dict(env="grid3d", victim_algo="qlearning", push_base=True, explore_push_prob=0.5),
+    dict(env="ring", victim_algo="sarsa", ae_model_path="online", ae_online_episodes=4,
+         ae_online_epochs=2, push_base=True),
     dict(env="lunarlander", victim_algo="dqn", encoder_mode="lstm", reward_mode="embedding",
          effort_weight=0.1, lstm_seq_len=20, lstm_memory_size=200),
 ], ids=lambda s: "-".join(str(v) for v in s.values()))

@@ -69,7 +69,10 @@ def train(
     """Run the attack training loop described in the module docstring."""
     max_episodes, max_timesteps = cfg["max_episodes"], cfg["max_timesteps"]
     model_dir, every = cfg["model_dir"], cfg["eval_freq_episode"]
-    warmup_episodes = attack_algo.warmup_episodes
+    # Exploration-only episodes: the learner's own warm-up, or longer if the behaviour
+    # encoder is fitted on the run's first episodes (ae_model_path="online").
+    encoder_warmup = obs_encoder.warmup_episodes
+    warmup_episodes = max(attack_algo.warmup_episodes, encoder_warmup)
     os.makedirs(model_dir, exist_ok=True)
 
     victim_env = attack_env.victim_system.env
@@ -127,6 +130,16 @@ def train(
 
         if is_push:
             push.end_episode(episode_reward)
+        if cfg["push_base"]:
+            attack_algo.set_base(push.base(cfg["push_base_conf"]))
+
+        if encoder_warmup and episode + 1 == warmup_episodes:
+            accuracy = obs_encoder.fit()
+            attack_algo.clear_buffer()  # those observations used the unfitted encoder
+            print(
+                f"behaviour encoder fitted on the first {warmup_episodes} episodes: "
+                f"held-out reconstruction accuracy {accuracy:.3f}"
+            )
 
         if cfg["bc_weight"] > 0 and (
             len(elites) < cfg["elite_k"] or episode_reward > elites[-1][0]

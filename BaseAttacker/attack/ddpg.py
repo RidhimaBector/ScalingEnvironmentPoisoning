@@ -134,6 +134,9 @@ class DDPG(AttackAlgorithm):
 
         self.bc_weight = bc_weight
         self._elite_s = self._elite_a = None
+        # Base action from the push search; the actor outputs a correction to it.
+        # All zeros (the default) gives plain DDPG.
+        self._base = np.zeros(nb_actions, dtype=np.float32)
 
         self._buffer = ReplayBuffer(state_dim=nb_states, action_dim=nb_actions)
         self._ou_noise = OrnsteinUhlenbeckProcess(
@@ -155,7 +158,18 @@ class DDPG(AttackAlgorithm):
     def act_greedy(self, state: np.ndarray) -> np.ndarray:
         """The policy's action without exploration noise."""
         with torch.no_grad():
-            return self.actor(_tensor(state).reshape(1, -1)).cpu().numpy().squeeze(0)
+            action = self._policy(self.actor, _tensor(state).reshape(1, -1))
+            return action.cpu().numpy().squeeze(0)
+
+    def _policy(self, actor: nn.Module, state: torch.Tensor) -> torch.Tensor:
+        """base + the actor's correction, kept inside the action range."""
+        return (actor(state) + _tensor(self._base)).clamp(-1.0, 1.0)
+
+    def set_base(self, base: np.ndarray) -> None:
+        self._base = np.asarray(base, dtype=np.float32).reshape(-1)
+
+    def clear_buffer(self) -> None:
+        self._buffer = ReplayBuffer(state_dim=self.nb_states, action_dim=self.nb_actions)
 
     def act(self, state: np.ndarray) -> np.ndarray:
         """The policy's action with exploration noise (training)."""
@@ -196,7 +210,7 @@ class DDPG(AttackAlgorithm):
             self._n_updates += 1
 
             with torch.no_grad():
-                next_action = self.actor_target(next_state)
+                next_action = self._policy(self.actor_target, next_state)
                 if self.td3:
                     smoothing = (
                         torch.randn_like(next_action) * self.policy_noise
@@ -224,7 +238,7 @@ class DDPG(AttackAlgorithm):
                     critic_loss_sum += loss.item()
 
             if self._n_updates % self.policy_freq == 0:
-                q = self.critic(state, self.actor(state)).mean()
+                q = self.critic(state, self._policy(self.actor, state)).mean()
                 actor_loss = -q
                 if self.bc_weight > 0 and self._elite_s is not None:
                     idx = np.random.randint(0, len(self._elite_s), size=self.batch_size)
@@ -259,6 +273,7 @@ class DDPG(AttackAlgorithm):
         torch.save(self.actor_optim.state_dict(), path + "_actor_optimizer")
         if self.td3:
             torch.save(self.critic2.state_dict(), path + "_critic2")
+        np.save(path + "_base.npy", self._base)
 
     def load(self, path: str) -> None:
         self.critic.load_state_dict(torch.load(path + "_critic", map_location=device))
@@ -271,6 +286,8 @@ class DDPG(AttackAlgorithm):
             torch.load(path + "_actor_optimizer", map_location=device)
         )
         self.actor_target = copy.deepcopy(self.actor)
+        if os.path.exists(path + "_base.npy"):  # absent in checkpoints made before push_base
+            self._base = np.load(path + "_base.npy").astype(np.float32)
         if self.td3 and os.path.exists(path + "_critic2"):
             self.critic2.load_state_dict(
                 torch.load(path + "_critic2", map_location=device)

@@ -220,6 +220,10 @@ python -m ae.train_ae --env mygame                    # discrete states: train i
 python main.py with env=mygame                        # attack it
 ```
 
+Pre-training simulates victims in your environment. To avoid that, fit the autoencoder
+during the attack on the traces the attacker itself observes (its first 500 episodes
+are then exploration only): `python main.py with env=mygame ae_model_path=online`.
+
 For vector-valued states skip the autoencoder and use the trajectory encoder:
 `python main.py with env=mygame victim_algo=dqn encoder_mode=lstm reward_mode=embedding`.
 
@@ -299,6 +303,10 @@ BaseAttacker/
   states use the trajectory encoder and the embedding reward.
 - An autoencoder is trained **per environment and size**. Those for the shipped
   environments are in `ae/models/`.
+  `ae_model_path=online` needs none.
+- `push_base=True` makes the attacker act as the push search's best directions plus
+  the actor's correction. Both options are off by default; `scripts/slurm/sweep_push_base.sh`
+  tests them.
 - The PPO attacker and the white-box encoder run but were not part of the reported
   experiments.
 

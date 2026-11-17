@@ -116,5 +116,14 @@ class ObservationEncoder:
     def train_encoder(self) -> None:
         self._inner.train_encoder()
 
+    @property
+    def warmup_episodes(self) -> int:
+        """Exploration-only attack episodes the inner encoder needs before fit()."""
+        return int(getattr(self._inner, 'warmup_episodes', 0))
+
+    def fit(self) -> float:
+        """Fit and freeze an encoder that learns from the run's first episodes."""
+        return float(self._inner.fit())
+
     def compute_reward(self, victim_data: List[Dict], target) -> float:
         return self._inner.compute_reward(victim_data, target)

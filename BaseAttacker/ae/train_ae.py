@@ -22,7 +22,7 @@ import torch
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from ae.ae import AutoEncoder, default_ae_name, device
+from ae.ae import AutoEncoder, batch_tensors, default_ae_name, device, recon_accuracy
 from registry import ENV_MAP, VICTIM_ALGO_MAP
 
 
@@ -65,22 +65,6 @@ def collect(env, victim_class, n_attack_episodes: int, steps: int, victim_eps: i
             victim.train(env, victim_eps)
             out.append(trace_to_actions(victim.get_behavior_trace(), env.nA))
     return np.asarray(out, dtype=np.int64)
-
-
-def batch_tensors(actions: np.ndarray):
-    n, nS = actions.shape
-    states = np.tile(np.arange(nS, dtype=np.float32)[None, :, None], (n, 1, 1))
-    acts = actions.astype(np.float32)[:, :, None]
-    x = torch.as_tensor(np.concatenate([states, acts], axis=2), device=device)
-    return x, torch.as_tensor(states, device=device), torch.as_tensor(actions, device=device).reshape(-1)
-
-
-def recon_accuracy(ae: AutoEncoder, actions: np.ndarray) -> float:
-    ae.Model.eval()
-    with torch.no_grad():
-        x, states, tgt = batch_tensors(actions)
-        pred = ae.Model(x, actions.shape[1], states).argmax(dim=1)
-    return float((pred == tgt).float().mean())
 
 
 def main():

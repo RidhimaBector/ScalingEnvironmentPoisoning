@@ -65,6 +65,14 @@ class PushExploration:
             1.0,
         ).reshape(self.shape)
 
+    def base(self, confidence: float = 0.5) -> np.ndarray:
+        """The search's current best push: per dimension, the most likely direction
+        (-1, 0 or +1) if its probability is at least `confidence`, else 0 (hold).
+        Zero everywhere until the search has made up its mind about a dimension."""
+        best = self.probs.argmax(axis=1)
+        sure = self.probs.max(axis=1) >= confidence
+        return np.where(sure, best.astype(float) - 1.0, 0.0).reshape(self.shape)
+
     def end_episode(self, episode_reward: float) -> None:
         """Feed back the reward of a push episode; update the probabilities when due."""
         if self._current is None or not self.adaptive:

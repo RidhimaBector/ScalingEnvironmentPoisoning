@@ -101,3 +101,11 @@ class AttackAlgorithm(ABC):
     def set_elite(self, states: np.ndarray, actions: np.ndarray) -> None:
         """Receive the transitions of the best episodes so far (imitation term).
         Only called when bc_weight > 0; algorithms without it can ignore this."""
+
+    def set_base(self, base: np.ndarray) -> None:
+        """Receive a base action found by the push search (push_base=True). An
+        algorithm that supports it outputs base + its own correction; others ignore it."""
+
+    def clear_buffer(self) -> None:
+        """Forget stored transitions. Called once when an encoder trained online is
+        frozen, because earlier observations were made with the untrained encoder."""

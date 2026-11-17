@@ -50,6 +50,46 @@ def test_push_exploration_learns_the_rewarded_direction():
     assert np.allclose(push.probs.sum(axis=1), 1.0)
 
 
+def test_push_base_follows_the_search():
+    push = PushExploration((3,), prob=1.0)
+    assert (push.base() == 0).all(), "undecided search gives no base"
+    push.probs = np.array([[0.8, 0.1, 0.1], [0.1, 0.1, 0.8], [0.4, 0.3, 0.3]])
+    assert push.base(0.5).tolist() == [-1.0, 1.0, 0.0]
+
+
+def test_ddpg_base_is_added_and_saved(tmp_path):
+    from attack.ddpg import DDPG
+    algo = DDPG(nb_states=4, nb_actions=3, max_action=1.0)
+    algo.eval()
+    state = np.zeros(4, dtype=np.float32)
+    plain = algo.act_greedy(state)
+    algo.set_base(np.array([1.0, -1.0, 0.0]))
+    with_base = algo.act_greedy(state)
+    assert np.allclose(with_base, np.clip(plain + [1.0, -1.0, 0.0], -1, 1), atol=1e-6)
+    algo.save(str(tmp_path / "m"))
+    other = DDPG(nb_states=4, nb_actions=3, max_action=1.0)
+    other.load(str(tmp_path / "m"))
+    other.eval()
+    assert np.allclose(other.act_greedy(state), with_base, atol=1e-6)
+
+
+def test_online_autoencoder_learns_observed_traces():
+    from ae.ae import AEObservationEncoder
+    rng = np.random.default_rng(0)
+    enc = AEObservationEncoder(n_states=8, context_dim=0, model_path="online",
+                               n_actions=2, online_episodes=3, online_epochs=150)
+    assert enc.warmup_episodes == 3
+    patterns = rng.integers(0, 2, size=(4, 8))          # four behaviours to tell apart
+    for _ in range(2000):
+        trace = np.column_stack([np.arange(8), patterns[rng.integers(4)]])
+        enc.encode([{"behavior_trace": trace}])
+    accuracy = enc.fit()
+    assert enc.warmup_episodes == 0, "frozen after the fit"
+    assert accuracy > 0.9
+    z = [enc.encode([{"behavior_trace": np.column_stack([np.arange(8), p])}]) for p in patterns]
+    assert not np.allclose(z[0], z[1]), "different behaviours get different embeddings"
+
+
 def test_config_helpers():
     assert parse_kv("n_states:12,gamma:0.5,name:x") == {"n_states": 12, "gamma": 0.5, "name": "x"}
     cfg = resolve_config({"env": "ring", "env_args": "n_states:12", "not_a_setting": 1})
