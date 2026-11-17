@@ -200,6 +200,34 @@ not separated between configs yet.
 Lander: smoke run `7712063` (DQN, K=60, I=10, 4 attack episodes) was still running
 after 35 minutes; `scripts/slurm/verify_lander.sh` is not submitted yet.
 
+**Result of job `7712563`** (all 8 completed, about 1 h each; 20 fresh victims per
+run; target match and exact-route count are no attack -> attack):
+
+| Config | Seed | best_avg_reward | Target match | Exact route | Online AE accuracy |
+|---|---|---|---|---|---|
+| plain | 0 | 13.21 | 0.49 -> 0.93 | 0/20 -> 1/20 | |
+| plain | 1 | 12.11 | 0.49 -> 0.90 | 0/20 -> 0/20 | |
+| base | 0 | 10.30 | 0.49 -> 0.77 | 0/20 -> 0/20 | |
+| base | 1 | 12.87 | 0.49 -> 0.96 | 0/20 -> 0/20 | |
+| online-ae | 0 | 9.56 | 0.49 -> 0.59 | 0/20 -> 0/20 | 0.577 |
+| online-ae | 1 | 11.74 | 0.49 -> 0.89 | 0/20 -> 0/20 | 0.580 |
+| base-online-ae | 0 | 10.93 | 0.49 -> 0.69 | 0/20 -> 0/20 | 0.577 |
+| base-online-ae | 1 | 12.57 | 0.49 -> 0.93 | 0/20 -> 0/20 | 0.582 |
+
+Reading: neither change passes the criterion (11 of 20 victims on the exact route) on
+6x6; no config does, including `plain`. Mean target match: plain 0.92, base 0.87,
+online-ae 0.74, both 0.81 (2 seeds each, so differences between configs are not
+established). The online autoencoder matches the pre-trained one in reconstruction
+(0.58 vs 0.59). Open: target match of 0.90-0.96 with 0-1 of 20 exact routes means the
+victims take the target action in most states but still miss at least one state on
+the route; the exact-route measure, not the match, is what fails here.
+The paper's method document was not updated (condition "if these work" not met).
+
+**Lander smoke `7712063`**: 4 attack episodes (K=60, I=10, 3 DQN victims) took
+57 min 58 s of training, about 14.5 min per attack episode. The 150-episode
+verification in `verify_lander.sh` would need about 36 h per run, over the 24 h limit;
+not submitted. The lander needs a speed-up or a smaller budget first.
+
 ### Diagnosis of the sweep from its training logs (`2026-11-17`)
 
 Means over the last 400 logged episodes of each run (jobs `4423670`), split into the
