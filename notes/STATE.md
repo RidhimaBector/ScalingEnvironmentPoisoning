@@ -303,6 +303,16 @@ diagnosis with `scripts/diagnose_grid_route.py`):
   seed 0: 1/20 -> 0/20.
 - Test submitted: `sweep_route_reward.sh` tasks 0-7, experiment `route-reward-v2`:
   6x6, seeds 0-3, `route` and `route-hold` (hold_threshold=1.0).
+- **Result (job `7729450`, 6 of 8 scored; no-attack baseline 0/20, target match 0.49):
+  no run passes.** Exact route at the last step / target match / best average episode
+  return in training (max 15):
+  - `route` seed 2: 0/20, 0.54, 3.14; seed 3: 0/20, 0.59, 2.98; seeds 0 and 1 still
+    training after 1 h 56 min (at episode ~7,150 of 12,000, best return 3.08 and 2.75).
+  - `route-hold` seed 0: 0/20, 0.52, 4.00; seed 1: 2/20, 0.83, 10.25; seed 2: 0/20,
+    0.72, 3.29; seed 3: 0/20, 0.92, 5.92.
+  - Five of six attackers never averaged more than 6 of 15 in training: with the
+    stricter reward they mostly did not learn to get victims along the route at all.
+    Round 14 (first version of the reward, no hold) reached target match 0.87 and 1.00.
 
 **Round 12 result so far** (job `7710630`, old reward, slow code, 13 of 16 scored;
 exact route per seed): 5x5 env view 0, 16, 18, 0; 5x5 own-actions 13, 0, 5, 0;
