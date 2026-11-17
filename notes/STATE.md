@@ -152,6 +152,33 @@ grep -h "^task\|^SCORE" logs/fir_4423670_*.out logs/fir_4429537_*.out logs/fir_4
 # cells without a SCORE line: python score_attack.py --run_dir results/fir_s27_<cell>_s<seed> --episodes 20
 ```
 
+### Diagnosis of the sweep from its training logs (`2026-11-17`)
+
+Means over the last 400 logged episodes of each run (jobs `4423670`), split into the
+actor's own episodes and push episodes. "Return" is the attack episode return (max 15).
+
+| Run | Actor return | Push return | Push true target match | Push exact route | Best 50-episode actor average |
+|---|---|---|---|---|---|
+| 4x4 Q-learning seed 2 | 12.99 | 12.95 | 0.88 | 0.38 | 13.66 |
+| 5x5 Q-learning seed 1 | 6.63 | 12.82 | 0.95 | 0.44 | 11.82 |
+| 6x6 Q-learning seed 1 | 7.30 | 12.59 | 0.88 | 0.00 | 10.06 |
+
+- On 5x5 and 6x6 the push search finds good perturbations, but the actor ends training
+  at the no-attack level (about 7) after an early peak (6x6 seed 1 reached 10.0 by
+  episode ~1200 and never improved). The bottleneck is the actor-critic not learning
+  and keeping what the search found, not exploration. On 4x4 the actor matches the search.
+- Observed reward and true target match agree within 0.05 in every run checked, so the
+  behaviour trace is a faithful signal.
+- REINFORCE victims: actor return 5.5 (grid) and 9.4 (ring), at or below the no-attack
+  level; un-attacked ring-8 victims take the target direction 6/20 times, i.e. they
+  have not settled on either route. Like the lander, the victim is not a competent
+  learner within the budget, so the cell does not test the attack.
+- The best hand-set map gives 0.65 exact route on 6x6 (belief 5 below), so 80% on 6x6
+  is above the best known ceiling under the current budget.
+- Lander settings differ from the Spiking Pitch Black code (K=60, I=15, TD3,
+  failure levels in the observation, 1000-step trajectories, 300-episode encoder
+  warm-up); ours used K=20, I=10, DDPG, own-actions observation, 200-step windows.
+
 ## 5. What we believe, and how sure
 
 1. **Seed variance dominates.** Outcomes are bimodal: a seed fails outright or poisons
