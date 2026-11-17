@@ -77,7 +77,28 @@ Finished (poisoned of 20, per seed; baseline was 0/20 in every case):
 | grid 5x5, Q-learning | 0 (target match 0.88), two seeds still running |
 | lander, VPG and A2C (18 runs) | no effect: target match and similarity unchanged within noise; victim return -108 to -200 |
 
-Not finished when last checked: grid 5x5 / 6x6 with Q-learning and SARSA (40-95%
+Added at `2026-11-16 17:00 MST` (cluster time), after the Hugging Face snapshot:
+
+| Cell | Seeds (poisoned of 20; target match without -> with attack) |
+|---|---|
+| grid 5x5, Q-learning | 0, 0, 0 (0.48 -> 0.88, 0.83, 0.84) |
+| grid 5x5, SARSA | 0, 0, 0 (0.45 -> 0.92, 0.76, 0.64) |
+| grid 6x6, Q-learning | 0, 0, 0 (0.50 -> 0.64, 0.61, 0.54) |
+| grid 6x6, SARSA | 0, 0, 0 (0.47 -> 0.65, 0.71, 0.73) |
+| ring 8, REINFORCE | 6, 7, 5, against a baseline of 6, 6, 6: no effect |
+
+**The larger grids regressed.** With the tuned push setting but the own-actions
+observation (`obs_dynamics=actions`), 0 of 12 runs reached the exact route on 5x5 and
+6x6; the same push setting with `obs_dynamics=env` gave 2/4 and 2/4 in round 9. Either
+the attacker needs the absolute dynamics on larger grids, or this is seeds; it has not
+been isolated. Test: rerun the round-9 batch-32 setting on 6x6 with both observations
+and the same seeds.
+
+Still running then: the 9 grid REINFORCE cells (about 800-1300 episodes done; they hit
+the 8 h limit unscored), ring-16 REINFORCE seed 0 (finishing), and the 9 lander DQN
+cells (110-260 of 1000 episodes; training stops at 13 h, then they are scored).
+
+Not finished when last checked (earlier note): grid 5x5 / 6x6 with Q-learning and SARSA (40-95%
 done); every REINFORCE cell (grid: ~300 of 6000-12000 episodes; ring: 20-95%); lander
 DQN (~50 of 1000 episodes). The grid/ring job has an 8 h limit and the default 21 h
 training timeout, so **unfinished REINFORCE cells are killed before scoring**: score
@@ -138,7 +159,8 @@ grep -h "^task\|^SCORE" logs/fir_4423670_*.out logs/fir_4429537_*.out logs/fir_4
    averaging over repeats, curricula from smaller grids, a reward that sees whole-route
    completion.
 4. **REINFORCE cells**: cap victim episode length or drop them from the grid.
-5. **5x5**: no setting is clearly best (2/4 at most); more seeds needed.
+5. **5x5 and 6x6 with the own-actions observation: 0/12** in the sweep (section 4).
+   Isolate observation versus seeds before anything else on larger grids.
 6. **Refresh the Hugging Face snapshot** when the remaining sweep cells are scored (section 8).
 7. **LLM attacker** idea: `notes/llm_attacker_idea.md` (not built).
 
