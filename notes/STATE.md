@@ -321,6 +321,17 @@ diagnosis with `scripts/diagnose_grid_route.py`):
     on route per step peaks at 0.70 (step 6) and falls to 0.10 by step 15, so the
     hold did not keep the route there.
 
+### Round 16: hold trigger separate from the reward, `2026-11-17` (commit `c425f30`)
+
+- `reward_mode=route` ignores failed moves again (the round-14 reward, which learned).
+  The hold uses its own signal: the route measure with `stop_when_stuck=True`, mean
+  over victims, whatever the reward mode (`hold_signal` in the step info).
+- Check on the saved round-14 attackers with this code, hold at 1.0 (20 victims, exact
+  route at the last step): seed 1 20/20, seed 0 0/20 (10/20 at some step). Same as the
+  round-15 check, as expected: those attackers were trained without the hold.
+- Test submitted: smoke `7734638`, then `sweep_route_reward.sh` tasks 0-7, experiment
+  `route-reward-v3` (6x6, seeds 0-3, `route` and `route-hold`).
+
 **Round 12 result so far** (job `7710630`, old reward, slow code, 13 of 16 scored;
 exact route per seed): 5x5 env view 0, 16, 18, 0; 5x5 own-actions 13, 0, 5, 0;
 6x6 env view 4, 0, 20, 0; 6x6 own-actions 0 and three still running after 6 h.
