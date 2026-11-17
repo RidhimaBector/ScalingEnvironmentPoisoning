@@ -313,6 +313,13 @@ diagnosis with `scripts/diagnose_grid_route.py`):
   - Five of six attackers never averaged more than 6 of 15 in training: with the
     stricter reward they mostly did not learn to get victims along the route at all.
     Round 14 (first version of the reward, no hold) reached target match 0.87 and 1.00.
+  - `scripts/diagnose_grid_route.py` on the 6 scored runs (20 victims each): 4 runs
+    have no victim on the exact route at any attack step (`route` seeds 2, 3;
+    `route-hold` seeds 0, 2), with 4 to 7 wrong route actions per victim on average
+    (round 14 `route` seed 1: 19/20 victims had none). `route-hold` seed 3: 8/20 on
+    route at some step, 0 at the last. `route-hold` seed 1: 18/20 at some step, share
+    on route per step peaks at 0.70 (step 6) and falls to 0.10 by step 15, so the
+    hold did not keep the route there.
 
 **Round 12 result so far** (job `7710630`, old reward, slow code, 13 of 16 scored;
 exact route per seed): 5x5 env view 0, 16, 18, 0; 5x5 own-actions 13, 0, 5, 0;
