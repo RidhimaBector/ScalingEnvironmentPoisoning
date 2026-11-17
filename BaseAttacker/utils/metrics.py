@@ -199,14 +199,17 @@ def greedy_path(T: np.ndarray, greedy_actions: np.ndarray, start: int, goal: int
     return path
 
 
-def route_prefix_from_trajectories(trajectories, target: np.ndarray, recent: float = 0.5) -> float:
+def route_prefix_from_trajectories(
+    trajectories, target: np.ndarray, recent: float = 0.5, stop_when_stuck: bool = False
+) -> float:
     """Blackbox-safe: how far the victim follows the target from where its episodes start.
 
     Uses only observed (pre_s, pre_a, s, a) tuples, the most recent `recent` share of
     them. Starting from the first state the victim was seen in, walk forward while the
     victim's most frequent action in the current state is the target action, moving to
-    the state it most often reached next with that action; the walk also ends where
-    that action most often leaves the victim in place. Returns the number of
+    the state it most often reached next with that action (failed moves that leave it
+    in place are ignored). With `stop_when_stuck`, the walk instead ends where that
+    action most often leaves the victim in place. Returns the number of
     distinct target states passed this way, divided by the number of target states:
     1.0 means the victim's usual behaviour follows the target from start to end, 0.0
     means it already deviates in its starting state.
@@ -230,7 +233,9 @@ def route_prefix_from_trajectories(trajectories, target: np.ndarray, recent: flo
         if int(np.argmax(actions[state])) != target_actions[state]:
             break
         seen.add(state)
-        onward = moves[state, target_actions[state]]
+        onward = moves[state, target_actions[state]].copy()
+        if not stop_when_stuck:
+            onward[state] = 0  # a failed move (staying put) is not a step along the route
         if onward.sum() == 0:
             break
         nxt = int(np.argmax(onward))

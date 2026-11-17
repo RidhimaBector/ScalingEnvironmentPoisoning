@@ -43,9 +43,10 @@ class AttackEnvironment(Env):
             "actions" the running sum of the perturbations it has sent,
             "env" the environment's dynamics vector, "none" nothing.
         effort_weight: weight of the attack-size penalty in reward_mode="embedding".
-        hold_threshold: if set, the attacker stops perturbing while its own reward
-            (observed behaviour only) is at or above this value: the step's perturbation
-            is replaced by zeros, and the attack resumes if the reward falls below it.
+        hold_threshold: if set, the attacker stops perturbing while the hold signal
+            (observed behaviour only: the route measure that also ends where the victim
+            is stuck) is at or above this value: the step's perturbation is replaced by
+            zeros, and the attack resumes if the signal falls below it.
     """
 
     def __init__(
@@ -77,7 +78,7 @@ class AttackEnvironment(Env):
         self._obs_dynamics = obs_dynamics
         self._effort_weight = effort_weight
         self._hold_threshold = hold_threshold
-        self._last_reward = None  # reward of the previous step of this episode
+        self._last_hold_signal = None  # hold signal of the previous step of this episode
         self._target = victim_population.target  # policy table, or None
         self._target_states_actions = None  # lazily loaded recorded target
 
@@ -97,7 +98,7 @@ class AttackEnvironment(Env):
         if seed is not None:
             self._victims.seed(seed)
         self._step_count = 0
-        self._last_reward = None
+        self._last_hold_signal = None
         self._sent = np.zeros(self.action_space.shape)
         self._victims.reset()
         self._encoder.reset_episode()
@@ -107,8 +108,8 @@ class AttackEnvironment(Env):
         self._step_count += 1
         held = (
             self._hold_threshold is not None
-            and self._last_reward is not None
-            and self._last_reward >= self._hold_threshold - 1e-9
+            and self._last_hold_signal is not None
+            and self._last_hold_signal >= self._hold_threshold - 1e-9
         )
         if held:  # target behaviour observed: leave the environment as it is
             action = np.zeros(self.action_space.shape)
@@ -122,7 +123,7 @@ class AttackEnvironment(Env):
         results = self._victims.run_experiments(self._victim_train_episodes)
         obs = self._encoder.encode(results, self._context())
         reward, parts = self._reward(results)
-        self._last_reward = reward
+        self._last_hold_signal = parts["hold_signal"]
 
         info = {
             "step": self._step_count,
@@ -154,6 +155,7 @@ class AttackEnvironment(Env):
     def _reward(self, results) -> Tuple[float, Dict[str, float]]:
         """Reward from observed behaviour only, plus its components for logging."""
         trace = traj = route = similarity = 0.0
+        hold_signal = None
         if self._target is not None:
             trace = self._encoder.compute_reward(results, self._target)
             traj = float(
@@ -176,6 +178,20 @@ class AttackEnvironment(Env):
                     ]
                 )
             )
+            if self._hold_threshold is not None:
+                # Stricter than the reward: the walk also ends where the victim is stuck
+                hold_signal = float(
+                    np.mean(
+                        [
+                            route_prefix_from_trajectories(
+                                r.get("trajectories", []),
+                                self._target,
+                                stop_when_stuck=True,
+                            )
+                            for r in results
+                        ]
+                    )
+                )
         if self._reward_mode == "embedding":
             similarity = self._encoder.target_similarity()
             span = np.maximum(
@@ -202,6 +218,7 @@ class AttackEnvironment(Env):
             "trace_accuracy": trace,
             "traj_accuracy": traj,
             "route_prefix": route,
+            "hold_signal": hold_signal,
             "target_similarity": similarity,
         }
 

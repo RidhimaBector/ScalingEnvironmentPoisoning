@@ -180,7 +180,9 @@ def test_route_prefix_counts_target_states_until_first_deviation():
     assert route_prefix_from_trajectories(follows, target) == 1.0
     # the target action usually fails in state 1: the walk ends there (states 0, 1 count)
     stuck = [(0, 1, 1, 1), (1, 1, 1, 1), (1, 1, 1, 1), (1, 1, 2, 1)] * 5
-    assert abs(route_prefix_from_trajectories(stuck, target) - 2 / 3) < 1e-9
+    assert route_prefix_from_trajectories(stuck, target) == 1.0  # ignored by default
+    strict = route_prefix_from_trajectories(stuck, target, stop_when_stuck=True)
+    assert abs(strict - 2 / 3) < 1e-9
     # an occasional failed move does not end it
     slips = [(0, 1, 1, 1), (1, 1, 1, 1), (1, 1, 2, 1), (0, 1, 1, 1), (1, 1, 2, 1)] * 5
     assert route_prefix_from_trajectories(slips, target) == 1.0

@@ -72,9 +72,11 @@ DEFAULT_CONFIG = {
     #               minus effort_weight x attack size (targets given as trajectories)
     "reward_mode": "trace",
     "effort_weight": 0.0,
-    # Stop perturbing while the attacker's own reward is at or above this value, and
-    # resume if it falls below (None = never hold). With reward_mode="route", 1.0 means
-    # "the victim was seen following the target from start to end".
+    # Stop perturbing while the hold signal is at or above this value, and resume if it
+    # falls below (None = never hold). The hold signal is the "route" measure with one
+    # more condition (the walk also ends where the target action usually leaves the
+    # victim in place), whatever reward_mode is: 1.0 means "every victim was seen
+    # following the target from start to end without getting stuck".
     "hold_threshold": None,
     # --- attacker learner ---
     "attack_algo": "ddpg",  # ddpg | ppo
