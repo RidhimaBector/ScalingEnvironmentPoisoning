@@ -174,6 +174,32 @@ and the 3x3x3 sweep (4x4). Smoke run `7711585` (90 episodes) passed; with only 3
 episodes of traces the online fit reached 0.53 reconstruction (pre-trained 5x5: 0.66).
 Collect with: `grep -h "^run:\|^SCORE\|fitted" logs/pushbase_7711713_*.out`.
 
+### Speed-up and rerun of the 6x6 check, `2026-11-17 07:20 EST` (cluster time)
+
+Commit `a404450`: tabular victims train in numba-compiled loops
+(`victim/fast_tabular.py`) when the environment reports a transition table
+(`tabular_model()`, implemented for grid and ring). Same update rules and sampling
+distributions; the Python loops remain the reference (`ENVPOIS_NO_JIT=1`). Checked:
+with 300 victims per path, ring-8 Q-learning episode length is 5.80 (Python) vs 5.79
+(compiled); tests compare the two paths. Profile before: 88% of a 6x6 run was the
+victim loop. Measured on the laptop, seconds per attack episode before -> after:
+6x6 Q-learning 0.46 -> 0.13 (3.6x), 4x4 SARSA 0.34 -> 0.10 (3.3x), ring-8 REINFORCE
+2.93 -> 0.14 (21x), 4x4 REINFORCE 15.3 -> 0.42 (37x). On killarney 6x6 went from
+about 1.3 to about 0.27 s per episode. What is left is the attacker's own 15 gradient
+steps per episode (about 5 ms each, spread over many small tensor operations; more
+threads or a GPU do not help at this network size). The lander is not sped up.
+numba is installed in the killarney venv (0.65.1); not yet on fir.
+
+Round 13 was cut down at the user's request ("don't need a full sweep until this
+works"): job `7711713` cancelled. Replacement job `7712563` (`pushbase-fast`), tasks
+32, 33, 36, 37, 40, 41, 44, 45 of `sweep_push_base.sh`: 6x6, seeds 0-1, configs
+`plain`, `base`, `online-ae`, `base-online-ae`, 12,000 episodes, about an hour each.
+Interim read of the cancelled runs at ~1,500 episodes: the online autoencoder's
+held-out reconstruction was 0.58 on all four runs (pre-trained 6x6: 0.59); returns had
+not separated between configs yet.
+Lander: smoke run `7712063` (DQN, K=60, I=10, 4 attack episodes) was still running
+after 35 minutes; `scripts/slurm/verify_lander.sh` is not submitted yet.
+
 ### Diagnosis of the sweep from its training logs (`2026-11-17`)
 
 Means over the last 400 logged episodes of each run (jobs `4423670`), split into the
