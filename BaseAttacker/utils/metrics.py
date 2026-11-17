@@ -197,3 +197,41 @@ def greedy_path(T: np.ndarray, greedy_actions: np.ndarray, start: int, goal: int
         if s == goal:
             break
     return path
+
+
+def route_prefix_from_trajectories(trajectories, target: np.ndarray, recent: float = 0.5) -> float:
+    """Blackbox-safe: how far the victim follows the target from where its episodes start.
+
+    Uses only observed (pre_s, pre_a, s, a) tuples, the most recent `recent` share of
+    them. Starting from the first state the victim was seen in, walk forward while the
+    victim's most frequent action in the current state is the target action, moving to
+    the state it most often reached next with that action. Returns the number of
+    distinct target states passed this way, divided by the number of target states:
+    1.0 means the victim's usual behaviour follows the target from start to end, 0.0
+    means it already deviates in its starting state.
+    """
+    if not len(trajectories):
+        return 0.0
+    nS, nA = target.shape
+    all_rows = np.asarray(trajectories, dtype=np.int64).reshape(-1, 4)
+    start = int(all_rows[0, 0])
+    rows = all_rows[int(len(all_rows) * (1.0 - recent)):]
+    actions = np.zeros((nS, nA))
+    np.add.at(actions, (rows[:, 0], rows[:, 1]), 1)
+    np.add.at(actions, (rows[:, 2], rows[:, 3]), 1)
+    moves = np.zeros((nS, nA, nS))
+    np.add.at(moves, (rows[:, 0], rows[:, 1], rows[:, 2]), 1)
+    on_target = np.sum(target, axis=1) > 0
+    target_actions = np.argmax(target, axis=1)
+
+    state, seen = start, set()
+    while state not in seen and on_target[state] and actions[state].sum() > 0:
+        if int(np.argmax(actions[state])) != target_actions[state]:
+            break
+        seen.add(state)
+        onward = moves[state, target_actions[state]].copy()
+        onward[state] = 0  # a failed move (staying put) is not a step along the route
+        if onward.sum() == 0:
+            break
+        state = int(np.argmax(onward))
+    return float(len(seen) / max(np.sum(on_target), 1))

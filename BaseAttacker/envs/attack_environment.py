@@ -20,10 +20,14 @@ from gymnasium import Env, spaces
 
 from agent.attack_dispatch import AttackDispatch
 from agent.victim_system import VictimSystem
-from utils.metrics import accuracy_from_trajectories, target_action_accuracy
+from utils.metrics import (
+    accuracy_from_trajectories,
+    route_prefix_from_trajectories,
+    target_action_accuracy,
+)
 
 OBS_DYNAMICS = ("actions", "env", "none")
-REWARD_MODES = ("trace", "traj", "mix", "embedding")
+REWARD_MODES = ("trace", "traj", "mix", "route", "route_mix", "embedding")
 
 
 class AttackEnvironment(Env):
@@ -133,13 +137,23 @@ class AttackEnvironment(Env):
 
     def _reward(self, results) -> Tuple[float, Dict[str, float]]:
         """Reward from observed behaviour only, plus its components for logging."""
-        trace = traj = similarity = 0.0
+        trace = traj = route = similarity = 0.0
         if self._target is not None:
             trace = self._encoder.compute_reward(results, self._target)
             traj = float(
                 np.mean(
                     [
                         accuracy_from_trajectories(
+                            r.get("trajectories", []), self._target
+                        )
+                        for r in results
+                    ]
+                )
+            )
+            route = float(
+                np.mean(
+                    [
+                        route_prefix_from_trajectories(
                             r.get("trajectories", []), self._target
                         )
                         for r in results
@@ -158,6 +172,10 @@ class AttackEnvironment(Env):
             reward = (
                 1 - self._effort_weight
             ) * similarity - self._effort_weight * effort
+        elif self._reward_mode == "route":
+            reward = route
+        elif self._reward_mode == "route_mix":
+            reward = 0.5 * (trace + route)
         elif self._reward_mode == "traj":
             reward = traj
         elif self._reward_mode == "mix":
@@ -167,6 +185,7 @@ class AttackEnvironment(Env):
         return float(reward), {
             "trace_accuracy": trace,
             "traj_accuracy": traj,
+            "route_prefix": route,
             "target_similarity": similarity,
         }
 

@@ -168,3 +168,23 @@ def test_run_naming_round_trip():
         assert run_path(cfg) == expected
         parts = parse_run_name(run_name(cfg))
         assert parts["env"] == cfg["env"] and parts["seed"] == cfg["seed"]
+
+
+def test_route_prefix_counts_target_states_until_first_deviation():
+    from utils.metrics import route_prefix_from_trajectories
+
+    # 4 states in a line, target: action 1 in states 0, 1, 2 (state 3 is the end)
+    target = np.zeros((4, 2))
+    target[[0, 1, 2], 1] = 1
+    follows = [(0, 1, 1, 1), (1, 1, 2, 1)] * 5
+    assert route_prefix_from_trajectories(follows, target) == 1.0
+    # a failed move (staying in state 1) does not end the walk
+    stuck = [(0, 1, 1, 1), (1, 1, 1, 1), (1, 1, 1, 1), (1, 1, 2, 1)] * 5
+    assert route_prefix_from_trajectories(stuck, target) == 1.0
+    # wrong action in state 1: only state 0 counts
+    leaves = [(0, 1, 1, 0), (1, 0, 2, 1)] * 5
+    assert abs(route_prefix_from_trajectories(leaves, target) - 1 / 3) < 1e-9
+    # wrong action in the starting state: nothing counts, however good the rest is
+    wrong_start = [(0, 0, 1, 1), (1, 1, 2, 1)] * 5
+    assert route_prefix_from_trajectories(wrong_start, target) == 0.0
+    assert route_prefix_from_trajectories([], target) == 0.0

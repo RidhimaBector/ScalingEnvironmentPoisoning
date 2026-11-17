@@ -65,6 +65,9 @@ DEFAULT_CONFIG = {
     #   "trace"     share of target states whose last observed action is the target's
     #   "traj"      share of observed actions in target states that are the target's
     #   "mix"       mean of the two
+    #   "route"     share of target states the victim's usual behaviour passes, with the
+    #               target action, from its starting state until it first deviates
+    #   "route_mix" mean of "trace" and "route"
     #   "embedding" similarity of the victim's behaviour embedding to the target's,
     #               minus effort_weight x attack size (targets given as trajectories)
     "reward_mode": "trace",
