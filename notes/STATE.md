@@ -287,6 +287,23 @@ diagnosis with `scripts/diagnose_grid_route.py`):
 - Open: the attacker reaches the route but does not hold it to the end of the episode;
   the score reads only the last step.
 
+### Round 15: hold rule and stricter route reward, `2026-11-17` (commit `f5e7a16`)
+
+- `hold_threshold` (default None): while the attacker's own reward of the previous step
+  is at or above it, the step's perturbation is replaced by zeros
+  (`envs/attack_environment.py`); the attack resumes if the reward falls below.
+- The route reward now also ends its walk where the target action most often leaves
+  the victim in place, so 1.0 means "seen following the target from start to end
+  without getting stuck". Reason: with the first version, holding at reward 1.0 froze
+  maps on which victims chose every route action correctly but one move was a steep
+  climb (round-14 `route` seed 1 attacker with hold: 0/20 on the exact route).
+- Check on the saved round-14 `route` attackers (trained with the first version of the
+  reward), 20 victims, exact route at the last step, hold off -> hold at 1.0:
+  seed 1: 4/20 -> 20/20 (share on route over steps 9-15: .35 .80 .90 .95 .95 1.0 1.0);
+  seed 0: 1/20 -> 0/20.
+- Test submitted: `sweep_route_reward.sh` tasks 0-7, experiment `route-reward-v2`:
+  6x6, seeds 0-3, `route` and `route-hold` (hold_threshold=1.0).
+
 **Round 12 result so far** (job `7710630`, old reward, slow code, 13 of 16 scored;
 exact route per seed): 5x5 env view 0, 16, 18, 0; 5x5 own-actions 13, 0, 5, 0;
 6x6 env view 4, 0, 20, 0; 6x6 own-actions 0 and three still running after 6 h.
