@@ -330,7 +330,12 @@ diagnosis with `scripts/diagnose_grid_route.py`):
   route at the last step): seed 1 20/20, seed 0 0/20 (10/20 at some step). Same as the
   round-15 check, as expected: those attackers were trained without the hold.
 - Test submitted: smoke `7734638`, then `sweep_route_reward.sh` tasks 0-7, experiment
-  `route-reward-v3` (6x6, seeds 0-3, `route` and `route-hold`).
+  `route-reward-v3` (6x6, seeds 0-3, `route` and `route-hold`). Real job `7734669`.
+- Round 15 final (job `7729450`): `route` seeds 0 and 1 finished after 3 h 20 min:
+  0/20 (target match 0.71) and 0/20 (0.48). All 8 round-15 runs fail the pass mark.
+- Job `7734669` after 1 h 58 min: all 8 at episode ~6,200-7,000 of 12,000 (about 3.5 h
+  per run, slower than the ~1 h 10 min of round-15 tasks 2-7; cause not checked),
+  best average return so far 2.3 to 3.9 of 15.
 
 **Round 12 result so far** (job `7710630`, old reward, slow code, 13 of 16 scored;
 exact route per seed): 5x5 env view 0, 16, 18, 0; 5x5 own-actions 13, 0, 5, 0;
