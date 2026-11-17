@@ -152,6 +152,28 @@ grep -h "^task\|^SCORE" logs/fir_4423670_*.out logs/fir_4429537_*.out logs/fir_4
 # cells without a SCORE line: python score_attack.py --run_dir results/fir_s27_<cell>_s<seed> --episodes 20
 ```
 
+### Round 13: push base and online autoencoder, submitted `2026-11-17 06:48 EST` (cluster time)
+
+Code at commit `c18da78` adds two options, both off by default:
+
+- `push_base=True`: the attacker's action is (the push search's current best direction
+  per dimension, where its probability is >= `push_base_conf`=0.5, else 0) + the
+  actor's output, clipped. The critic is unchanged; the base is saved with every
+  checkpoint (`<name>_base.npy`). Motivated by the diagnosis below.
+- `ae_model_path=online`: no pre-trained autoencoder. The run's first
+  `ae_online_episodes`=500 attack episodes are exploration only (random or push); the
+  trace autoencoder is then fitted on the traces seen (60 epochs), frozen, and the
+  replay buffer is cleared. The fit prints its held-out reconstruction accuracy.
+
+Job `7711713` on killarney, tasks 0-35, `scripts/slurm/sweep_push_base.sh`: grid 4x4
+(6000 ep, push 0.2), 5x5 and 6x6 (12000 ep, push 0.4 / 32 / 8 / 0.3), Q-learning,
+`obs_dynamics=actions`, seeds 0-3, configs `base`, `online-ae`, `base-online-ae`.
+Results: `$SCRATCH/envpois/results/push-base/`; logs `logs/pushbase_7711713_<task>.out`.
+Comparison without either option: round 12 config `obs-actions` (5x5, 6x6, same seeds)
+and the 3x3x3 sweep (4x4). Smoke run `7711585` (90 episodes) passed; with only 30
+episodes of traces the online fit reached 0.53 reconstruction (pre-trained 5x5: 0.66).
+Collect with: `grep -h "^run:\|^SCORE\|fitted" logs/pushbase_7711713_*.out`.
+
 ### Diagnosis of the sweep from its training logs (`2026-11-17`)
 
 Means over the last 400 logged episodes of each run (jobs `4423670`), split into the
