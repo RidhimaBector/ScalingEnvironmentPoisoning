@@ -241,6 +241,29 @@ row, right column, bottom row):
 - The learned maps keep the bottom row (part of the route) at altitude 0 and differ
   from the hand-set maps (route at 10).
 
+### Round 14: route-prefix reward, `2026-11-17` (commit `2946482`)
+
+Priority set by the user on 2026-11-17: "getting it working complete black box and
+general for gridworld is our first step". The lander is parked.
+
+New reward modes (`defaults.py`, `utils/metrics.py: route_prefix_from_trajectories`),
+computed only from the victim's observed (state, action, next state) tuples, most
+recent half of them: starting from the first state the victim was seen in, walk forward
+while its most frequent action is the target action, moving to the state it most often
+reached next (a failed move does not count as a step); the reward is the number of
+distinct target states passed divided by the number of target states.
+`reward_mode=route` is that alone, `route_mix` is its mean with the trace reward.
+The best-checkpoint choice follows the reward, so it changes with the mode.
+
+Check against ground truth on the saved 6x6 attackers (20 victims each; observed
+route prefix | true prefix of the greedy policy | trace reward): base seed 0:
+0.00 | 0.00 | 0.68; base seed 1: 0.34 | 0.57 | 0.88; plain seed 0: 0.05 | 0.05 | 0.90;
+plain seed 1: 0.09 | 0.09 | 0.85. The new reward is low exactly where the trace reward
+is high and the route is missed; it underestimates on base seed 1.
+
+Test: `scripts/slurm/sweep_route_reward.sh`, tasks 0, 1, 4, 5 (6x6, seeds 0-1,
+`route` and `route-mix`), otherwise the `plain` settings of round 13.
+
 **Lander smoke `7712063`**: 4 attack episodes (K=60, I=10, 3 DQN victims) took
 57 min 58 s of training, about 14.5 min per attack episode. The 150-episode
 verification in `verify_lander.sh` would need about 36 h per run, over the 24 h limit;
