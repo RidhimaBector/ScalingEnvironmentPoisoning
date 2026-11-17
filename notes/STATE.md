@@ -264,6 +264,33 @@ is high and the route is missed; it underestimates on base seed 1.
 Test: `scripts/slurm/sweep_route_reward.sh`, tasks 0, 1, 4, 5 (6x6, seeds 0-1,
 `route` and `route-mix`), otherwise the `plain` settings of round 13.
 
+**Result of round 14** (job `7714711`, 6x6, own-actions observation, 20 fresh victims;
+diagnosis with `scripts/diagnose_grid_route.py`):
+
+| Mode | Seed | Target match | Exact route, last step | Exact route at any of 15 steps | Share on route per attack step (steps 7-15) | All 15 route actions right, last step |
+|---|---|---|---|---|---|---|
+| route | 0 | 0.49 -> 0.87 | 1/20 | 16/20 | .60 .20 .15 .10 .05 .05 .05 .10 .05 | 1/20 |
+| route | 1 | 0.49 -> 1.00 | 4/20 | 20/20 | .00 .00 1.0 1.0 1.0 1.0 1.0 1.0 .20 | 19/20 |
+| route-mix | 0 | 0.49 -> 0.78 | 0/20 | 0/20 | all 0 | 0/20 |
+| route-mix | 1 | 0.49 -> 0.84 | 0/20 | 0/20 | all 0 | 0/20 |
+
+- By the pass criterion (11 of 20 on the exact route at the last attack step) no run
+  passes.
+- `route` seed 1 puts all 20 victims on the exact route for attack steps 9-14 and loses
+  16 of them at step 15: the last perturbations leave route cell 29 at altitude 8.1
+  below cell 35 at 10, so that move becomes "most likely stays put" (15 victims break
+  there with the right action). Its final map has the whole perimeter at 10, like the
+  hand-set maps. `route` seed 0 reaches 12/20 at step 7 and then decays.
+- `route-mix` never reaches the route on either seed.
+- With the old reward and the same settings (round 13 `plain`): 0/20 and 2/20 victims
+  were ever on the route at any step.
+- Open: the attacker reaches the route but does not hold it to the end of the episode;
+  the score reads only the last step.
+
+**Round 12 result so far** (job `7710630`, old reward, slow code, 13 of 16 scored;
+exact route per seed): 5x5 env view 0, 16, 18, 0; 5x5 own-actions 13, 0, 5, 0;
+6x6 env view 4, 0, 20, 0; 6x6 own-actions 0 and three still running after 6 h.
+
 **Lander smoke `7712063`**: 4 attack episodes (K=60, I=10, 3 DQN victims) took
 57 min 58 s of training, about 14.5 min per attack episode. The 150-episode
 verification in `verify_lander.sh` would need about 36 h per run, over the 24 h limit;
