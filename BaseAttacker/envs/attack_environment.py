@@ -43,6 +43,9 @@ class AttackEnvironment(Env):
             "actions" the running sum of the perturbations it has sent,
             "env" the environment's dynamics vector, "none" nothing.
         effort_weight: weight of the attack-size penalty in reward_mode="embedding".
+        hold_threshold: if set, the attacker stops perturbing while its own reward
+            (observed behaviour only) is at or above this value: the step's perturbation
+            is replaced by zeros, and the attack resumes if the reward falls below it.
     """
 
     def __init__(
@@ -54,6 +57,7 @@ class AttackEnvironment(Env):
         reward_mode: str = "trace",
         obs_dynamics: str = "actions",
         effort_weight: float = 0.0,
+        hold_threshold: Optional[float] = None,
     ):
         super().__init__()
         if obs_dynamics not in OBS_DYNAMICS:
@@ -72,6 +76,8 @@ class AttackEnvironment(Env):
         self._reward_mode = reward_mode
         self._obs_dynamics = obs_dynamics
         self._effort_weight = effort_weight
+        self._hold_threshold = hold_threshold
+        self._last_reward = None  # reward of the previous step of this episode
         self._target = victim_population.target  # policy table, or None
         self._target_states_actions = None  # lazily loaded recorded target
 
@@ -91,6 +97,7 @@ class AttackEnvironment(Env):
         if seed is not None:
             self._victims.seed(seed)
         self._step_count = 0
+        self._last_reward = None
         self._sent = np.zeros(self.action_space.shape)
         self._victims.reset()
         self._encoder.reset_episode()
@@ -98,6 +105,13 @@ class AttackEnvironment(Env):
 
     def step(self, action: np.ndarray) -> Tuple[np.ndarray, float, bool, bool, Dict]:
         self._step_count += 1
+        held = (
+            self._hold_threshold is not None
+            and self._last_reward is not None
+            and self._last_reward >= self._hold_threshold - 1e-9
+        )
+        if held:  # target behaviour observed: leave the environment as it is
+            action = np.zeros(self.action_space.shape)
         self._dispatch.apply(self._victims, action)
         self._sent = self._sent + np.clip(
             np.asarray(action, dtype=float).reshape(self._sent.shape),
@@ -108,10 +122,12 @@ class AttackEnvironment(Env):
         results = self._victims.run_experiments(self._victim_train_episodes)
         obs = self._encoder.encode(results, self._context())
         reward, parts = self._reward(results)
+        self._last_reward = reward
 
         info = {
             "step": self._step_count,
             "accuracy": reward,
+            "held": float(held),
             "victim_results": results,
             **parts,
         }

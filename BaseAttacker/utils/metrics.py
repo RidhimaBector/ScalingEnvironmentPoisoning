@@ -205,7 +205,8 @@ def route_prefix_from_trajectories(trajectories, target: np.ndarray, recent: flo
     Uses only observed (pre_s, pre_a, s, a) tuples, the most recent `recent` share of
     them. Starting from the first state the victim was seen in, walk forward while the
     victim's most frequent action in the current state is the target action, moving to
-    the state it most often reached next with that action. Returns the number of
+    the state it most often reached next with that action; the walk also ends where
+    that action most often leaves the victim in place. Returns the number of
     distinct target states passed this way, divided by the number of target states:
     1.0 means the victim's usual behaviour follows the target from start to end, 0.0
     means it already deviates in its starting state.
@@ -229,9 +230,11 @@ def route_prefix_from_trajectories(trajectories, target: np.ndarray, recent: flo
         if int(np.argmax(actions[state])) != target_actions[state]:
             break
         seen.add(state)
-        onward = moves[state, target_actions[state]].copy()
-        onward[state] = 0  # a failed move (staying put) is not a step along the route
+        onward = moves[state, target_actions[state]]
         if onward.sum() == 0:
             break
-        state = int(np.argmax(onward))
+        nxt = int(np.argmax(onward))
+        if nxt == state:  # the target action usually fails here: the victim is stuck
+            break
+        state = nxt
     return float(len(seen) / max(np.sum(on_target), 1))

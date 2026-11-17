@@ -72,6 +72,10 @@ DEFAULT_CONFIG = {
     #               minus effort_weight x attack size (targets given as trajectories)
     "reward_mode": "trace",
     "effort_weight": 0.0,
+    # Stop perturbing while the attacker's own reward is at or above this value, and
+    # resume if it falls below (None = never hold). With reward_mode="route", 1.0 means
+    # "the victim was seen following the target from start to end".
+    "hold_threshold": None,
     # --- attacker learner ---
     "attack_algo": "ddpg",  # ddpg | ppo
     "batch_size": 256,

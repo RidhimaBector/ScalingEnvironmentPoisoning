@@ -175,6 +175,7 @@ def build_attack_env(
         victim_train_episodes=cfg["victim_n_episodes"],
         encoder=encoder,
         reward_mode=cfg["reward_mode"],
+        hold_threshold=cfg["hold_threshold"],
         obs_dynamics=cfg["obs_dynamics"],
         effort_weight=cfg["effort_weight"],
     )

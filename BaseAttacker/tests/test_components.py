@@ -178,9 +178,12 @@ def test_route_prefix_counts_target_states_until_first_deviation():
     target[[0, 1, 2], 1] = 1
     follows = [(0, 1, 1, 1), (1, 1, 2, 1)] * 5
     assert route_prefix_from_trajectories(follows, target) == 1.0
-    # a failed move (staying in state 1) does not end the walk
+    # the target action usually fails in state 1: the walk ends there (states 0, 1 count)
     stuck = [(0, 1, 1, 1), (1, 1, 1, 1), (1, 1, 1, 1), (1, 1, 2, 1)] * 5
-    assert route_prefix_from_trajectories(stuck, target) == 1.0
+    assert abs(route_prefix_from_trajectories(stuck, target) - 2 / 3) < 1e-9
+    # an occasional failed move does not end it
+    slips = [(0, 1, 1, 1), (1, 1, 1, 1), (1, 1, 2, 1), (0, 1, 1, 1), (1, 1, 2, 1)] * 5
+    assert route_prefix_from_trajectories(slips, target) == 1.0
     # wrong action in state 1: only state 0 counts
     leaves = [(0, 1, 1, 0), (1, 0, 2, 1)] * 5
     assert abs(route_prefix_from_trajectories(leaves, target) - 1 / 3) < 1e-9
@@ -188,3 +191,21 @@ def test_route_prefix_counts_target_states_until_first_deviation():
     wrong_start = [(0, 0, 1, 1), (1, 1, 2, 1)] * 5
     assert route_prefix_from_trajectories(wrong_start, target) == 0.0
     assert route_prefix_from_trajectories([], target) == 0.0
+
+
+def test_hold_threshold_stops_perturbing_once_reward_is_reached():
+    from builders import build_attack_env, build_encoders, build_population
+
+    cfg = resolve_config({"env": "ring", "victim_n_episodes": 5, "hold_threshold": -1.0})
+    population = build_population(cfg)
+    obs_encoder, _ = build_encoders(population, cfg)
+    env = build_attack_env(population, cfg, obs_encoder)
+    env.reset()
+    push = np.ones(env.action_space.shape)
+    _, _, _, _, info = env.step(push)  # no previous reward yet: the push is applied
+    assert info["held"] == 0.0
+    sent = env._sent.copy()
+    assert np.abs(sent).sum() > 0
+    _, _, _, _, info = env.step(push)  # any reward is >= -1: held, nothing is sent
+    assert info["held"] == 1.0
+    assert np.array_equal(env._sent, sent)

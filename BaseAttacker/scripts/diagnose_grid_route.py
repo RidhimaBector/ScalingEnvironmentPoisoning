@@ -1,6 +1,8 @@
 """Where do attacked grid victims leave the target route? (evaluation only)
 
-    python scripts/diagnose_grid_route.py <folder of run folders> [victims per run]
+    python scripts/diagnose_grid_route.py <folder of run folders> [victims per run] [key=value ...]
+
+Trailing key=value pairs override the runs' saved settings (e.g. hold_threshold=1.0).
 
 For each run: 20 fresh victims (same seeds as score_attack.py), attacked by the saved
 best checkpoint. At the end of the attack episode, walk the target route and find the
@@ -25,8 +27,9 @@ from utils.metrics import greedy_path
 
 root = sys.argv[1]
 N = int(sys.argv[2]) if len(sys.argv) > 2 else 20
+overrides = {k: float(v) for k, v in (a.split("=") for a in sys.argv[3:])}
 for run in sorted(glob.glob(root + "/*")):
-    cfg, attack_env, translator, attacker, used = load_run(run)
+    cfg, attack_env, translator, attacker, used = load_run(run, overrides=overrides)
     target = attack_env._target
     t_act = target.argmax(1)
     on_target = target.sum(1) > 0
