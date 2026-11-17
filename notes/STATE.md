@@ -223,6 +223,24 @@ victims take the target action in most states but still miss at least one state 
 the route; the exact-route measure, not the match, is what fails here.
 The paper's method document was not updated (condition "if these work" not met).
 
+**Where the 6x6 victims leave the route** (`scripts/diagnose_grid_route.py`, the 8
+saved attackers, 20 fresh victims each, 160 victims; target route is 15 moves: top
+row, right column, bottom row):
+
+- 159 of 160 victims are off the exact route at the last attack step, and every one
+  breaks within the first 3 cells of the route (positions 0-2 of 15), mostly at the
+  start cell, where the target says east and the goal is 5 cells straight south.
+- Cause of the first break: wrong greedy action in 129 victims; right action but the
+  move is so far uphill that staying put is the most likely outcome (the route measure
+  follows the most likely transition) in 30 victims.
+- Wrong route actions per victim (of 15), mean: plain 1.00 / 1.50, base 3.40 / 0.65,
+  online-ae 6.20 / 1.65, both 4.65 / 1.00 (seed 0 / seed 1).
+- Victims with all 15 route actions right: base seed 1: 11 of 20; both seed 1: 6;
+  plain seed 0: 1; the other five runs: 0. These count as off-route only because of
+  the uphill rule above.
+- The learned maps keep the bottom row (part of the route) at altitude 0 and differ
+  from the hand-set maps (route at 10).
+
 **Lander smoke `7712063`**: 4 attack episodes (K=60, I=10, 3 DQN victims) took
 57 min 58 s of training, about 14.5 min per attack episode. The 150-episode
 verification in `verify_lander.sh` would need about 36 h per run, over the 24 h limit;
