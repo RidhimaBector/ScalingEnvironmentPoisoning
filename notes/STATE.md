@@ -126,6 +126,18 @@ Totals by victim family, counting a seed as working at 11 or more of 20:
 grid 4x4 Q-learning/SARSA 5 of 6; grid 5x5 and 6x6 0 of 12; ring Q-learning/SARSA
 17 of 18 (the miss is 10/20); ring REINFORCE 0 of 9; lander 0 of 23 scored.
 
+### Round 12: observation comparison on killarney, submitted `2026-11-17 06:26 EST` (cluster time)
+
+Job `7710630`, tasks 0-15, `scripts/slurm/sweep_obs_comparison.sh` at commit `200111a`:
+grid 5x5 and 6x6, Q-learning, push setting 0.4 / batch 32 / elite 8 / rate 0.3, 12,000
+episodes, seeds 0-3, each with `obs_dynamics=env` and `obs_dynamics=actions`.
+`TRAIN_TIMEOUT=14h`, job limit 16 h. Results:
+`$SCRATCH/envpois/results/obs-comparison/grid3d-<N>x<N>__qlearning__obs-<env|actions>__seed<k>`;
+logs `BaseAttacker/logs/obscompare_7710630_<task>.out` in the killarney checkout. Runs
+will end `PUBLISH_PENDING` (no Hugging Face token there). A 60-episode smoke run (job
+`7710471`, tasks 3 and 12) trained and scored in about 2 minutes; its output was deleted.
+Collect with: `grep -h "^run:\|^SCORE" logs/obscompare_7710630_*.out`.
+
 Not finished when last checked (earlier note): grid 5x5 / 6x6 with Q-learning and SARSA (40-95%
 done); every REINFORCE cell (grid: ~300 of 6000-12000 episodes; ring: 20-95%); lander
 DQN (~50 of 1000 episodes). The grid/ring job has an 8 h limit and the default 21 h
