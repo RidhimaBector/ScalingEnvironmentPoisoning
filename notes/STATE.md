@@ -365,6 +365,34 @@ diagnosis with `scripts/diagnose_grid_route.py`):
   (tasks 0, 4) plus `7751093` (task 0 again, experiment `smokeb`) to check that the
   same seed repeats on killarney; then `sweep_route_reward.sh` tasks 0-7, experiment
   `route-reward-v4` (same settings as v3).
+- **Seeding fix confirmed on killarney**: the two copies of smoke task 0 gave identical
+  training logs (100 of 100 lines).
+- **Result of `route-reward-v4`** (job `7751186`, about 1 h 10 min per run, 20 fresh
+  victims, no-attack baseline 0/20 and target match 0.49): **all 8 runs 0/20.** Target
+  match / best average return: `route` seeds 0-3: 0.87 / 4.65, 0.46 / 3.87, 0.69 / 3.80,
+  0.49 / 2.80; `route-hold` seeds 0-3: 0.67 / 4.55, 0.64 / 4.80, 0.69 / 3.80,
+  0.49 / 2.80. `scripts/diagnose_grid_route.py` was not run on these checkpoints.
+- **Why the scores differ between rounds 14, 16 and v4** (checked 2026-11-18):
+  - The code path of the `route` reward without hold is unchanged since round 14
+    (`git diff 2946482 HEAD`: only the hold rule and the seeding line).
+  - For a given seed the exploration (push) episodes are identical in all three rounds;
+    only the learned attacker's episodes differ. Last 2,000 training episodes, mean
+    episode reward of push episodes (count ending with victims on the route) vs the
+    attacker's own episodes in round 14 / round 16 / v4:
+    seed 0: 10.11 (375 of 807) vs 2.17 / 2.06 / 2.32; seed 1: 5.74 (0 of 819) vs
+    3.64 / 1.41 / 2.42; seed 2: 8.83 (283 of 798) vs - / 0.72 / 0.64; seed 3: 4.72
+    (18 of 785) vs - / 2.30 / 1.72.
+  - In the runs that scored well the attacker's reward rose late (round 14 seed 0:
+    best average 3.03 at episode 8,000, 7.44 at 10,000; round 16 `route-hold` seed 1:
+    3.29 at 10,000, 11.61 at 12,000). No v4 run shows that rise.
+  - Not checked: why the learned attacker does not reproduce the push episodes.
+- **Scoring the exploration search on its own** (commit `503982b`): `main.py` saves the
+  search's probabilities (`push_probs.npy`) at every checkpoint;
+  `score_attack.py --policy push` plays the most likely direction per dimension at every
+  step without noise, `--policy push_sample` draws directions once per victim and adds
+  the exploration noise (0.2) as in training. `train_and_score` prints both as extra
+  SCORE lines. Submitted as experiment `route-reward-v5` (same 8 runs as v4; smoke
+  `7752302` first).
 - Round 15 final (job `7729450`): `route` seeds 0 and 1 finished after 3 h 20 min:
   0/20 (target match 0.71) and 0/20 (0.48). All 8 round-15 runs fail the pass mark.
 - Job `7734669` after 1 h 58 min: all 8 at episode ~6,200-7,000 of 12,000 (about 3.5 h
