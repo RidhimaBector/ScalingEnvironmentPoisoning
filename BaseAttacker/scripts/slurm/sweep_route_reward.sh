@@ -10,7 +10,8 @@
 #               signal is 1.0 (hold_threshold=1.0). The hold signal is the route measure
 #               with one more condition: the walk also ends where the victim is stuck.
 #
-# experiment=route-reward-v3. Earlier rounds: route-reward (same reward, no hold, 2
+# experiment=route-reward-v4 (after the seeding fix; v3 is the same setting before it).
+# Earlier rounds: route-reward (same reward, no hold, 2
 # seeds) and route-reward-v2 (the stricter measure used as the reward too: did not learn).
 #
 #     sbatch --account=<acct> --array=0-15 scripts/slurm/sweep_route_reward.sh   # 6x6: 0-7
@@ -32,7 +33,7 @@ T=$SLURM_ARRAY_TASK_ID
 N=${SIZES[$((T / (2 * NSEEDS)))]}
 CFG=(${CONFIGS[$(((T / NSEEDS) % 2))]})
 SEED=$((T % NSEEDS))
-train_and_score experiment=route-reward-v3 config_name=${CFG[0]} \
+train_and_score experiment=route-reward-v4 config_name=${CFG[0]} \
     env=grid3d grid_size=$N victim_algo=qlearning encoder_mode=ae reward_mode=route \
     obs_dynamics=actions push_cem=True cem_floor=-1 explore_push_prob=0.4 \
     cem_batch=32 cem_elite=8 cem_lr=0.3 max_episodes=12000 "${CFG[@]:1}" seed=$SEED
