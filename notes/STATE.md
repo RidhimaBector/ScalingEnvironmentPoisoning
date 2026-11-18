@@ -445,6 +445,35 @@ exact route per seed): 5x5 env view 0, 16, 18, 0; 5x5 own-actions 13, 0, 5, 0;
 verification in `verify_lander.sh` would need about 36 h per run, over the 24 h limit;
 not submitted. The lander needs a speed-up or a smaller budget first.
 
+### Round 17: attacker starts from the search, search gets more budget (`2026-11-18`, commit `5a82636`)
+
+User request: "fix it, make the attacker work".
+
+What the v5 training logs show (push episodes vs the attacker's own, mean episode
+reward per 1,000 episodes):
+
+- The search is slow and was still improving when the runs ended. Push mean reward at
+  episodes 0-1k / 6-7k / 11-12k: seed 0: 1.0 / 4.4 / 10.1; seed 1: 0.9 / 3.1 / 6.1;
+  seed 2: 0.9 / 3.4 / 9.0; seed 3: 0.7 / 3.6 / 5.5. Seed 3 sat at 3.6-3.7 from episode
+  3,000 to 10,000 (best single push 4.3) and only then moved; seeds 0 and 2 put their
+  first victims on the route at 7-8k.
+- The attacker's own episodes stay at 0.5-2.8 for the whole run on every seed and never
+  end with victims on the route: the actor does not learn this on its own.
+
+Changes and test (`scripts/slurm/sweep_search_base.sh`, experiment `search-base`,
+6x6, route reward, own-actions observation, 12,000 episodes, seeds 0-3, all with
+`push_base=True`: the attacker acts as the search's best directions + the actor's
+correction):
+
+| Config | Push episodes | Search |
+|---|---|---|
+| `base` | 40% | as in v5 |
+| `base-search` | 80% | as in v5 |
+| `base-search-wide` | 80% | `cem_patience=5`: floor doubles (up to 4x) when the elite reward has not risen for 5 updates, resets when it rises |
+| `base-search-fast` | 80% | batch 16, elite 4 (twice as many updates) |
+
+Submitted: smoke `7761909` (tasks 0, 8, 12; 150 episodes), then tasks 0-15.
+
 ### Diagnosis of the sweep from its training logs (`2026-11-17`)
 
 Means over the last 400 logged episodes of each run (jobs `4423670`), split into the
