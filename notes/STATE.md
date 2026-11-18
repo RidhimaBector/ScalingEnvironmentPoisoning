@@ -349,6 +349,18 @@ diagnosis with `scripts/diagnose_grid_route.py`):
     is not reproducible across jobs, or something else changed between the commits).
   - Round 12 leftovers (job `7710630`, 6x6 own-actions, old reward, 14 h each):
     4/20, 0/20, 0/20 (target match 0.93, 0.83, 0.89).
+- **Why the same seed did not repeat (`2026-11-18`): runs were not reproducible.**
+  Round 14 and round 16 `route` seed 0 differ from episode 1 in their logs (reward
+  0.53 vs 0.67). Locally, two runs of the same command and seed at the same commit also
+  differ from episode 1, while their push episodes are identical. Cause: the warm-up
+  episodes take `attack_env.action_space.sample()`, and the space's own generator was
+  never seeded (not affected by `np.random.seed`). Fix: `main.py` seeds it with
+  `cfg["seed"]`. Check: two local runs of 60 episodes (6x6, round-16 `route` settings,
+  seed 0) now print identical log lines. Ruled out on the way: hash randomisation,
+  thread count, the numba victims, the second Sacred run.
+  Consequence: **every result before this fix is one draw of a random warm-up, not "the
+  result of seed N"**; differences between configs on the same seed (rounds 12-16) are
+  not paired comparisons. Reproducibility on killarney is not checked yet.
 - Round 15 final (job `7729450`): `route` seeds 0 and 1 finished after 3 h 20 min:
   0/20 (target match 0.71) and 0/20 (0.48). All 8 round-15 runs fail the pass mark.
 - Job `7734669` after 1 h 58 min: all 8 at episode ~6,200-7,000 of 12,000 (about 3.5 h

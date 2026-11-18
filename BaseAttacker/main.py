@@ -228,13 +228,21 @@ def sacred_main(_run, _config):
 
     victim_run = start_victim_sacred(cfg)
     try:
-        population = build_population(cfg, VictimExperimentTracker(sacred_run=victim_run))
+        population = build_population(
+            cfg, VictimExperimentTracker(sacred_run=victim_run)
+        )
         obs_encoder, action_translator = build_encoders(population, cfg)
         attack_env = build_attack_env(population, cfg, obs_encoder)
+        # The space has its own generator (used by the warm-up episodes); unseeded, it
+        # makes two runs with the same seed differ from the first episode on.
+        attack_env.action_space.seed(cfg["seed"])
         attack_algo = build_attack_algo(attack_env, cfg)
         attack_tracker = AttackExperimentTracker(
-            sacred_run=_run, timestep_every=cfg["log_timestep_every"])
-        train(attack_env, attack_algo, obs_encoder, action_translator, cfg, attack_tracker)
+            sacred_run=_run, timestep_every=cfg["log_timestep_every"]
+        )
+        train(
+            attack_env, attack_algo, obs_encoder, action_translator, cfg, attack_tracker
+        )
         finish_victim_sacred(victim_run, status="COMPLETED")
     except BaseException as exc:
         # Always close the victim run: its heartbeat thread would keep the process alive.
