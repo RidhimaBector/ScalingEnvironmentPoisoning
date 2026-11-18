@@ -361,6 +361,10 @@ diagnosis with `scripts/diagnose_grid_route.py`):
   Consequence: **every result before this fix is one draw of a random warm-up, not "the
   result of seed N"**; differences between configs on the same seed (rounds 12-16) are
   not paired comparisons. Reproducibility on killarney is not checked yet.
+- Rerun with the fix submitted `2026-11-18` (commit `4485cd6`): smoke `7751090`
+  (tasks 0, 4) plus `7751093` (task 0 again, experiment `smokeb`) to check that the
+  same seed repeats on killarney; then `sweep_route_reward.sh` tasks 0-7, experiment
+  `route-reward-v4` (same settings as v3).
 - Round 15 final (job `7729450`): `route` seeds 0 and 1 finished after 3 h 20 min:
   0/20 (target match 0.71) and 0/20 (0.48). All 8 round-15 runs fail the pass mark.
 - Job `7734669` after 1 h 58 min: all 8 at episode ~6,200-7,000 of 12,000 (about 3.5 h
