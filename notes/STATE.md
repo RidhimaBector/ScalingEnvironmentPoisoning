@@ -331,6 +331,24 @@ diagnosis with `scripts/diagnose_grid_route.py`):
   round-15 check, as expected: those attackers were trained without the hold.
 - Test submitted: smoke `7734638`, then `sweep_route_reward.sh` tasks 0-7, experiment
   `route-reward-v3` (6x6, seeds 0-3, `route` and `route-hold`). Real job `7734669`.
+- **Result (job `7734669`, all 8 scored, about 3.5-3.9 h per run; baseline 0/20, target
+  match 0.49): 1 of 8 passes.** Exact route at the last step / at any step / target
+  match / best average training return (max 15):
+  - `route` seed 0: 0/20, 0/20, 0.75, 3.74; seed 1: 0/20, 0/20, 0.62, 3.28;
+    seed 2: 0/20, 0/20, 0.67, 3.86; seed 3: 0/20, 0/20, 0.57, 3.88.
+  - `route-hold` seed 0: 0/20, 18/20, 0.74, 9.10; **seed 1: 19/20, 20/20, 1.00, 11.61**;
+    seed 2: 0/20, 0/20, 0.71, 3.98; seed 3: 0/20, 0/20, 0.83, 6.10.
+  - `route-hold` seed 1 holds the route: share on route per step from step 4:
+    .65 .90 .95 .95 .90 .90 1.0 .95 .95 1.0 .95 .95. `route-hold` seed 0 reaches it
+    (0.70 at step 5) and loses it (0 from step 12); 17 of 20 first breaks are a wrong
+    action, 13 of them in the start state.
+  - The four `route` runs use the round-14 reward (the function is equivalent) and the
+    round-14 settings, but seeds 0 and 1 did not repeat round 14 (target match 0.87 and
+    1.00, 16/20 and 20/20 on route at some step): now 0.75 and 0.62 and never on
+    route. Same seed, same settings, different outcome; cause not checked (training
+    is not reproducible across jobs, or something else changed between the commits).
+  - Round 12 leftovers (job `7710630`, 6x6 own-actions, old reward, 14 h each):
+    4/20, 0/20, 0/20 (target match 0.93, 0.83, 0.89).
 - Round 15 final (job `7729450`): `route` seeds 0 and 1 finished after 3 h 20 min:
   0/20 (target match 0.71) and 0/20 (0.48). All 8 round-15 runs fail the pass mark.
 - Job `7734669` after 1 h 58 min: all 8 at episode ~6,200-7,000 of 12,000 (about 3.5 h
