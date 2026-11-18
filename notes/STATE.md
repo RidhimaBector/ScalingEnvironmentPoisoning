@@ -393,6 +393,28 @@ diagnosis with `scripts/diagnose_grid_route.py`):
   the exploration noise (0.2) as in training. `train_and_score` prints both as extra
   SCORE lines. Submitted as experiment `route-reward-v5` (same 8 runs as v4; smoke
   `7752302` first).
+- **Result of `route-reward-v5`** (job `7752361`, 6x6, own-actions observation, 20
+  fresh victims, no-attack baseline 0/20 and target match 0.49). Exact route at the
+  last step (target match):
+
+  | Config | Seed | Learned attacker | `push` | `push_sample` |
+  |---|---|---|---|---|
+  | route | 0 | 0/20 (0.87) | 20/20 (1.00) | 8/20 (0.95) |
+  | route | 1 | 0/20 (0.46) | 0/20 (0.94) | 0/20 (0.89) |
+  | route | 2 | 0/20 (0.69) | 20/20 (1.00) | 6/20 (0.95) |
+  | route | 3 | 0/20 (0.49) | 3/20 (0.92) | 4/20 (0.89) |
+  | route-hold | 0 | 0/20 (0.67) | 20/20 (1.00) | 13/20 (0.95) |
+  | route-hold | 1 | 0/20 (0.64) | 0/20 (0.94) | 0/20 (0.89) |
+  | route-hold | 2 | 0/20 (0.69) | 20/20 (1.00) | 9/20 (0.92) |
+  | route-hold | 3 | 0/20 (0.49) | 4/20 (0.91) | 4/20 (0.88) |
+
+  - The learned attacker's scores equal v4's on all 8 runs (same seeds, separate jobs).
+  - `push` passes the mark (11 of 20) in 4 of 8 runs: seeds 0 and 2, with and without
+    hold. Seeds 1 and 3 fail with every policy.
+  - `push` is one fixed perturbation repeated at every step: it does not read the
+    victim's behaviour at attack time. The search that found it used only the attacker's
+    own reward.
+  - Not checked: where seeds 1 and 3 leave the route; whether the hold ever triggered.
 - Round 15 final (job `7729450`): `route` seeds 0 and 1 finished after 3 h 20 min:
   0/20 (target match 0.71) and 0/20 (0.48). All 8 round-15 runs fail the pass mark.
 - Job `7734669` after 1 h 58 min: all 8 at episode ~6,200-7,000 of 12,000 (about 3.5 h
