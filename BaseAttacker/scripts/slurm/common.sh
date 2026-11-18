@@ -35,5 +35,10 @@ train_and_score() {
   echo "run: $run_dir  settings: $*"
   timeout "${TRAIN_TIMEOUT:-21h}" python -u main.py with "$@"
   python score_attack.py --run_dir "$run_dir" --episodes "${SCORE_EPISODES:-20}"
+  # The exploration search on its own, without the learned attacker (extra SCORE lines)
+  if [ -f "$run_dir/push_probs.npy" ]; then
+    python score_attack.py --run_dir "$run_dir" --episodes "${SCORE_EPISODES:-20}" --policy push
+    python score_attack.py --run_dir "$run_dir" --episodes "${SCORE_EPISODES:-20}" --policy push_sample
+  fi
   python publish.py --run_dir "$run_dir" --log "logs/${SLURM_JOB_NAME:-run}_${SLURM_ARRAY_JOB_ID:-0}_${SLURM_ARRAY_TASK_ID:-0}.out"
 }

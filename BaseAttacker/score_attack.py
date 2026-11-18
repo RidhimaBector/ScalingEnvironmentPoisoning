@@ -26,6 +26,15 @@ The run is rebuilt from the run_config.json that main.py wrote next to its check
     python score_attack.py --run_dir results/<run> [--episodes 20]
 
 Prints one SCORE line and writes results/<run>/score.json.
+
+--policy chooses what plays the "attacked" episode:
+
+  actor        the trained attacker (default)
+  push         the exploration search's most likely direction per dimension, the same
+               at every step, no noise (from push_probs.npy; writes score_push.json)
+  push_sample  directions drawn from the search's probabilities once per victim, plus
+               the exploration noise at every step, as in a training push episode
+               (writes score_push_sample.json)
 """
 
 import argparse
@@ -106,9 +115,40 @@ def rollout(attack_env, translator, policy, steps: int) -> dict:
     return info
 
 
-def score(run_dir: str, checkpoint: str = "best_model", episodes: int = 20) -> dict:
+PUSH_NOISE = 0.2  # PushExploration's default, which main.py uses
+
+
+def push_policy(probs: np.ndarray, shape, sample: bool, seed: int):
+    """A fixed-direction policy from the exploration search's probabilities.
+
+    Uses its own random generator, so the victims' randomness stays the same as in the
+    baseline episode."""
+    rng = np.random.default_rng(seed)
+    if sample:
+        idx = np.array([rng.choice(3, p=p) for p in probs])
+    else:
+        idx = probs.argmax(axis=1)
+    direction = idx.astype(float) - 1.0
+
+    def policy(obs):
+        noise = rng.normal(0.0, PUSH_NOISE, size=direction.shape) if sample else 0.0
+        return np.clip(direction + noise, -1.0, 1.0).reshape(shape)
+
+    return policy
+
+
+def score(
+    run_dir: str,
+    checkpoint: str = "best_model",
+    episodes: int = 20,
+    policy_name: str = "actor",
+) -> dict:
     cfg, attack_env, translator, attacker, used = load_run(run_dir, checkpoint)
     zeros = np.zeros(attack_env.action_space.shape)
+    probs = None
+    if policy_name != "actor":
+        probs = np.load(os.path.join(run_dir, "push_probs.npy"))
+        used = "push_probs.npy"
     recorded = attack_env.victim_system.env.target_trajectories()
     names = METRICS + (GAPS if recorded else ())
     baseline = {k: [] for k in names}
@@ -116,7 +156,17 @@ def score(run_dir: str, checkpoint: str = "best_model", episodes: int = 20) -> d
     for ep in range(episodes):
         for store, policy in (
             (baseline, lambda obs: zeros),
-            (attacked, attacker.act_greedy),
+            (
+                attacked,
+                attacker.act_greedy
+                if probs is None
+                else push_policy(
+                    probs,
+                    attack_env.action_space.shape,
+                    sample=policy_name == "push_sample",
+                    seed=5000 + ep,
+                ),
+            ),
         ):
             np.random.seed(5000 + ep)  # same victim randomness for both conditions
             torch.manual_seed(5000 + ep)
@@ -128,6 +178,7 @@ def score(run_dir: str, checkpoint: str = "best_model", episodes: int = 20) -> d
     return {
         "run_dir": run_dir,
         "checkpoint": used,
+        "policy": policy_name,
         "episodes": episodes,
         "env": cfg["env"],
         "env_kwargs": cfg["env_kwargs"],
@@ -145,15 +196,20 @@ def main():
     ap.add_argument("--run_dir", required=True)
     ap.add_argument("--checkpoint", default="best_model")
     ap.add_argument("--episodes", type=int, default=20)
+    ap.add_argument(
+        "--policy", default="actor", choices=("actor", "push", "push_sample")
+    )
     a = ap.parse_args()
 
-    out = score(a.run_dir, a.checkpoint, a.episodes)
-    with open(os.path.join(a.run_dir, "score.json"), "w") as fh:
+    out = score(a.run_dir, a.checkpoint, a.episodes, a.policy)
+    name = "score.json" if a.policy == "actor" else f"score_{a.policy}.json"
+    with open(os.path.join(a.run_dir, name), "w") as fh:
         json.dump(out, fh, indent=1)
     b, t, n = out["baseline"], out["attacked"], out["episodes"]
     print(
         f"SCORE env={out['env']} victim={out['victim_algo']}"
-        f" | target_match {b['greedy_accuracy']:.2f} -> {t['greedy_accuracy']:.2f}"
+        + ("" if a.policy == "actor" else f" policy={a.policy}")
+        +        f" | target_match {b['greedy_accuracy']:.2f} -> {t['greedy_accuracy']:.2f}"
         f" | route {out['baseline_route_count']}/{n} -> {out['route_count']}/{n}"
         f" | similarity {b['target_similarity']:.2f} -> {t['target_similarity']:.2f}"
         f" | victim_return {b['victim_return']:.1f} -> {t['victim_return']:.1f}"

@@ -171,6 +171,9 @@ def train(
         if (episode + 1) % every == 0 or episode + 1 == max_episodes:
             attack_algo.save(os.path.join(model_dir, str(episode + 1)))
             obs_encoder.save(os.path.join(model_dir, "latest_encoder.pt"))
+            # The exploration search's state, so it can be scored on its own
+            # (score_attack.py --policy push)
+            np.save(os.path.join(model_dir, "push_probs.npy"), push.probs)
             _delete_old_checkpoints(
                 model_dir, episode + 1, every, cfg["keep_checkpoints"]
             )
