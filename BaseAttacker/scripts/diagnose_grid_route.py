@@ -3,6 +3,8 @@
     python scripts/diagnose_grid_route.py <folder of run folders> [victims per run] [key=value ...]
 
 Trailing key=value pairs override the runs' saved settings (e.g. hold_threshold=1.0).
+policy=push or policy=push_sample attacks with the exploration search's saved state
+instead of the learned attacker (see score_attack.py --policy).
 
 For each run: 20 fresh victims (same seeds as score_attack.py), attacked by the saved
 best checkpoint. At the end of the attack episode, walk the target route and find the
@@ -22,14 +24,20 @@ import torch
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from score_attack import load_run
+from score_attack import load_run, push_policy
 from utils.metrics import greedy_path
 
 root = sys.argv[1]
 N = int(sys.argv[2]) if len(sys.argv) > 2 else 20
-overrides = {k: float(v) for k, v in (a.split("=") for a in sys.argv[3:])}
+args = dict(a.split("=") for a in sys.argv[3:])
+policy_name = args.pop("policy", "actor")
+overrides = {k: float(v) for k, v in args.items()}
 for run in sorted(glob.glob(root + "/*")):
     cfg, attack_env, translator, attacker, used = load_run(run, overrides=overrides)
+    probs = None
+    if policy_name != "actor":
+        probs = np.load(os.path.join(run, "push_probs.npy"))
+        used = f"push_probs.npy, policy {policy_name}"
     target = attack_env._target
     t_act = target.argmax(1)
     on_target = target.sum(1) > 0
@@ -46,12 +54,20 @@ for run in sorted(glob.glob(root + "/*")):
         np.random.seed(5000 + ep)
         torch.manual_seed(5000 + ep)
         obs, _ = attack_env.reset()
+        policy = (
+            attacker.act_greedy
+            if probs is None
+            else push_policy(
+                probs,
+                attack_env.action_space.shape,
+                sample=policy_name == "push_sample",
+                seed=5000 + ep,
+            )
+        )
         hits = []
         for _ in range(cfg["max_timesteps"]):
             obs, _, _, _, info = attack_env.step(
-                translator.translate(
-                    attacker.act_greedy(np.asarray(obs, dtype=np.float32))
-                )
+                translator.translate(policy(np.asarray(obs, dtype=np.float32)))
             )
             hits.append(info["path_match"])
         route_ok_steps.append(hits)
@@ -96,6 +112,12 @@ for run in sorted(glob.glob(root + "/*")):
         f"  route states most often wrong (state: victims): {dict(wrong_states.most_common(6))}"
     )
     print(f"  target route: {want}")
+    if probs is not None:
+        print(
+            f"  search's most likely direction per dimension (-1 down, 0 hold, 1 up):\n"
+            f"{(probs.argmax(1) - 1).reshape(env.shape)}\n"
+            f"  probability of that direction:\n{np.round(probs.max(1), 2).reshape(env.shape)}"
+        )
     print(
         f"  final altitude map:\n{np.round(np.asarray(env.get_dynamics()).reshape(env.shape), 1)}"
     )

@@ -414,7 +414,22 @@ diagnosis with `scripts/diagnose_grid_route.py`):
   - `push` is one fixed perturbation repeated at every step: it does not read the
     victim's behaviour at attack time. The search that found it used only the attacker's
     own reward.
-  - Not checked: where seeds 1 and 3 leave the route; whether the hold ever triggered.
+  - Not checked: whether the hold ever triggered.
+- **Where the `push` policy leaves the route** (`scripts/diagnose_grid_route.py <folder>
+  20 policy=push`, the 4 `route` runs of v5, 20 victims each; commit after `ef83d13`):
+  - Seeds 0 and 2: 20/20 on the route from attack step 5-6 to step 15, no wrong route
+    action in any victim.
+  - Seed 1: 0/20 at every step. First break at route position 9 (cell 29, the last
+    cell of the right column, where the target turns into the bottom row) in 15
+    victims (wrong action there in 13), at position 0-1 in 5 (right action, move most
+    likely fails).
+  - Seed 3: 3/20 at the last step, 19/20 at some step, share on route per step between
+    0.10 and 0.40. First break at positions 7-9 (cells 17, 23, 29), all wrong actions;
+    cell 29 wrong in 14 victims.
+  - Final maps: all four raise the top row to 10. Seeds 0 and 2 keep the bottom row
+    low (2 or 0, corner 35 at 10 or 2); seeds 1 and 3 raise the whole bottom row to 10.
+    From cell 29 the goal (30) is 6 moves away both along the bottom row (the target)
+    and along the row above it.
 - Round 15 final (job `7729450`): `route` seeds 0 and 1 finished after 3 h 20 min:
   0/20 (target match 0.71) and 0/20 (0.48). All 8 round-15 runs fail the pass mark.
 - Job `7734669` after 1 h 58 min: all 8 at episode ~6,200-7,000 of 12,000 (about 3.5 h
