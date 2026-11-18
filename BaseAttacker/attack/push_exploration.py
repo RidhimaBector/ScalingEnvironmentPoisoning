@@ -11,6 +11,11 @@ towards the `elite` episodes with the highest reward. This turns exploration int
 search over "which way to push each dimension", guided only by the attacker's own
 reward.
 
+With `patience > 0` the search widens when it stalls: if the mean reward of a batch's
+elite episodes has not risen for `patience` batches, the probability floor doubles (up
+to 4x), so more dimensions leave their current direction per push; it returns to its
+normal value as soon as the elite reward rises again.
+
 Works for any Box perturbation space; nothing here knows what a dimension means.
 """
 
@@ -30,6 +35,7 @@ class PushExploration:
         lr: float = 0.5,
         floor: float = -1.0,
         noise: float = 0.2,
+        patience: int = 0,
     ):
         self.shape = tuple(action_shape)
         self.prob = prob
@@ -43,6 +49,10 @@ class PushExploration:
         self.probs = np.full(
             (n_dims, 3), 1.0 / 3.0
         )  # P(down), P(hold), P(up) per dimension
+        self.patience = patience
+        self.floor_scale = 1.0  # current widening of the floor (1, 2 or 4)
+        self._best_elite = -np.inf  # best elite mean reward of any batch so far
+        self._stalled = 0  # batches since it last rose
         self._pending = []  # (episode reward, direction indices)
         self._current: Optional[np.ndarray] = None
 
@@ -81,8 +91,22 @@ class PushExploration:
         if len(self._pending) >= self.batch:
             best = sorted(self._pending, key=lambda item: -item[0])[: self.elite]
             freq = np.mean([np.eye(3)[idx] for _, idx in best], axis=0)
+            if self.patience > 0:
+                elite_reward = float(np.mean([r for r, _ in best]))
+                if elite_reward > self._best_elite + 1e-9:
+                    self._best_elite, self._stalled, self.floor_scale = (
+                        elite_reward,
+                        0,
+                        1.0,
+                    )
+                else:
+                    self._stalled += 1
+                    if self._stalled >= self.patience:
+                        self.floor_scale = min(self.floor_scale * 2.0, 4.0)
+                        self._stalled = 0
             self.probs = np.maximum(
-                (1 - self.lr) * self.probs + self.lr * freq, self.floor
+                (1 - self.lr) * self.probs + self.lr * freq,
+                self.floor * self.floor_scale,
             )
             self.probs /= self.probs.sum(axis=1, keepdims=True)
             self._pending = []

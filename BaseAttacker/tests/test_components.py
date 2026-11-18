@@ -47,6 +47,28 @@ def test_push_exploration_learns_the_rewarded_direction():
         assert action.shape == (6,) and np.abs(action).max() <= 1.0
         push.end_episode(float(push._current[0] == 2))     # reward "up" on dimension 0
     assert push.probs[0, 2] > 0.8
+
+
+def test_push_exploration_widens_when_stalled_and_resets_on_progress():
+    push = PushExploration((6,), prob=1.0, adaptive=True, batch=4, elite=2, patience=2)
+    floor = push.floor
+
+    def batch(reward):
+        for _ in range(4):
+            push.start_episode(warmup=False)
+            push.end_episode(reward)
+
+    batch(1.0)                       # first batch sets the best elite reward
+    assert push.floor_scale == 1.0
+    batch(1.0), batch(1.0)           # two batches without a rise
+    assert push.floor_scale == 2.0
+    assert push.probs.min() >= 2 * floor / (1 + 6 * floor) - 1e-9
+    batch(1.0), batch(1.0)
+    assert push.floor_scale == 4.0
+    batch(1.0), batch(1.0)
+    assert push.floor_scale == 4.0   # capped
+    batch(2.0)                       # progress
+    assert push.floor_scale == 1.0
     assert np.allclose(push.probs.sum(axis=1), 1.0)
 
 

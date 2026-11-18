@@ -87,6 +87,7 @@ def train(
         elite=cfg["cem_elite"],
         lr=cfg["cem_lr"],
         floor=cfg["cem_floor"],
+        patience=cfg["cem_patience"],
     )
 
     best_avg_reward = 0.0  # best 50-episode mean of the episode reward so far

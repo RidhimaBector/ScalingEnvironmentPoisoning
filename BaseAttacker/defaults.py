@@ -101,6 +101,9 @@ DEFAULT_CONFIG = {
     "cem_elite": 4,  # best push episodes kept per update
     "cem_lr": 0.5,  # step towards the elite direction frequencies
     "cem_floor": -1.0,  # min probability per direction; < 0 = 0.25 / n_dims
+    # > 0: double the floor (up to 4x) whenever the elite reward has not risen for this
+    # many updates, and reset it when it rises (0 = fixed floor)
+    "cem_patience": 0,
     # push_base: the attacker acts as (the push search's current best directions) +
     # (the actor's correction), so what the search finds is never lost by the actor.
     "push_base": False,
