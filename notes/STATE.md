@@ -474,6 +474,35 @@ correction):
 
 Submitted: smoke `7761909` (tasks 0, 8, 12; 150 episodes), then tasks 0-15.
 
+**Result of round 17** (job `7762094`; 20 fresh victims; no-attack baseline 0/20,
+target match 0.49; 13 runs took 1 h 03-1 h 13, tasks 6-8 took 3 h 12-3 h 24, cause not
+checked). Victims on the exact route at the last step, seeds 0 / 1 / 2 / 3:
+
+| Config | Attacker (best checkpoint) | Search alone, `push` | `push_sample` |
+|---|---|---|---|
+| `base` | 0 / 20 / 0 / 0 | 20 / 0 / 20 / 3 | 8 / 0 / 6 / 4 |
+| `base-search` | 20 / 17 / 0 / 9 | 20 / 20 / 20 / 20 | 12 / 13 / 5 / 12 |
+| `base-search-wide` | 16 / 18 / 0 / 0 | 20 / 20 / 20 / 20 | 6 / 11 / 4 / 4 |
+| `base-search-fast` | 20 / 0 / 0 / 0 | 20 / 0 / 20 / 19 | 13 / 0 / 11 / 14 |
+
+- **Search alone with 80% push episodes passes on every seed**: `base-search` and
+  `base-search-wide` 20/20 on 8 of 8 runs (target match 1.00). With 40% it is the v5
+  result again (20, 0, 20, 3). `base-search-fast` fails seed 1 (0/20, match 0.65).
+  The widening rule made no difference to `push` here (both 4 of 4).
+- **The attacker (search's directions + actor's correction) passes on 6 of 16 runs**:
+  2 of 4 for `base-search` and `base-search-wide`, 1 of 4 for the other two. Seed 2
+  is 0/20 in all four configs although its search alone is 20/20.
+- **The actor's correction is what breaks it.** At the final checkpoint the base equals
+  the search's directions in 15 of 16 runs (1 of 36 dimensions differs in the other),
+  yet scoring the final checkpoint (base + correction) gives, seeds 0-3: `base-search`
+  20, 12, 0, 0; `base-search-wide` 0, 0, 0, 0, where the same directions without the
+  correction give 20/20. The best-checkpoint's base differs from the final base in 0-11
+  of 36 dimensions, so an out-of-date base is a second, smaller cause.
+- The attack is sensitive to small changes of the perturbation: adding the exploration
+  noise (std 0.2 per step, `push_sample`) takes the search from 20/20 to 4-13/20.
+- `base` seed 1: the attacker passes (20/20) where the search alone fails (0/20); the
+  only run where the correction helped.
+
 ### Diagnosis of the sweep from its training logs (`2026-11-17`)
 
 Means over the last 400 logged episodes of each run (jobs `4423670`), split into the
