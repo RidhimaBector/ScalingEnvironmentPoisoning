@@ -107,5 +107,11 @@ DEFAULT_CONFIG = {
     # push_base: the attacker acts as (the push search's current best directions) +
     # (the actor's correction), so what the search finds is never lost by the actor.
     "push_base": False,
+    # The actor's output is multiplied by this before it is added to the base (and to
+    # zeros without push_base): 1 = the actor can reach any action, 0.2 = it can move
+    # each dimension at most 0.2 away from the base.
+    "push_correction": 1.0,
+    # Scoring uses the search's final base instead of the one saved with the checkpoint
+    "push_final_base": False,
     "push_base_conf": 0.5,  # a direction enters the base once its probability reaches this
 }

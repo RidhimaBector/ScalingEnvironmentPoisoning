@@ -233,3 +233,19 @@ def test_hold_threshold_stops_perturbing_once_reward_is_reached():
     _, _, _, _, info = env.step(push)  # any reward is >= -1: held, nothing is sent
     assert info["held"] == 1.0
     assert np.array_equal(env._sent, sent)
+
+
+def test_correction_scale_keeps_the_action_near_the_base():
+    import torch
+
+    from attack.ddpg import DDPG
+
+    algo = DDPG(nb_states=4, nb_actions=3, max_action=1.0, correction_scale=0.2)
+    with torch.no_grad():  # make the actor's output large
+        for p in algo.actor.parameters():
+            p.mul_(50.0)
+    base = np.array([1.0, 0.0, -1.0], dtype=np.float32)
+    algo.set_base(base)
+    for _ in range(5):
+        action = algo.act_greedy(np.random.randn(4).astype(np.float32))
+        assert np.abs(action - base).max() <= 0.2 + 1e-6

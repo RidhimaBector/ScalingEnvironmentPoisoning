@@ -44,6 +44,7 @@ import os
 import numpy as np
 import torch
 
+from attack.push_exploration import base_from_probs
 from builders import (
     build_attack_algo,
     build_attack_env,
@@ -99,6 +100,11 @@ def load_run(run_dir: str, checkpoint: str = "best_model", overrides=None):
         path = os.path.join(run_dir, str(numbered[-1]))
         encoder_path = os.path.join(run_dir, "latest_encoder.pt")
     attacker.load(path)
+    probs_path = os.path.join(run_dir, "push_probs.npy")
+    if cfg["push_base"] and cfg["push_final_base"] and os.path.exists(probs_path):
+        # Use the search's final result as the base, not the one saved with the
+        # checkpoint (the best checkpoint can predate the search's last changes).
+        attacker.set_base(base_from_probs(np.load(probs_path), cfg["push_base_conf"]))
     attacker.eval()
     obs_encoder.load(encoder_path)  # only encoders trained online have weights to load
     return cfg, attack_env, translator, attacker, os.path.basename(path)

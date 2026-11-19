@@ -203,6 +203,7 @@ def build_attack_algo(attack_env: AttackEnvironment, cfg: Dict[str, Any]):
             expl_noise=cfg["expl_noise"],
             td3=cfg["td3"],
             bc_weight=cfg["bc_weight"],
+            correction_scale=cfg["push_correction"],
         )
     kwargs.update(nb_states=state_dim, nb_actions=action_dim, max_action=max_action)
     return algo_class(**kwargs)
