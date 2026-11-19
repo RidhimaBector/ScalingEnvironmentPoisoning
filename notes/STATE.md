@@ -503,6 +503,43 @@ checked). Victims on the exact route at the last step, seeds 0 / 1 / 2 / 3:
 - `base` seed 1: the attacker passes (20/20) where the search alone fails (0/20); the
   only run where the correction helped.
 
+### Round 18: limit on the actor's correction (`2026-11-19`, commit `a649c96`)
+
+`push_correction` multiplies the actor's output before it is added to the search's
+directions; `push_final_base=True` makes scoring use the search's final directions.
+Sweep `scripts/slurm/sweep_correction.sh`, killarney job `7785216`, experiment
+`correction-limit`: same setup as round 17 `base-search` (6x6, Q-learning victims,
+own-actions observation, route reward, 80% push episodes, 12,000 episodes). 20 fresh
+victims per run, no-attack baseline 0/20 on every run. Each run took 65 to 68 minutes.
+
+Victims on the exact route at the last attack step, seeds 0 / 1 / 2 / 3:
+
+| Config | Attacker | Search alone (`push`) | `push_sample` |
+|---|---|---|---|
+| `corr0.2` | 20 / 20 / 0 / 20 | 20 / 20 / 20 / 20 | 12 / 13 / 5 / 12 |
+| `corr0.05` | 20 / 20 / 0 / 20 | 20 / 20 / 20 / 20 | 12 / 13 / 5 / 12 |
+| round 17 `base-search` (no limit) | 20 / 17 / 0 / 9 | 20 / 20 / 20 / 20 | 12 / 13 / 5 / 12 |
+
+The attacker passes on 6 of 8 runs (round 17 without a limit: 2 of 4 on this setup).
+Seed 2 fails at both limits (`scripts/diagnose_grid_route.py`):
+
+- `corr0.05` seed 2: all 20 victims are on the route at attack steps 5 to 12 of 15, and
+  0 at steps 13 to 15. No wrong action on the route (target match 1.00); the break is at
+  the last move (31 to 30), caused by the dynamics. The search holds the 7 bottom-row
+  dimensions at zero on this seed (12 of 36 dimensions held; seed 0 holds 4), and the
+  correction moves them a little every step, so the bottom row drifts (final altitudes
+  1.3 to 2.6) until the last move no longer goes where the route needs.
+- `corr0.2` seed 2: victims on the route at steps 5 to 8 only; then wrong actions.
+- The learned correction is near its limit on 3% to 14% of dimensions and is largest on
+  the dimensions the search holds.
+
+Before the cluster run, the round-17 final checkpoints (trained without a limit) were
+rescored locally with their correction scaled: runs at 20/20 out of 8 were 1 (scale 1),
+3 (0.5), 3 (0.2), 5 (0.1); with scale 0 the 3 runs checked were 20/20.
+
+Not verified: whether the correction improves anything over the search alone on any run
+(the attacker never scores above the search); other grid sizes and victims.
+
 ### Diagnosis of the sweep from its training logs (`2026-11-17`)
 
 Means over the last 400 logged episodes of each run (jobs `4423670`), split into the
