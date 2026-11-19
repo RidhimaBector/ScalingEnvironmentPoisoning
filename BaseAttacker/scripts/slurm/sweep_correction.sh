@@ -9,8 +9,11 @@
 #
 #   corr0.2   the actor can move each dimension at most 0.2 from the base
 #   corr0.05  at most 0.05
+#   corr0.2-pushed, corr0.05-pushed   the same, and no correction on the dimensions
+#             the search holds at zero (push_correct_held=False): on seed 2 a small
+#             correction there added up over the episode and broke the last move
 #
-#     sbatch --account=<acct> --array=0-7 scripts/slurm/sweep_correction.sh
+#     sbatch --account=<acct> --array=0-15 scripts/slurm/sweep_correction.sh
 #
 # Each run prints three SCORE lines: the attacker, and the search alone (policy=push,
 # policy=push_sample).
@@ -25,6 +28,8 @@ source scripts/slurm/common.sh
 CONFIGS=(
   "corr0.2   push_correction=0.2"
   "corr0.05  push_correction=0.05"
+  "corr0.2-pushed   push_correction=0.2 push_correct_held=False"
+  "corr0.05-pushed  push_correction=0.05 push_correct_held=False"
 )
 NSEEDS=4
 T=$SLURM_ARRAY_TASK_ID

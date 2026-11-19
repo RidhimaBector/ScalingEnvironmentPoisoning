@@ -249,3 +249,19 @@ def test_correction_scale_keeps_the_action_near_the_base():
     for _ in range(5):
         action = algo.act_greedy(np.random.randn(4).astype(np.float32))
         assert np.abs(action - base).max() <= 0.2 + 1e-6
+
+
+def test_correction_leaves_held_dimensions_alone():
+    import torch
+
+    from attack.ddpg import DDPG
+
+    algo = DDPG(
+        nb_states=4, nb_actions=3, max_action=1.0, correction_scale=0.2, correct_held=False
+    )
+    with torch.no_grad():
+        for p in algo.actor.parameters():
+            p.mul_(50.0)
+    algo.set_base(np.array([1.0, 0.0, -1.0], dtype=np.float32))
+    for _ in range(5):
+        assert algo.act_greedy(np.random.randn(4).astype(np.float32))[1] == 0.0

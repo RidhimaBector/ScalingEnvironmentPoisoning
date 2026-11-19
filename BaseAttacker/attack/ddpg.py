@@ -110,6 +110,7 @@ class DDPG(AttackAlgorithm):
         policy_freq=2,
         bc_weight=0.0,
         correction_scale=1.0,
+        correct_held=True,
         **_unused,
     ):
         self.nb_states, self.nb_actions, self.max_action = (
@@ -142,6 +143,8 @@ class DDPG(AttackAlgorithm):
         # The correction is the actor's output times this, so below 1 the actor can
         # move each dimension at most that far from the base.
         self.correction_scale = correction_scale
+        # False: no correction on dimensions where the base is 0 (the search holds them)
+        self.correct_held = correct_held
 
         self._buffer = ReplayBuffer(state_dim=nb_states, action_dim=nb_actions)
         self._ou_noise = OrnsteinUhlenbeckProcess(
@@ -168,9 +171,11 @@ class DDPG(AttackAlgorithm):
 
     def _policy(self, actor: nn.Module, state: torch.Tensor) -> torch.Tensor:
         """base + the actor's correction, kept inside the action range."""
-        return (self.correction_scale * actor(state) + _tensor(self._base)).clamp(
-            -1.0, 1.0
-        )
+        base = _tensor(self._base)
+        correction = self.correction_scale * actor(state)
+        if not self.correct_held:
+            correction = correction * (base != 0)
+        return (correction + base).clamp(-1.0, 1.0)
 
     def set_base(self, base: np.ndarray) -> None:
         self._base = np.asarray(base, dtype=np.float32).reshape(-1)

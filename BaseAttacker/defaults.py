@@ -111,6 +111,9 @@ DEFAULT_CONFIG = {
     # zeros without push_base): 1 = the actor can reach any action, 0.2 = it can move
     # each dimension at most 0.2 away from the base.
     "push_correction": 1.0,
+    # False: the actor cannot move dimensions the search holds (base 0). A small
+    # correction there adds up over the steps of an attack episode.
+    "push_correct_held": True,
     # Scoring uses the search's final base instead of the one saved with the checkpoint
     "push_final_base": False,
     "push_base_conf": 0.5,  # a direction enters the base once its probability reaches this
