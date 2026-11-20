@@ -719,6 +719,12 @@ are picked up by `python publish.py --pending <results folder>`.
   in `paper/adhoc/` were pushed on 2026-11-16. Nine bibliography entries were written
   from memory into `ref_kunwar.bib`: verify them before submission. `main.tex` is the
   co-authors' and was left untouched.
+- 2026-11-20 (paper commit `cfd9044`): `prelim_method.tex` now describes the round-19
+  attacker: strategy = search's directions + limited, masked actor correction
+  (Eq. `prelim-strategy`), the route reward (Eq. `prelim-route-reward`), 80% push
+  episodes for 6x6, and evaluation of the search alone. It states that this strategy
+  has only been run on 6x6 with Q-learning victims and that the other settings are
+  provisional. Figures and the lander text were not changed.
 - `notes/writeup_2026-11-16.html`: a short scientific write-up of rounds 1-9 (source of
   a private claude.ai artifact). It predates rounds 10-11; its 8x8 row says "running".
 - The methodology document describes the lander at K=20, I=10, which section 5.7 says
