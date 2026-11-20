@@ -562,6 +562,38 @@ Not verified: that the learned correction contributes anything (the attacker equ
 search alone on every run, and both are at the ceiling of this score); any other grid
 size, victim algorithm or environment; more than 4 seeds.
 
+### Round 20: other grid sizes and other victims, settings unchanged (`2026-11-20`, commit `92adb71`)
+
+`scripts/slurm/sweep_generality.sh`, killarney job `7838442`: the round-19 config
+`corr0.2-pushed` with only `grid_size` and `victim_algo` changed, 2 seeds per cell,
+nothing retuned. 20 fresh victims per run; the no-attack baseline is 0/20 on every run.
+
+Victims on the exact route at the last attack step, seeds 0 / 1:
+
+| Cell | Attacker | Search alone (`push`) | `push_sample` | Target match, attacker (no attack) | Wall time |
+|---|---|---|---|---|---|
+| 5x5, Q-learning | 20 / 20 | 20 / 20 | 12 / 14 | 1.00 / 1.00 (0.51) | 1:01 / 0:59 |
+| 4x4, Q-learning | 0 / 20 | 0 / 20 | 0 / 16 | 0.64 / 1.00 (0.43) | 1:01 / 2:47 |
+| 6x6, SARSA | 0 / 20 | 0 / 20 | 0 / 13 | 0.65 / 1.00 (0.51) | 3:07 / 3:14 |
+| 6x6, REINFORCE | 0 / 0 | 0 / 0 | 0 / 0 | 0.24 / 0.21 (0.26) | 5:10 / 5:10 |
+
+5 of 8 runs fail the pass mark (11/20); 3 pass at 20/20.
+
+- In every run the attacker scores the same as the search alone, so each failure is a
+  run where the search did not find the route. Training logs of the failed Q-learning
+  and SARSA runs: `best_avg_reward` stays at 3.4 to 3.6 (4x4 seed 0: 3.63 at episode
+  12000; SARSA seed 0: 3.44 at episode 3794), against 12.7 to 12.95 in the runs that pass.
+- The two REINFORCE runs did not finish: they reached episodes 3864 and 3872 of 12000
+  when the 5 h training limit stopped them (about 4.7 s per episode against 0.3 s for
+  Q-learning on 6x6), and were scored from what existed then. `best_avg_reward` was 0.74
+  and 0.70 and target match is at the no-attack level. This is not a test of a full-length run.
+- The smoke runs (150 episodes, one per cell, job `7837887`) ran and were deleted.
+- All 8 uploads to Hugging Face failed with 401 (`PUBLISH_PENDING`): killarney has no token.
+
+Not verified: why the search fails on those seeds (not diagnosed); whether 2 seeds per
+cell represent the pass rate (1 of 2 is compatible with almost any rate); REINFORCE at
+full length; any other environment.
+
 ### Diagnosis of the sweep from its training logs (`2026-11-17`)
 
 Means over the last 400 logged episodes of each run (jobs `4423670`), split into the
