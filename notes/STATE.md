@@ -590,7 +590,34 @@ Victims on the exact route at the last attack step, seeds 0 / 1:
 - The smoke runs (150 episodes, one per cell, job `7837887`) ran and were deleted.
 - All 8 uploads to Hugging Face failed with 401 (`PUBLISH_PENDING`): killarney has no token.
 
-Not verified: why the search fails on those seeds (not diagnosed); whether 2 seeds per
+**Diagnosis of the two failed Q-learning / SARSA runs** (4x4 seed 0, SARSA seed 0; from
+their training logs, `push_probs.npy` and saved bases, no new runs):
+
+- No victim set was ever on the route in training: `path=1` on 0 of 12,000 episodes in
+  both, against 7,452 and 7,480 in the two passing runs of the same cells, where it
+  first appears at episodes 2015 and 1957 and the reward jumps from under 4 to over 11
+  within about 1,000 episodes. The highest single-episode reward in the failed runs is
+  6.78 and 5.07 (passing: 14.00, 13.67).
+- The search is fully settled, on a different pattern. Mean top probability per
+  dimension is 0.95 in the failed runs and 0.95 to 0.96 in the passing ones; no
+  dimension is below 0.5 in any of the four. So it is not undecided, it is committed.
+- 4x4: the passing seed raises the 9 route cells and lowers the rest except one. The
+  failed seed lowers the whole top row (the first 3 moves of the route) and differs from
+  the passing seed in 8 of 16 dimensions; the top-row cells 0 and 1 were already "down"
+  in its base at episode 1500. SARSA seed 0 holds 15 of 36 dimensions and raises only 4;
+  the passing seed raises 20.
+- Nothing in this config can undo that: with `cem_floor=-1` each dimension leaves its
+  settled direction with probability about 0.25/n_dims per push (0.016 on 4x4, 0.007 on
+  6x6), and `cem_patience=0`, so the floor never widens. Reward plateaus at 3.4 to 3.6
+  from episode 2,000-6,000 to the end.
+- Same signature as the search failures of round 17 (`base` seed 1 and
+  `base-search-fast` seed 1: 0/20, target match 0.65).
+
+Not checked: which early batches set the wrong directions; whether `cem_patience=5`
+(round 17's `base-search-wide`, which passed 4 of 4 on 6x6 Q-learning for the search
+alone) changes these two seeds.
+
+Not verified: whether 2 seeds per
 cell represent the pass rate (1 of 2 is compatible with almost any rate); REINFORCE at
 full length; any other environment.
 
