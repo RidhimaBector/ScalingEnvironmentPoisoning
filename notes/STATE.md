@@ -540,6 +540,28 @@ rescored locally with their correction scaled: runs at 20/20 out of 8 were 1 (sc
 Not verified: whether the correction improves anything over the search alone on any run
 (the attacker never scores above the search); other grid sizes and victims.
 
+### Round 19: no correction on dimensions the search holds (`2026-11-19`, commit `e8ae7cd`)
+
+`push_correct_held=False`: the actor's correction is zero wherever the search's direction
+is zero. Tasks 8 to 15 of `scripts/slurm/sweep_correction.sh`, killarney job `7786417`,
+otherwise identical to round 18. 20 fresh victims per run, no-attack baseline 0/20 on
+every run. Each run took 65 to 72 minutes.
+
+Victims on the exact route at the last attack step, seeds 0 / 1 / 2 / 3:
+
+| Config | Attacker | Search alone (`push`) | `push_sample` |
+|---|---|---|---|
+| `corr0.2-pushed` | 20 / 20 / 20 / 20 | 20 / 20 / 20 / 20 | 12 / 13 / 5 / 12 |
+| `corr0.05-pushed` | 20 / 20 / 20 / 20 | 20 / 20 / 20 / 20 | 12 / 13 / 5 / 12 |
+
+The attacker passes on 8 of 8 runs (target match 1.00 on all). Before the cluster run,
+rescoring the round-18 checkpoints locally with the setting gave 20/20 on seed 2 at both
+limits (0/20 without it) and left seeds 0, 1, 3 of `corr0.2` at 20/20.
+
+Not verified: that the learned correction contributes anything (the attacker equals the
+search alone on every run, and both are at the ceiling of this score); any other grid
+size, victim algorithm or environment; more than 4 seeds.
+
 ### Diagnosis of the sweep from its training logs (`2026-11-17`)
 
 Means over the last 400 logged episodes of each run (jobs `4423670`), split into the
